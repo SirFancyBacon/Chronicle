@@ -271,5 +271,9 @@
     "area.mt301": "TOMBEAU NOIR",
     "area.mt40": "CHÂTEAU NOIR",
     "options.quit_game.help": "Quitter le jeu et revenir au bureau.",
-    "options.quit_game.label": "Quitter le jeu"
+    "options.quit_game.label": "Quitter le jeu",
+    "commenu.dungeon.dunmenu5.pak.allmenu.998": "Journal",
+    "commenu.dungeon.dunmenu5.pak.allmenu.999": "Quitter le jeu",
+    "commenu.emenu.pak.allmenu.998": "Journal",
+    "commenu.emenu.pak.allmenu.999": "Quitter le jeu"
 }

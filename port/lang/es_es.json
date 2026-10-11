@@ -271,5 +271,9 @@
     "area.mt301": "SANTUARIO OSCURO",
     "area.mt40": "CASTILLO GLORIOSO OSCURO",
     "options.quit_game.help": "Sal del juego y vuelve al escritorio.",
-    "options.quit_game.label": "Salir del juego"
+    "options.quit_game.label": "Salir del juego",
+    "commenu.dungeon.dunmenu5.pak.allmenu.998": "Diario",
+    "commenu.dungeon.dunmenu5.pak.allmenu.999": "Salir del juego",
+    "commenu.emenu.pak.allmenu.998": "Diario",
+    "commenu.emenu.pak.allmenu.999": "Salir del juego"
 }

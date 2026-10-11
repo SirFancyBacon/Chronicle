@@ -271,5 +271,9 @@
     "area.mt301": "DUNKLER SCHREIN",
     "area.mt40": "BURG DÜSTERHIMMEL",
     "options.quit_game.help": "Das Spiel beenden und zum Desktop zurückkehren.",
-    "options.quit_game.label": "Spiel beenden"
+    "options.quit_game.label": "Spiel beenden",
+    "commenu.dungeon.dunmenu5.pak.allmenu.998": "Logbuch",
+    "commenu.dungeon.dunmenu5.pak.allmenu.999": "Spiel beenden",
+    "commenu.emenu.pak.allmenu.998": "Logbuch",
+    "commenu.emenu.pak.allmenu.999": "Spiel beenden"
 }

@@ -271,5 +271,9 @@
     "area.mt301": "ALTARE OSCURO",
     "area.mt40": "CASTELLO OSCURO",
     "options.quit_game.help": "Esci dal gioco e torna al desktop.",
-    "options.quit_game.label": "Esci dal gioco"
+    "options.quit_game.label": "Esci dal gioco",
+    "commenu.dungeon.dunmenu5.pak.allmenu.998": "Il registro",
+    "commenu.dungeon.dunmenu5.pak.allmenu.999": "Esci dal gioco\ne torna al desktop.",
+    "commenu.emenu.pak.allmenu.998": "Il registro",
+    "commenu.emenu.pak.allmenu.999": "Esci dal gioco\ne torna al desktop."
 }
