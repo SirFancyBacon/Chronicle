@@ -35,6 +35,13 @@ constexpr u32 NATIVE_COLOR_WHITE  = FONT_COLOR_WHITE;
 constexpr u32 NATIVE_COLOR_GOLD   = FONT_COLOR_GOLD;
 constexpr u32 NATIVE_COLOR_YELLOW = FONT_COLOR_YELLOW;
 
+// Native Gamepad Glyph Tokens (no underscores to prevent '?' font corruption)
+#define PAD_GLYPH_UP      "{up}"
+#define PAD_GLYPH_DOWN    "{down}"
+#define PAD_GLYPH_CROSS   "{cross}"
+#define PAD_GLYPH_SQUARE  "{square}"
+#define PAD_GLYPH_CIRCLE  "{circle}"
+
 // ==============================================================
 // MOD UI FRAMEWORK
 // ==============================================================
@@ -482,61 +489,60 @@ PORT_OVERRIDE void MenuManualDraw() {
         }
     }
 
-    // --- REVERTED NATIVE 512x360 TRACKER DASHBOARD ---
+    // --- CHEST TRACKER DASHBOARD ---
     if (ManualMenu.mode == MANUAL_MODE_TRACKER) {
-        // Native window size and position
-        ModUI::DrawWindow(64, 40, 512, 360, 0x80); 
+        // Window shrunken by 40px in height (335 -> 295) to end tightly below the content
+        ModUI::DrawWindow(64, 85, 512, 295, 0x80); 
         MenuTextureReload(0x1A);
 
         // Header Title
         ModUI::DynamicText header("JOURNAL: CHEST TRACKER", NATIVE_COLOR_GOLD);
-        header.Draw(320 - (header.GetWidth() / 2), 54, 0x80);
+        header.Draw(320 - (header.GetWidth() / 2), 98, 0x80);
 
         // Filter Mode Indicator
         const char* mode_label = tracker_filter_miracle_only ? "< MIRACLE CHESTS ONLY >" : "< ALL TOWN CHESTS >";
         u32 mode_color = tracker_filter_miracle_only ? NATIVE_COLOR_YELLOW : NATIVE_COLOR_WHITE;
         ModUI::DynamicText mode_text(mode_label, mode_color);
-        mode_text.Draw(320 - (mode_text.GetWidth() / 2), 76, 0x80);
+        mode_text.Draw(320 - (mode_text.GetWidth() / 2), 120, 0x80);
 
-        // --- Left Pane: Settlements Selector ---
+        // --- Left Pane: Settlements List ---
         ModUI::DynamicText left_hdr("SETTLEMENTS", NATIVE_COLOR_YELLOW);
-        left_hdr.Draw(88, 106, 0x80);
+        left_hdr.Draw(88, 144, 0x80);
 
-        int left_start_y = 132;
-        int row_spacing  = 26;
+        int left_start_y = 168;
+        int row_spacing  = 24;
 
         int tracker_hand_y = left_start_y + (tracker_selected_town * row_spacing) - 3;
-        ModUI::DrawHandCursor(62, tracker_hand_y, 0x80);
+        ModUI::DrawHandCursor(58, tracker_hand_y, 0x80);
 
         MenuTextureReload(0x1A);
         for (int i = 0; i < TRACKER_TOWN_COUNT; i++) {
             int row_y = left_start_y + (i * row_spacing);
             u32 name_color = (i == tracker_selected_town) ? NATIVE_COLOR_YELLOW : NATIVE_COLOR_WHITE;
             
-            // Clean town name only: no overlapping brackets on the left column
             ModUI::DynamicText town_name(TRACKER_TOWNS[i].name, name_color);
             town_name.Draw(88, row_y, 0x80);
         }
 
-        // Left Pane: World Total Block (cleanly separated at the bottom)
+        // Left Pane: World Total Section
         TownStats g_stats = GetGlobalStats();
         int g_collected = tracker_filter_miracle_only ? g_stats.collected_miracle : g_stats.collected_total;
         int g_max       = tracker_filter_miracle_only ? g_stats.max_miracle       : g_stats.max_total;
 
         ModUI::DynamicText total_hdr("World Total", NATIVE_COLOR_GOLD);
-        total_hdr.Draw(88, 276, 0x80);
+        total_hdr.Draw(88, 300, 0x80);
 
         char g_buf[32];
         snprintf(g_buf, sizeof(g_buf), "[ %2d / %2d ]", g_collected, g_max);
         u32 g_color = (g_collected == g_max && g_max > 0) ? NATIVE_COLOR_GOLD : NATIVE_COLOR_WHITE;
         ModUI::DynamicText g_progress(g_buf, g_color);
-        g_progress.Draw(88, 300, 0x80);
+        g_progress.Draw(88, 322, 0x80);
 
-        // --- Right Pane: Breakdown & Area Total ---
+        // --- Right Pane: Breakdown & Summary ---
         char right_title[64];
         snprintf(right_title, sizeof(right_title), "%s Breakdown", TRACKER_TOWNS[tracker_selected_town].name);
         ModUI::DynamicText right_hdr(right_title, NATIVE_COLOR_YELLOW);
-        right_hdr.Draw(275, 106, 0x80);
+        right_hdr.Draw(275, 144, 0x80);
 
         TownStats cur_stats = GetTownStats(tracker_selected_town);
 
@@ -557,8 +563,8 @@ PORT_OVERRIDE void MenuManualDraw() {
             breakdown.push_back({ "Standard Items", cur_stats.collected_std, cur_stats.max_std });
         }
 
-        int right_start_y = 132;
-        int right_spacing = 24;
+        int right_start_y = 168;
+        int right_spacing = 22;
 
         for (size_t r = 0; r < breakdown.size(); ++r) {
             int y = right_start_y + (r * right_spacing);
@@ -574,26 +580,12 @@ PORT_OVERRIDE void MenuManualDraw() {
             cnt.Draw(455, y, 0x80);
         }
 
-        // Right Pane: Area Total (moved directly under the breakdown)
+        // Right Pane: Progress percentage
         int town_cur_collected = tracker_filter_miracle_only ? cur_stats.collected_miracle : cur_stats.collected_total;
         int town_cur_max       = tracker_filter_miracle_only ? cur_stats.max_miracle       : cur_stats.max_total;
-        int right_summary_y    = tracker_filter_miracle_only ? 242 : 262;
+        int summary_y          = tracker_filter_miracle_only ? 264 : 284;
 
-        ModUI::DynamicText area_total_lbl("Area Total", NATIVE_COLOR_YELLOW);
-        area_total_lbl.Draw(275, right_summary_y, 0x80);
-
-        char area_buf[32];
-        snprintf(area_buf, sizeof(area_buf), "[ %2d / %2d ]", town_cur_collected, town_cur_max);
-        u32 area_col = (town_cur_collected == town_cur_max && town_cur_max > 0)
-                       ? NATIVE_COLOR_GOLD
-                       : NATIVE_COLOR_WHITE;
-        ModUI::DynamicText area_total_val(area_buf, area_col);
-        area_total_val.Draw(455, right_summary_y, 0x80);
-
-        // Right Pane: Progress
-        int status_y = right_summary_y + 24;
         int pct = (town_cur_max > 0) ? (town_cur_collected * 100) / town_cur_max : 0;
-
         char pct_buf[32];
         snprintf(pct_buf, sizeof(pct_buf), "Progress: %d%%", pct);
 
@@ -602,11 +594,29 @@ PORT_OVERRIDE void MenuManualDraw() {
                             : NATIVE_COLOR_WHITE;
 
         ModUI::DynamicText pct_txt(pct_buf, pct_color);
-        pct_txt.Draw(275, status_y, 0x80);
+        pct_txt.Draw(275, summary_y, 0x80);
 
-        // Bottom Controls Help Bar
-        ModUI::DynamicText controls("UP/DOWN: Select   CROSS/SQUARE: Filter   CIRCLE: Return", NATIVE_COLOR_WHITE);
-        controls.Draw(320 - (controls.GetWidth() / 2), 366, 0x80);
+        // Right Pane: Area Total (directly under Progress)
+        int total_row_y = summary_y + 20;
+        ModUI::DynamicText area_total_lbl("Area Total", NATIVE_COLOR_YELLOW);
+        area_total_lbl.Draw(275, total_row_y, 0x80);
+
+        char area_buf[32];
+        snprintf(area_buf, sizeof(area_buf), "[ %2d / %2d ]", town_cur_collected, town_cur_max);
+        u32 area_col = (town_cur_collected == town_cur_max && town_cur_max > 0)
+                       ? NATIVE_COLOR_GOLD
+                       : NATIVE_COLOR_WHITE;
+        ModUI::DynamicText area_total_val(area_buf, area_col);
+        area_total_val.Draw(455, total_row_y, 0x80);
+
+        // Bottom Controls Help Bar docked outside the window with a 15px margin from the screen bottom (480 - 15 - ~17)
+        ModUI::DynamicText controls(
+            PAD_GLYPH_UP " / " PAD_GLYPH_DOWN " Select   "
+            PAD_GLYPH_CROSS " / " PAD_GLYPH_SQUARE " Filter   "
+            PAD_GLYPH_CIRCLE " Return",
+            NATIVE_COLOR_WHITE
+        );
+        controls.Draw(320 - (controls.GetWidth() / 2), 448, 0x80);
 
         return; 
     }
