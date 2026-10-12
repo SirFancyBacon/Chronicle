@@ -356,7 +356,7 @@ PORT_OVERRIDE void MenuManualDraw() {
     
     // --- NATIVE CATEGORY SELECT MENU ---
     if (ManualMenu.mode == MANUAL_MODE_SELECT) {
-        int text_alpha = (ManualMenu.selection_level == -1) ? 128 : 255;
+        int text_alpha = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
         int win_alpha  = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
         
         ModUI::DrawWindow(135, 85, 220, 160, win_alpha);
