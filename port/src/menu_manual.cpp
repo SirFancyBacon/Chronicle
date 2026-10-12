@@ -38,14 +38,14 @@ namespace ModUI {
     class DynamicText {
     public:
         GameText text;
-        int color;
+        u32 color;
         DynamicText(const char* string, u32 c = NATIVE_COLOR_WHITE) : color(c) {
             text.Set(string);
         }
         void Draw(int x, int y, int alpha = 0x80) {
             text.SetColour(color); 
             text.RefreshGlyphs();
-            text.Draw(x, y, alpha); // Alpha 255 restores 100% PS2 brightness!
+            text.Draw(x, y, alpha);
         }
         int GetWidth() {
             text.RefreshGlyphs();
@@ -54,7 +54,7 @@ namespace ModUI {
     };
 
     void DrawWindow(int x, int y, int width_px, int height_px, int alpha = 0x80) {
-        // Convert strict pixel dimensions into the PS2 16x16 block chunks
+        // Uses your verified custom block height calculation
         float w = (width_px - 28) / 16.0f;
         float h = (height_px - 76) / 16.0f;
         if (w < 0.0f) w = 0.0f;
@@ -129,8 +129,6 @@ extern s16 ManualImgEnter();
 
 // ==============================================================
 // NATIVE PS2 TEXT OVERRIDE
-// Completely strips the 4-line main category box from drawing
-// but preserves the Sub-Menu and Tutorial reading boxes!
 // ==============================================================
 static void Port_DrawManualMsg() {
     if (ManualMenu.messages_ready == 0) return;
@@ -166,7 +164,7 @@ static void Port_DrawManualMsg() {
     }
 
     CommonMenuMes3.Step();
-    CommonMenuMes3.DrawMesWin(); // Draws Sub-Menus without drawing the 4-line category box!
+    CommonMenuMes3.DrawMesWin();
 }
 
 // ==============================================================
@@ -179,6 +177,11 @@ PORT_OVERRIDE int MenuManualKey() {
     switch (ManualMenu.mode) {
         case MANUAL_MODE_LOADING:
             if (SetManualMsgBuffer() != 0) {
+                // String Intercept for 5th row
+                const char* new_list = "Georama\nDungeon\nWeapon\nSavings/Other\nMiracle Chests";
+                char* target_buffer = (char*)ManualMenu.common_message_buffer + 0x48;
+                strcpy(target_buffer, new_list);
+
                 ManualMenu.mode = MANUAL_MODE_SELECT;
             }
             break;
@@ -196,7 +199,7 @@ PORT_OVERRIDE int MenuManualKey() {
 
             if (ManualMenu.selection_level == -2) {
                 minimum = 0;
-                maximum = 4; // Expanded for 5th row
+                maximum = 4;
                 selection = &ManualMenu.category;
             }
 
@@ -353,14 +356,11 @@ PORT_OVERRIDE void MenuManualDraw() {
     
     // --- NATIVE CATEGORY SELECT MENU ---
     if (ManualMenu.mode == MANUAL_MODE_SELECT) {
-        
-        // Dim the UI if the user clicked into a sub-menu
         int text_alpha = (ManualMenu.selection_level == -1) ? 128 : 255;
         int win_alpha  = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
         
         ModUI::DrawWindow(135, 85, 220, 160, win_alpha);
         
-        // BIND TRUE TYPE FONT ATLAS
         MenuTextureReload(0x1A);
         
         const char* categories[] = {
@@ -370,9 +370,8 @@ PORT_OVERRIDE void MenuManualDraw() {
         int start_y = 100;
         for (int i = 0; i < 5; i++) {
             int row_y = start_y + (i * 25);
-            int color = (i == ManualMenu.category) ? NATIVE_COLOR_YELLOW : NATIVE_COLOR_WHITE;
+            u32 color = (i == ManualMenu.category) ? NATIVE_COLOR_YELLOW : NATIVE_COLOR_WHITE;
             
-            // Revert active color to white if the user is currently inside a sub-menu
             if (ManualMenu.selection_level == -1 && i != ManualMenu.category) {
                 color = NATIVE_COLOR_WHITE;
             }
@@ -380,15 +379,12 @@ PORT_OVERRIDE void MenuManualDraw() {
             ModUI::DynamicText text(categories[i], color);
             text.Draw(160, row_y, text_alpha); 
             
-            // Only draw cursor if we are at the top level
             if (i == ManualMenu.category && ManualMenu.selection_level == -2) {
                 ModUI::DynamicText cursor(">", NATIVE_COLOR_YELLOW);
                 cursor.Draw(145, row_y, 255); 
             }
         }
         
-        // ONLY stop drawing here if we are at the top level.
-        // This ensures the sub-menu box below can draw!
         if (ManualMenu.selection_level == -2) {
             return; 
         }
@@ -409,7 +405,7 @@ PORT_OVERRIDE void MenuManualDraw() {
         for (int i = 0; i < TRACKER_TOWN_COUNT; i++) {
             int row_y = start_y + (i * row_spacing);
             
-            int color = (i == tracker_selected_town) ? NATIVE_COLOR_YELLOW : NATIVE_COLOR_WHITE;
+            u32 color = (i == tracker_selected_town) ? NATIVE_COLOR_YELLOW : NATIVE_COLOR_WHITE;
             ModUI::DynamicText town_name(tracker_data[i].name, color);
             town_name.Draw(120, row_y, 255);
             
@@ -443,6 +439,7 @@ PORT_OVERRIDE void MenuManualDraw() {
             if (x > 0x280) break;
             int width = 0x280;
             MenuTextureClip(screen_x, source_x, width, 0, 0x280);
+
             if (width > 0x280) width = 0x280;
             if (width < 0) width = 0;
 
@@ -468,7 +465,6 @@ PORT_OVERRIDE void MenuManualDraw() {
     // --- Sub-Menus and Tutorial Box ---
     if (ManualMenu.messages_ready != 0 && ManualMenu.mode != MANUAL_MODE_CLOSING) {
         if (ManualMenu.mode != MANUAL_MODE_TRACKER) {
-            // Replaces DrawManualMsg() to cleanly draw sub-menus without drawing the 4-line main box!
             Port_DrawManualMsg();
         }
     }
