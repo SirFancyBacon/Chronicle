@@ -128,13 +128,16 @@ void DrawBtlMenuBar() {
         if (MenuWarningMsgFlag != 0) brightness = 64;
 
         menu_flag = BattleMenuFlag;
-        if (BTLMENU_STATE_MAIN < menu_flag && menu_flag < BTLMENU_STATE_ITEM_OPEN) {
-            icon_alpha = 0;
+
+        // Hide all unselected icons whenever any sub-menu is active
+        if (menu_flag != BTLMENU_STATE_MAIN && menu_flag != BTLMENU_STATE_APPEAR && menu_flag != BTLMENU_STATE_EXIT) {
+            if (i != MenuSelect[1]) {
+                continue;
+            }
         }
 
         selected = 0;
         
-        // Prevent array bounds fault!
         float icon_x, icon_y;
         GetSafeIconPos(i, icon_x, icon_y);
 
@@ -158,7 +161,6 @@ void DrawBtlMenuBar() {
         }
     }
 }
-
 int BtlMenuDrawSpecialFlag(int flag) {
     if ((BattleMenuFlag == BTLMENU_STATE_ATLA_OPEN || BattleMenuFlag == BTLMENU_STATE_ATLA ||
          BattleMenuFlag == BTLMENU_STATE_ATLA_CLOSE) && GetMenuAtraEventFlag() != 0) {
