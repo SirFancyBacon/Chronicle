@@ -10,6 +10,7 @@
 #define InitMenuChara Btl_InitMenuChara
 #define InitWeaponSelect Btl_InitWeaponSelect
 #define InitItemMode Btl_InitItemMode
+#define BattleManualInit Btl_BattleManualInit
 
 void Btl_InitMenuChara(u_long128 *buffer);
 void Btl_InitWeaponSelect(int mode, int chara);

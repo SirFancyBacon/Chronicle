@@ -36,6 +36,7 @@
 extern void Btl_InitMenuChara(u_long128 *buffer);
 extern void Btl_InitWeaponSelect(int mode, int chara);
 extern void Btl_InitItemMode(int mode, int chara);
+extern void Btl_BattleManualInit(int*, u_long128*);
 
 // Define a new internal state for our Quit button
 #define BTLMENU_PAGE_QUIT 100
@@ -496,7 +497,8 @@ PORT_OVERRIDE int BattleMenuSelect() {
                 blocks[0] = MenuExtendReadBlock;
                 blocks[1] = BtlMenuExReadBlock;
                 blocks[2] = BtlMenuManualReadBlock;
-                BattleManualInit(blocks, buffer);
+                extern void Btl_BattleManualInit(int*, u_long128*); 
+                Btl_BattleManualInit(blocks, buffer);
                 break;
             }
             case BTLMENU_PAGE_QUIT: {
