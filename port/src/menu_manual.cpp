@@ -23,11 +23,12 @@
 #include "texture.hpp"
 #include "userstatus.hpp"
 #include "gametext.hpp"
+#include "gameutil.hpp"
 
 // Native Color Palette Enums (Required for Drop Shadows)
-constexpr int NATIVE_COLOR_WHITE  = 0;
-constexpr int NATIVE_COLOR_GOLD   = 2;
-constexpr int NATIVE_COLOR_YELLOW = 4;
+constexpr u32 NATIVE_COLOR_WHITE  = FONT_COLOR_WHITE;
+constexpr u32 NATIVE_COLOR_GOLD   = FONT_COLOR_GOLD;
+constexpr u32 NATIVE_COLOR_YELLOW = FONT_COLOR_YELLOW;
 
 // ==============================================================
 // MOD UI FRAMEWORK
@@ -38,10 +39,10 @@ namespace ModUI {
     public:
         GameText text;
         int color;
-        DynamicText(const char* string, int c = NATIVE_COLOR_WHITE) : color(c) {
+        DynamicText(const char* string, u32 c = NATIVE_COLOR_WHITE) : color(c) {
             text.Set(string);
         }
-        void Draw(int x, int y, int alpha = 255) {
+        void Draw(int x, int y, int alpha = 0x80) {
             text.SetColour(color); 
             text.RefreshGlyphs();
             text.Draw(x, y, alpha); // Alpha 255 restores 100% PS2 brightness!
@@ -55,7 +56,7 @@ namespace ModUI {
     void DrawWindow(int x, int y, int width_px, int height_px, int alpha = 0x80) {
         // Convert strict pixel dimensions into the PS2 16x16 block chunks
         float w = (width_px - 28) / 16.0f;
-        float h = (height_px - 44) / 16.0f;
+        float h = (height_px - 76) / 16.0f;
         if (w < 0.0f) w = 0.0f;
         if (h < 0.0f) h = 0.0f;
         MenuHelpWinDraw(x, y, w, h, alpha);
