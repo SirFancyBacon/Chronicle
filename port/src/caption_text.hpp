@@ -20,6 +20,7 @@ struct CaptionBounds {
 
 // Sets an explicit localization override for the next Draw() call
 void SetNextCaption(const char *key, const char *english);
+void SetNextCaptionText(std::string_view text);
 
 std::vector<std::pair<std::string, std::string>> Strings();
 bool Ready();

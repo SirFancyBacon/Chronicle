@@ -47,12 +47,12 @@ constexpr Entry kEntries[kIcons] = {
 
 const char *s_next_caption_key = nullptr;
 const char *s_next_caption_english = nullptr;
+std::string s_next_caption_text;
 
 constexpr float kEm = 25.0f;
 constexpr float kOutlineWidth = 1.6f;
 constexpr float kLeastShrink = 0.62f;
 
-// Cream font fill and blue outline colors matching stayframe
 constexpr unsigned char kFill[3]    = {255, 250, 220};
 constexpr unsigned char kOutline[3] = {0, 0, 160};
 
@@ -201,6 +201,10 @@ void SetNextCaption(const char *key, const char *english) {
     s_next_caption_english = english;
 }
 
+void SetNextCaptionText(std::string_view text) {
+    s_next_caption_text = text;
+}
+
 std::vector<std::pair<std::string, std::string>> Strings() {
     std::vector<std::pair<std::string, std::string>> out;
     for (const Entry &entry : kEntries) {
@@ -270,7 +274,11 @@ bool Draw(int icon, int x, int y, int box_width, int alpha, int bright) {
 
     bool custom_caption = false;
     std::string text;
-    if (s_next_caption_key != nullptr) {
+    if (!s_next_caption_text.empty()) {
+        custom_caption = true;
+        text = std::move(s_next_caption_text);
+        s_next_caption_text.clear();
+    } else if (s_next_caption_key != nullptr) {
         custom_caption = true;
         text = LocalizeText(s_next_caption_key, "");
         if (text.empty()) {

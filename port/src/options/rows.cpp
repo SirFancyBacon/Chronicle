@@ -591,9 +591,7 @@ const Row kGameRows[] = {
     OnOffRow<&Config::discord_rich_presence>("discord.rich_presence", "Enable Discord",
                                              "\"Discord Rich Presence\"\nShows what you are\nplaying on Discord."),
     OnOffRow<&Config::element_quick_select>("game.element_quick_select", "Element Quick Select",
-                                            "\"Element Quick Select\"\nD-pad Up in a dungeon\npicks the element."),
-    Row{.key = "quit_game", .label = "Quit Game", .help = "Exit the game and\nreturn to the desktop.",
-        .activate = QuitGame},
+                                            "\"Element Quick Select\"\nD-pad Up in a dungeon\npicks the element.")
 };
 
 const Row kDisplayRows[] = {

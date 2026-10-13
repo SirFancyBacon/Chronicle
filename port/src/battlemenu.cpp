@@ -38,7 +38,6 @@
 // UI Framework
 #include "ui_framework.hpp"
 
-#include <cctype>
 #include <string>
 #include <vector>
 
@@ -72,8 +71,8 @@ void BtlMenuMekeIconInfo(int *icons, int menu_mode) {
     int icon_count = GetMenuModeMax();
 
     s16 custom_draw_tbl[2][9] = {
-        {0, 1, 2, 3, 7, 4, 6, 12, 0}, // Dungeon
-        {0, 1, 2, 3, 8, 5, 4,  6, 12}  // Town
+        {0, 1, 2, 3, 7, 4, 6, 12, 0}, // Dungeon (6: Journal/Book, 12: Quit/House)
+        {0, 1, 2, 3, 8, 5, 4,  6, 12}  // Town    (6: Journal/Book, 12: Quit/House)
     };
 
     for (int i = 0; i < icon_count; i++) {
@@ -86,7 +85,7 @@ void BtlMenuMekeIconInfo(int *icons, int menu_mode) {
             case MENU_MOVE_LOCKED:
             case MENU_MOVE_FIRST_DUNGEON: special_icon = 9; break;
             case MENU_MOVE_WORLD_MAP:     special_icon = 8; break;
-            case MENU_MOVE_INTERIOR_OUT:  special_icon = 12; break; // Retains Go Outside (12)
+            case MENU_MOVE_INTERIOR_OUT:  special_icon = 12; break; // Retains Go Outside
         }
         icons[4] = special_icon;
     }
@@ -102,6 +101,122 @@ void GetSafeIconPos(int index, float& out_x, float& out_y) {
         out_x = NorMenuIcon[orig_max - 1].x - (16.0f * diff);
         out_y = NorMenuIcon[orig_max - 1].y + (40.0f * diff);
     }
+}
+
+void GetBattleMenuHelpData(int index, int mode, std::string& out_title, std::string& out_desc) {
+    if (mode == BATTLE_MENU_MODE_DUNGEON) {
+        switch (index) {
+            case 0:
+                out_title = LocalizeText("battlemenu.item.title", "\"Item\"");
+                out_desc  = LocalizeText("battlemenu.item.help", "Use current item or\nSet active items.");
+                break;
+            case 1:
+                out_title = LocalizeText("battlemenu.weapon.title", "\"Weapon\"");
+                out_desc  = LocalizeText("battlemenu.weapon.help", "Change and customise\nweapons.");
+                break;
+            case 2:
+                out_title = LocalizeText("battlemenu.allies.title", "\"Allies\"");
+                out_desc  = LocalizeText("battlemenu.allies.help", "Change controllable\ncharacter.");
+                break;
+            case 3:
+                out_title = LocalizeText("battlemenu.georama.title", "\"Georama Parts\"");
+                out_desc  = LocalizeText("battlemenu.georama.help", "Check acquired\ngeorama parts.");
+                break;
+            case 4: {
+                int escape_flag = GetEscapeDngFlag();
+                if (escape_flag == 2) {
+                    out_title = LocalizeText("battlemenu.escape.title", "\"Escape\"");
+                    out_desc  = LocalizeText("battlemenu.escape.help", "Escape from the\ncurrent dungeon.");
+                } else {
+                    out_title = LocalizeText("battlemenu.go_outside.title", "\"Go Outside\"");
+                    out_desc  = LocalizeText("battlemenu.go_outside.help", "Go outside of\nthe building.");
+                }
+                break;
+            }
+            case 5:
+                out_title = LocalizeText("battlemenu.option.title", "\"Options\"");
+                out_desc  = LocalizeText("battlemenu.option.help", "Change game\nconfigurations.");
+                break;
+            case 6:
+                out_title = LocalizeText("battlemenu.journal.title", "\"Journal\"");
+                out_desc  = LocalizeText("battlemenu.journal.help", "Check manuals and\nchest tracker.");
+                break;
+            case 7:
+                out_title = LocalizeText("battlemenu.quit.title", "\"Quit Game\"");
+                out_desc  = LocalizeText("battlemenu.quit.help", "Exit the game and\nreturn to desktop.");
+                break;
+            default:
+                out_title.clear();
+                out_desc.clear();
+                break;
+        }
+    } else {
+        switch (index) {
+            case 0:
+                out_title = LocalizeText("battlemenu.item.title", "\"Item\"");
+                out_desc  = LocalizeText("battlemenu.item.help", "Use current item or\nSet active items.");
+                break;
+            case 1:
+                out_title = LocalizeText("battlemenu.weapon.title", "\"Weapon\"");
+                out_desc  = LocalizeText("battlemenu.weapon.help", "Change and customise\nweapons.");
+                break;
+            case 2:
+                out_title = LocalizeText("battlemenu.allies.title", "\"Allies\"");
+                out_desc  = LocalizeText("battlemenu.allies.help", "Change controllable\ncharacter.");
+                break;
+            case 3:
+                out_title = LocalizeText("battlemenu.georama.title", "\"Georama Parts\"");
+                out_desc  = LocalizeText("battlemenu.georama.help", "Check acquired\ngeorama parts.");
+                break;
+            case 4: {
+                int flag = NowGetGameFlagForBtlMenu(BtlMenuMode);
+                switch (flag) {
+                    case MENU_MOVE_WORLD_MAP:
+                        out_title = LocalizeText("battlemenu.world_map.title", "\"World Map\"");
+                        out_desc  = LocalizeText("battlemenu.world_map.help", "Move to another\narea on world map.");
+                        break;
+                    case MENU_MOVE_INTERIOR_OUT:
+                        out_title = LocalizeText("battlemenu.go_outside.title", "\"Go Outside\"");
+                        out_desc  = LocalizeText("battlemenu.go_outside.help", "Go outside of\nthe building.");
+                        break;
+                    default:
+                        out_title = LocalizeText("battlemenu.dungeon.title", "\"Go to Dungeon\"");
+                        out_desc  = LocalizeText("battlemenu.dungeon.help", "Go to Divine\nBeast Cave.");
+                        break;
+                }
+                break;
+            }
+            case 5:
+                out_title = LocalizeText("battlemenu.save.title", "\"Save\"");
+                out_desc  = LocalizeText("battlemenu.save.help", "Record current\ngame progress.");
+                break;
+            case 6:
+                out_title = LocalizeText("battlemenu.option.title", "\"Options\"");
+                out_desc  = LocalizeText("battlemenu.option.help", "Change game\nconfigurations.");
+                break;
+            case 7:
+                out_title = LocalizeText("battlemenu.journal.title", "\"Journal\"");
+                out_desc  = LocalizeText("battlemenu.journal.help", "Check manuals and\nchest tracker.");
+                break;
+            case 8:
+                out_title = LocalizeText("battlemenu.quit.title", "\"Quit Game\"");
+                out_desc  = LocalizeText("battlemenu.quit.help", "Exit the game and\nreturn to desktop.");
+                break;
+            default:
+                out_title.clear();
+                out_desc.clear();
+                break;
+        }
+    }
+}
+
+std::string GetBattleMenuCaption(int index, int mode) {
+    std::string title, desc;
+    GetBattleMenuHelpData(index, mode, title, desc);
+    if (title.size() >= 2 && title.front() == '"' && title.back() == '"') {
+        title = title.substr(1, title.size() - 2);
+    }
+    return title;
 }
 
 void DrawBtlMenuBar() {
@@ -166,13 +281,9 @@ void DrawBtlMenuBar() {
         }
 
         if (icons[i] >= 0) {
-            // Apply caption overrides strictly to the Journal and Quit Game slots
-            if (i == icon_count - 1) {
-                caption::SetNextCaption("menu.caption.quit_game", "QUIT GAME");
-            } else if ((BtlMenuMode == BATTLE_MENU_MODE_TOWN && i == 7) ||
-                       (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON && i == 6)) {
-                caption::SetNextCaption("menu.caption.journal", "JOURNAL");
-            }
+            // Guarantee 100% synchronization: feed the title directly to caption rendering
+            std::string cap = GetBattleMenuCaption(i, BtlMenuMode);
+            caption::SetNextCaptionText(cap);
 
             DrawMainMenuIcon(x, y, icons[i], selected, brightness, icon_alpha);
         }
@@ -188,125 +299,6 @@ int BtlMenuDrawSpecialFlag(int flag) {
         flag = 0;
     }
     return flag;
-}
-
-void GetBattleMenuHelpData(int index, int mode, std::string& out_title, std::string& out_desc) {
-    if (mode == BATTLE_MENU_MODE_DUNGEON) {
-        switch (index) {
-            case 0:
-                out_title = LocalizeText("battlemenu.item.title", "\"Item\"");
-                out_desc  = LocalizeText("battlemenu.item.help", "Use current item or\nSet active items.");
-                break;
-            case 1:
-                out_title = LocalizeText("battlemenu.weapon.title", "\"Weapon\"");
-                out_desc  = LocalizeText("battlemenu.weapon.help", "Change and customise\nweapons.");
-                break;
-            case 2:
-                out_title = LocalizeText("battlemenu.allies.title", "\"Allies\"");
-                out_desc  = LocalizeText("battlemenu.allies.help", "Change controllable\ncharacter.");
-                break;
-            case 3:
-                out_title = LocalizeText("battlemenu.georama.title", "\"GeoramaParts\"");
-                out_desc  = LocalizeText("battlemenu.georama.help", "Check acquired\ngeorama parts.");
-                break;
-            case 4: {
-                int escape_flag = GetEscapeDngFlag();
-                if (escape_flag == 2) {
-                    out_title = LocalizeText("battlemenu.escape.title", "\"Escape\"");
-                    out_desc  = LocalizeText("battlemenu.escape.help", "Escape from the\ncurrent dungeon.");
-                } else {
-                    out_title = LocalizeText("battlemenu.go_outside.title", "\"Go Outside\"");
-                    out_desc  = LocalizeText("battlemenu.go_outside.help", "Go outside of\nthe building.");
-                }
-                break;
-            }
-            case 5:
-                out_title = LocalizeText("battlemenu.option.title", "\"Options\"");
-                out_desc  = LocalizeText("battlemenu.option.help", "Change game\nconfigurations.");
-                break;
-            case 6:
-                out_title = LocalizeText("battlemenu.journal.title", "\"Journal\"");
-                out_desc  = LocalizeText("battlemenu.journal.help", "Check manuals and\nchest tracker.");
-                break;
-            case 7:
-                out_title = LocalizeText("battlemenu.quit.title", "\"Quit Game\"");
-                out_desc  = LocalizeText("battlemenu.quit.help", "Exit the game and\nreturn to desktop.");
-                break;
-            default:
-                out_title.clear();
-                out_desc.clear();
-                break;
-        }
-    } else {
-        switch (index) {
-            case 0:
-                out_title = LocalizeText("battlemenu.item.title", "\"Item\"");
-                out_desc  = LocalizeText("battlemenu.item.help", "Use current item or\nSet active items.");
-                break;
-            case 1:
-                out_title = LocalizeText("battlemenu.weapon.title", "\"Weapon\"");
-                out_desc  = LocalizeText("battlemenu.weapon.help", "Change and customise\nweapons.");
-                break;
-            case 2:
-                out_title = LocalizeText("battlemenu.allies.title", "\"Allies\"");
-                out_desc  = LocalizeText("battlemenu.allies.help", "Change controllable\ncharacter.");
-                break;
-            case 3:
-                out_title = LocalizeText("battlemenu.georama.title", "\"GeoramaParts\"");
-                out_desc  = LocalizeText("battlemenu.georama.help", "Check acquired\ngeorama parts.");
-                break;
-            case 4: {
-                int flag = NowGetGameFlagForBtlMenu(BtlMenuMode);
-                switch (flag) {
-                    case MENU_MOVE_WORLD_MAP:
-                        out_title = LocalizeText("battlemenu.world_map.title", "\"World Map\"");
-                        out_desc  = LocalizeText("battlemenu.world_map.help", "Move to another\narea on world map.");
-                        break;
-                    case MENU_MOVE_INTERIOR_OUT:
-                        out_title = LocalizeText("battlemenu.go_outside.title", "\"Go Outside\"");
-                        out_desc  = LocalizeText("battlemenu.go_outside.help", "Go outside of\nthe building.");
-                        break;
-                    default:
-                        out_title = LocalizeText("battlemenu.dungeon.title", "\"Go to Dungeon\"");
-                        out_desc  = LocalizeText("battlemenu.dungeon.help", "Go to Divine\nBeast Cave.");
-                        break;
-                }
-                break;
-            }
-            case 5:
-                out_title = LocalizeText("battlemenu.save.title", "\"Save\"");
-                out_desc  = LocalizeText("battlemenu.save.help", "Record current\ngame progress.");
-                break;
-            case 6:
-                out_title = LocalizeText("battlemenu.option.title", "\"Options\"");
-                out_desc  = LocalizeText("battlemenu.option.help", "Change game\nconfigurations.");
-                break;
-            case 7:
-                out_title = LocalizeText("battlemenu.journal.title", "\"Journal\"");
-                out_desc  = LocalizeText("battlemenu.journal.help", "Check manuals and\nchest tracker.");
-                break;
-            case 8:
-                out_title = LocalizeText("battlemenu.quit.title", "\"Quit Game\"");
-                out_desc  = LocalizeText("battlemenu.quit.help", "Exit the game and\nreturn to desktop.");
-                break;
-            default:
-                out_title.clear();
-                out_desc.clear();
-                break;
-        }
-    }
-}
-
-std::string GetBattleMenuCaption(int index, int mode) {
-    std::string title, desc;
-    GetBattleMenuHelpData(index, mode, title, desc);
-    if (title.size() >= 2 && title.front() == '"' && title.back() == '"') {
-        title = title.substr(1, title.size() - 2);
-    }
-    for (char& c : title) {
-        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-    }
-    return title;
 }
 
 void DrawQuitConfirmModal(int alpha) {
@@ -350,7 +342,6 @@ void DrawQuitConfirmModal(int alpha) {
         }
 
         MenuTextureReload(0x1A);
-        // Cream-yellow tone matching vanilla prompt buttons
         UI::Label lbl(text, UI::ColorYellow, UI::Alignment::Center);
         lbl.Draw(bx + (btn_w / 2), by + 2, alpha);
     };
