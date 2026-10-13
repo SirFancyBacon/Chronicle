@@ -19,10 +19,64 @@ extern void setbilinear(int n);
 namespace UI {
 
 // -----------------------------------------------------------------------------
-// Window: 9-slice parametric dialog background (MenuHelpWinDraw wrapper)
+// Word Wrap Utility
+// -----------------------------------------------------------------------------
+std::vector<std::string> WrapText(std::string_view text, int max_width) {
+    std::vector<std::string> lines;
+    if (text.empty() || max_width <= 0) return lines;
+
+    std::string current_line;
+    size_t i = 0;
+
+    while (i < text.size()) {
+        if (text[i] == '\r') {
+            i++;
+            continue;
+        }
+        if (text[i] == '\n') {
+            lines.push_back(current_line);
+            current_line.clear();
+            i++;
+            continue;
+        }
+
+        if (current_line.empty()) {
+            while (i < text.size() && text[i] == ' ') i++;
+            if (i >= text.size()) break;
+        }
+
+        size_t word_start = i;
+        while (i < text.size() && text[i] != ' ' && text[i] != '\n' && text[i] != '\r') {
+            i++;
+        }
+        std::string word(text.substr(word_start, i - word_start));
+
+        if (i < text.size() && text[i] == ' ') {
+            i++;
+        }
+
+        std::string candidate = current_line.empty() ? word : (current_line + " " + word);
+
+        Label test_lbl(candidate);
+        if (test_lbl.GetWidth() > max_width && !current_line.empty()) {
+            lines.push_back(current_line);
+            current_line = word;
+        } else {
+            current_line = candidate;
+        }
+    }
+
+    if (!current_line.empty()) {
+        lines.push_back(current_line);
+    }
+
+    return lines;
+}
+
+// -----------------------------------------------------------------------------
+// Window
 // -----------------------------------------------------------------------------
 void Window::Draw(int x, int y, int width_px, int height_px, int alpha) {
-    // 28px horizontal frame cap overhead, 76px vertical border cap overhead
     float w = (width_px - 28) / 16.0f;
     float h = (height_px - 76) / 16.0f;
     if (w < 0.0f) w = 0.0f;
@@ -34,12 +88,13 @@ void Window::Draw(int x, int y, int width_px, int height_px, int alpha) {
 // Label
 // -----------------------------------------------------------------------------
 Label::Label(std::string_view text, u32 color, Alignment align)
-    : m_color(color), m_align(align) {
-    SetText(text);
+    : m_raw_text(text), m_color(color), m_align(align) {
+    m_text.Set(m_raw_text.c_str());
 }
 
 void Label::SetText(std::string_view text) {
-    m_text.Set(text.data());
+    m_raw_text = text;
+    m_text.Set(m_raw_text.c_str());
     m_dirty = true;
 }
 
@@ -95,6 +150,14 @@ void Label::DrawWithStroke(int x, int y, u32 fill_color, u32 stroke_color, int s
     m_text.SetColour(fill_color);
     m_text.Draw(draw_x, y, alpha);
     m_text.Draw(draw_x + 1, y, alpha);
+}
+
+void Label::DrawWrapped(int x, int y, int max_width, int line_height, int alpha) {
+    std::vector<std::string> lines = WrapText(m_raw_text, max_width);
+    for (size_t i = 0; i < lines.size(); ++i) {
+        Label line_lbl(lines[i], m_color, m_align);
+        line_lbl.Draw(x, y + static_cast<int>(i) * line_height, alpha);
+    }
 }
 
 // -----------------------------------------------------------------------------

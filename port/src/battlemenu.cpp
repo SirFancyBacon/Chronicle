@@ -210,6 +210,9 @@ PORT_OVERRIDE void DrawBattleMain() {
         }
     }
 
+    // Help window is active for the main selection wheel
+    BtlWakuMake2 = 1;
+
     int max_icons = GetMenuModeMax();
     bool is_custom_slot = false;
     if (BtlMenuMode == BATTLE_MENU_MODE_TOWN && MenuSelect[1] == 5) {
@@ -218,7 +221,6 @@ PORT_OVERRIDE void DrawBattleMain() {
         is_custom_slot = true; // Journal or Quit
     }
 
-    // Suppress vanilla ClsMes state to avoid stale buffer rendering
     if (is_custom_slot) {
         CommonMenuMes2.mes_made = -1;
         CommonMenuMes2.stay_frame = false;
@@ -341,7 +343,8 @@ PORT_OVERRIDE void BattleMenuDraw() {
         CursorVibeCnt = 0;
     }
 
-    int draw_help = BtlMenuDrawSpecialFlag(1);
+    // Check BtlWakuMake2 to respect sub-menu transitions
+    int draw_help = BtlMenuDrawSpecialFlag(BtlWakuMake2);
 
     if (BtlMenuReadEndFlag != 0) {
         switch (BattleMenuFlag) {
@@ -350,18 +353,22 @@ PORT_OVERRIDE void BattleMenuDraw() {
                 if (BtlHelpWinAlpha < 0) BtlHelpWinAlpha = 0;
                 break;
             default:
-                BtlHelpWinAlpha += 9;
-                if (BtlHelpWinAlpha > 0x80) BtlHelpWinAlpha = 0x80;
+                if (BattleMenuFlag == BTLMENU_STATE_MAIN || BattleMenuFlag == BTLMENU_STATE_APPEAR) {
+                    BtlHelpWinAlpha += 9;
+                    if (BtlHelpWinAlpha > 0x80) BtlHelpWinAlpha = 0x80;
+                } else {
+                    BtlHelpWinAlpha -= 8;
+                    if (BtlHelpWinAlpha < 0) BtlHelpWinAlpha = 0;
+                }
                 break;
         }
 
-        // Draw help window plate using retail coordinates
-        if (draw_help != 0) {
+        // Help window plate drawn only when draw_help is active
+        if (draw_help != 0 && BtlHelpWinAlpha > 0) {
             MenuHelpWinDraw((int) HelpWinHead[0], (int) HelpWinHead[1], BtlHelpWinW, BtlHelpWinH, BtlHelpWinAlpha);
         }
     }
 
-    // Retrieve native text offsets
     GetMainMenuRightHelpMsgLangOffset(text_x, text_y);
 
     int max_icons = GetMenuModeMax();
@@ -374,7 +381,6 @@ PORT_OVERRIDE void BattleMenuDraw() {
 
     if (BtlMenuReadEndFlag != 0 && draw_help != 0 && BattleMenuFlag == BTLMENU_STATE_MAIN) {
         if (!is_custom_slot) {
-            // Vanilla slots: render ClsMes text
             MenuTextureReload(CommonMenuMes2.tex_block);
             CommonMenuMes2.text_x = (int) (HelpWinHead[0] + text_x);
             CommonMenuMes2.text_y = (int) (HelpWinHead[1] + text_y);
@@ -383,7 +389,6 @@ PORT_OVERRIDE void BattleMenuDraw() {
             CommonMenuMes2.Step();
             CommonMenuMes2.DrawMesWin();
         } else if (BtlHelpWinAlpha > 0) {
-            // Custom slots: render using native HelpWinHead origin and language offsets
             const char* title = nullptr;
             const char* desc  = nullptr;
 
@@ -407,7 +412,7 @@ PORT_OVERRIDE void BattleMenuDraw() {
                 title_lbl.Draw(draw_x, draw_y, BtlHelpWinAlpha);
 
                 UI::Label desc_lbl(desc, UI::ColorWhite);
-                desc_lbl.Draw(draw_x, draw_y + 22, BtlHelpWinAlpha);
+                desc_lbl.DrawWrapped(draw_x, draw_y + 20, 190, 18, BtlHelpWinAlpha);
             }
         }
     }
@@ -485,15 +490,19 @@ PORT_OVERRIDE int BattleMenuSelect() {
                         return 1;
                     }
                 }
+                BtlWakuMake2 = 0;
                 Btl_InitMenuChara(buffer);
                 break;
             case BTLMENU_PAGE_WEAPON:
+                BtlWakuMake2 = 0;
                 Btl_InitWeaponSelect(WEP_OPEN_FROM_BAR, chara);
                 break;
             case BTLMENU_PAGE_ITEM:
+                BtlWakuMake2 = 0;
                 Btl_InitItemMode(0, chara);
                 break;
             case BTLMENU_PAGE_ATLA: {
+                BtlWakuMake2 = 0;
                 int blocks[2] = {0, 0};
                 blocks[0] = BtlMenuReadBlock;
                 blocks[1] = MenuExtendReadBlock;
@@ -531,6 +540,7 @@ PORT_OVERRIDE int BattleMenuSelect() {
                 break;
             }
             case BTLMENU_PAGE_OPTION:
+                BtlWakuMake2 = 0;
                 InitMenuOption(OPTION_OPEN_GAME_MENU, MenuExtendReadBlock, buffer);
                 break;
             case BTLMENU_PAGE_SAVE:

@@ -2,6 +2,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "clsmes.hpp"
 #include "gametext.hpp"
@@ -18,7 +19,7 @@ constexpr u32 ColorWhite  = FONT_COLOR_WHITE;
 constexpr u32 ColorGold   = FONT_COLOR_GOLD;
 constexpr u32 ColorYellow = FONT_COLOR_YELLOW;
 
-// Palette index 3 is the authentic native Blue font in atlas 0x1A
+// Palette index 3 is the native Blue font in atlas 0x1A
 constexpr u32 ColorBlue   = 3;
 
 constexpr u32 NATIVE_COLOR_WHITE  = FONT_COLOR_WHITE;
@@ -31,6 +32,9 @@ enum class Alignment {
     Center,
     Right
 };
+
+// Splits a string into word-wrapped lines against a maximum pixel width
+std::vector<std::string> WrapText(std::string_view text, int max_width);
 
 // -----------------------------------------------------------------------------
 // Window: 9-slice parametric dialog background (MenuHelpWinDraw wrapper)
@@ -55,8 +59,10 @@ public:
     int GetWidth();
     void Draw(int x, int y, int alpha = 0x80);
     void DrawWithStroke(int x, int y, u32 fill_color, u32 stroke_color, int stroke_px = 2, int alpha = 0x80);
+    void DrawWrapped(int x, int y, int max_width, int line_height = 18, int alpha = 0x80);
 
 private:
+    std::string m_raw_text;
     GameText m_text;
     u32 m_color{ColorWhite};
     Alignment m_align{Alignment::Left};
