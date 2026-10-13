@@ -6,6 +6,7 @@
 // Retail headers
 #include "btactstatus.hpp"
 #include "camera.hpp"
+#include "caption_text.hpp"
 #include "character.hpp"
 #include "clsmes.hpp"
 #include "dataread.hpp"
@@ -37,6 +38,7 @@
 // UI Framework
 #include "ui_framework.hpp"
 
+#include <cctype>
 #include <string>
 #include <vector>
 
@@ -50,7 +52,7 @@ extern void Btl_BattleManualInit(int*, u_long128*);
 namespace {
 
 bool       s_quit_confirm_active = false;
-int        s_quit_confirm_choice = 1; // 0 = YES, 1 = NO (default to NO)
+int        s_quit_confirm_choice = 1;
 UI::Cursor s_quit_cursor;
 
 int GetMenuModeMax() {
@@ -71,7 +73,7 @@ void BtlMenuMekeIconInfo(int *icons, int menu_mode) {
 
     s16 custom_draw_tbl[2][9] = {
         {0, 1, 2, 3, 7, 4, 6, 12, 0}, // Dungeon
-        {0, 1, 2, 3, 8, 5, 4, 6, 12}  // Town
+        {0, 1, 2, 3, 8, 5, 4,  6, 12}  // Town
     };
 
     for (int i = 0; i < icon_count; i++) {
@@ -84,7 +86,7 @@ void BtlMenuMekeIconInfo(int *icons, int menu_mode) {
             case MENU_MOVE_LOCKED:
             case MENU_MOVE_FIRST_DUNGEON: special_icon = 9; break;
             case MENU_MOVE_WORLD_MAP:     special_icon = 8; break;
-            case MENU_MOVE_INTERIOR_OUT:  special_icon = 0xC; break;
+            case MENU_MOVE_INTERIOR_OUT:  special_icon = 12; break; // Retains Go Outside (12)
         }
         icons[4] = special_icon;
     }
@@ -164,6 +166,14 @@ void DrawBtlMenuBar() {
         }
 
         if (icons[i] >= 0) {
+            // Apply caption overrides strictly to the Journal and Quit Game slots
+            if (i == icon_count - 1) {
+                caption::SetNextCaption("menu.caption.quit_game", "QUIT GAME");
+            } else if ((BtlMenuMode == BATTLE_MENU_MODE_TOWN && i == 7) ||
+                       (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON && i == 6)) {
+                caption::SetNextCaption("menu.caption.journal", "JOURNAL");
+            }
+
             DrawMainMenuIcon(x, y, icons[i], selected, brightness, icon_alpha);
         }
     }
@@ -287,6 +297,18 @@ void GetBattleMenuHelpData(int index, int mode, std::string& out_title, std::str
     }
 }
 
+std::string GetBattleMenuCaption(int index, int mode) {
+    std::string title, desc;
+    GetBattleMenuHelpData(index, mode, title, desc);
+    if (title.size() >= 2 && title.front() == '"' && title.back() == '"') {
+        title = title.substr(1, title.size() - 2);
+    }
+    for (char& c : title) {
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    }
+    return title;
+}
+
 void DrawQuitConfirmModal(int alpha) {
     const int box_w = 260;
     const int box_h = 58;
@@ -305,12 +327,11 @@ void DrawQuitConfirmModal(int alpha) {
     UI::Label desc_lbl(q_desc, UI::ColorWhite);
     desc_lbl.Draw(box_x + 22, box_y + 32, alpha);
 
-    // Narrowed button proportions (120px x 28px)
-    const int btn_w  = 120;
-    const int btn_h  = 28;
+    const int btn_w  = 100;
+    const int btn_h  = 26;
     const int btn_x  = (640 - btn_w) / 2;
-    const int btn_y0 = box_y + box_h + 10; // 232
-    const int btn_y1 = btn_y0 + btn_h + 6;  // 266
+    const int btn_y0 = box_y + box_h + 10;
+    const int btn_y1 = btn_y0 + btn_h + 6;
 
     CTexture* gaiji_tex = draw2d::Get().find_texture("gaiji");
     if (gaiji_tex == nullptr) {
@@ -329,9 +350,9 @@ void DrawQuitConfirmModal(int alpha) {
         }
 
         MenuTextureReload(0x1A);
-        UI::Label lbl(text, UI::ColorWhite, UI::Alignment::Center);
-        // Vertically centered at by + 3
-        lbl.Draw(bx + (btn_w / 2), by + 3, alpha);
+        // Cream-yellow tone matching vanilla prompt buttons
+        UI::Label lbl(text, UI::ColorYellow, UI::Alignment::Center);
+        lbl.Draw(bx + (btn_w / 2), by + 2, alpha);
     };
 
     std::string txt_yes = LocalizeText("battlemenu.quit.yes", "YES");
@@ -342,12 +363,9 @@ void DrawQuitConfirmModal(int alpha) {
 
     int sel_y = (s_quit_confirm_choice == 0) ? btn_y0 : btn_y1;
 
-    // Symmetrical 3px bracket padding around button perimeter
-    constexpr int pad = 3;
-    DrawMenuWaku(btn_x - pad, sel_y - pad, btn_w + 2 * pad - 16, btn_h + 2 * pad - 16, 0, StayTex, alpha);
+    DrawMenuWaku(btn_x - 14, sel_y - 6, btn_w + 12, btn_h - 4, 0, StayTex, alpha);
 
-    // Hand cursor centered on the active button
-    s_quit_cursor.SetTarget(static_cast<float>(btn_x - 34), static_cast<float>(sel_y + 4));
+    s_quit_cursor.SetTarget(static_cast<float>(btn_x - 34), static_cast<float>(sel_y + 3));
     s_quit_cursor.Draw(alpha);
 }
 
@@ -394,7 +412,12 @@ PORT_OVERRIDE void DrawBattleMain() {
     }
 
     if (!s_quit_confirm_active) {
-        int width = (info != nullptr) ? (info->label_width + 0x4A) : 100;
+        std::string cap = GetBattleMenuCaption(MenuSelect[1], BtlMenuMode);
+        UI::Label cap_lbl(cap);
+        int width = cap_lbl.GetWidth() + 0x4A;
+        if (info != nullptr && width < (info->label_width + 0x4A)) {
+            width = info->label_width + 0x4A;
+        }
 
         float icon_x, icon_y;
         GetSafeIconPos(MenuSelect[1], icon_x, icon_y);
@@ -515,8 +538,6 @@ PORT_OVERRIDE void BattleMenuDraw() {
 
     GetMainMenuRightHelpMsgLangOffset(text_x, text_y);
 
-    // Dynamic help box sizing and line height
-    // 28px line pitch between description lines
     if (BtlMenuReadEndFlag != 0 && draw_help != 0 && BattleMenuFlag == BTLMENU_STATE_MAIN && BtlHelpWinAlpha > 0 && !s_quit_confirm_active) {
         std::string title;
         std::string desc;
@@ -530,11 +551,10 @@ PORT_OVERRIDE void BattleMenuDraw() {
             const int draw_x = box_x + (text_x > 0 ? text_x : 22);
 
             const int max_text_w = 230;
-            constexpr int line_height = 28; // Expanded line pitch for wrapped TTF lines
+            constexpr int line_height = 28;
             std::vector<std::string> lines = UI::WrapText(desc, max_text_w);
             int num_lines = std::max(1, static_cast<int>(lines.size()));
 
-            // Dynamic height: 32px base + (num_lines * 28px)
             int box_h = 32 + (num_lines * line_height);
             const int box_bottom = 452;
             int box_y = box_bottom - box_h;
@@ -730,7 +750,7 @@ PORT_OVERRIDE int BattleMenuSelect() {
             case BTLMENU_PAGE_QUIT: {
                 s_quit_confirm_active = true;
                 s_quit_confirm_choice = 1;
-                s_quit_cursor.SnapTo((640 - 120) / 2.0f - 34.0f, (164 + 58 + 10 + 28 + 6) + 4.0f);
+                s_quit_cursor.SnapTo((640 - 100) / 2.0f - 34.0f, (164 + 58 + 10 + 26 + 6) + 3.0f);
                 ComMenuSePlay(MENU_SOUND_CONFIRM);
                 return 1;
             }
