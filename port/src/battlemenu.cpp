@@ -325,32 +325,18 @@ void DrawQuitConfirmModal(int alpha) {
     const int btn_y0 = box_y + box_h + 10;
     const int btn_y1 = btn_y0 + btn_h + 6;
 
-    CTexture* gaiji_tex = draw2d::Get().find_texture("gaiji");
-    if (gaiji_tex == nullptr) {
-        gaiji_tex = TexManager.GetTexture((char*)"gaiji", -1);
-    }
-
-    auto DrawBevelButton = [&](int bx, int by, const std::string& text) {
-        if (gaiji_tex != nullptr) {
-            CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
-
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 2, by + 3, btn_w, btn_h), uv_white, 0, 0, 0, (alpha * 90) >> 7);
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(bx, by, btn_w, btn_h), uv_white, 20, 10, 5, alpha);
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 1, by + 1, btn_w - 2, btn_h - 2), uv_white, 115, 75, 50, alpha);
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 2, by + 2, btn_w - 3, btn_h - 3), uv_white, 55, 28, 14, alpha);
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 2, by + 2, btn_w - 4, btn_h - 4), uv_white, 100, 56, 33, alpha);
-        }
-
-        MenuTextureReload(0x1A);
-        UI::Label lbl(text, UI::ColorYellow, UI::Alignment::Center);
-        lbl.Draw(bx + (btn_w / 2), by + 2, alpha);
-    };
-
     std::string txt_yes = LocalizeText("battlemenu.quit.yes", "YES");
     std::string txt_no  = LocalizeText("battlemenu.quit.no", "NO");
 
-    DrawBevelButton(btn_x, btn_y0, txt_yes);
-    DrawBevelButton(btn_x, btn_y1, txt_no);
+    UI::ButtonStyle btn_style{
+        .preset      = UI::ButtonPreset::Terracotta,
+        .text_color  = UI::ColorYellow,
+        .drop_shadow = true,
+        .align       = UI::Alignment::Center
+    };
+
+    UI::BevelButton::Draw(UI::Rect(btn_x, btn_y0, btn_w, btn_h), txt_yes, btn_style, alpha);
+    UI::BevelButton::Draw(UI::Rect(btn_x, btn_y1, btn_w, btn_h), txt_no,  btn_style, alpha);
 
     int sel_y = (s_quit_confirm_choice == 0) ? btn_y0 : btn_y1;
 

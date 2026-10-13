@@ -18,7 +18,7 @@ namespace UI {
 constexpr u32 ColorWhite  = FONT_COLOR_WHITE;
 constexpr u32 ColorGold   = FONT_COLOR_GOLD;
 constexpr u32 ColorYellow = FONT_COLOR_YELLOW;
-constexpr u32 ColorBlue   = 3; // Native Blue font in atlas 0x1A
+constexpr u32 ColorBlue   = 3;
 
 constexpr u32 NATIVE_COLOR_WHITE  = FONT_COLOR_WHITE;
 constexpr u32 NATIVE_COLOR_GOLD   = FONT_COLOR_GOLD;
@@ -31,58 +31,121 @@ enum class Alignment {
     Right
 };
 
+// -----------------------------------------------------------------------------
+// Rect: Screen-space and UV bounding box primitive
+// -----------------------------------------------------------------------------
+struct Rect {
+    int x = 0;
+    int y = 0;
+    int w = 0;
+    int h = 0;
+
+    constexpr Rect() = default;
+    constexpr Rect(int in_x, int in_y, int in_w, int in_h)
+        : x(in_x), y(in_y), w(in_w), h(in_h) {}
+
+    constexpr int Left() const { return x; }
+    constexpr int Right() const { return x + w; }
+    constexpr int Top() const { return y; }
+    constexpr int Bottom() const { return y + h; }
+    constexpr int CenterX() const { return x + (w / 2); }
+    constexpr int CenterY() const { return y + (h / 2); }
+    constexpr bool Empty() const { return w <= 0 || h <= 0; }
+    constexpr bool Contains(float px, float py) const {
+        return px >= static_cast<float>(x) && px < static_cast<float>(x + w) &&
+               py >= static_cast<float>(y) && py < static_cast<float>(y + h);
+    }
+};
+
+// -----------------------------------------------------------------------------
+// TextStyle: Declarative text styling (Color, Drop Shadow, Justification)
+// -----------------------------------------------------------------------------
+struct TextStyle {
+    u32       color       = ColorWhite;        // Default: White
+    bool      drop_shadow = true;              // Default: Drop shadow enabled
+    Alignment align       = Alignment::Center; // Default: Center justification
+    int       line_height = 24;
+    int       text_dx     = 0;
+    int       text_dy     = 0;
+};
+
 std::vector<std::string> WrapText(std::string_view text, int max_width);
 
 // -----------------------------------------------------------------------------
-// TrackerWindow: Dedicated, immutable window for Chest Tracker & Manuals
+// Windows & Plates
 // -----------------------------------------------------------------------------
 class TrackerWindow {
 public:
     static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80);
+    static void Draw(const Rect& box, int alpha = 0x80) {
+        Draw(box.x, box.y, box.w, box.h, alpha);
+    }
 };
 
-// -----------------------------------------------------------------------------
-// HelpBox: Dedicated dynamic window for the Battle Menu help box
-// -----------------------------------------------------------------------------
 class HelpBox {
 public:
     static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80);
+    static void Draw(const Rect& box, int alpha = 0x80) {
+        Draw(box.x, box.y, box.w, box.h, alpha);
+    }
 };
 
-// General window alias mapping to TrackerWindow
 class Window {
 public:
     static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80);
+    static void Draw(const Rect& box, int alpha = 0x80) {
+        Draw(box.x, box.y, box.w, box.h, alpha);
+    }
+};
+
+class TabPlate {
+public:
+    static void Draw(int left, int right, int y, int alpha = 0x80);
 };
 
 // -----------------------------------------------------------------------------
-// Label: GameText wrapper with glyph parsing, auto-width, stroke & alignment
+// Label: GameText wrapper with glyph parsing, auto-width, shadow & box layout
 // -----------------------------------------------------------------------------
 class Label {
 public:
     Label() = default;
-    explicit Label(std::string_view text, u32 color = ColorWhite, Alignment align = Alignment::Left);
+    explicit Label(std::string_view text, u32 color = ColorWhite,
+                   Alignment align = Alignment::Left, bool drop_shadow = true);
+    Label(std::string_view text, const TextStyle& style);
 
     void SetText(std::string_view text);
     void SetColor(u32 color);
     void SetAlignment(Alignment align);
+    void SetDropShadow(bool enabled);
+    void SetOffset(int dx, int dy);
+    void SetStyle(const TextStyle& style);
 
+    const std::string& GetText() const { return m_raw_text; }
     int GetWidth();
+
     void Draw(int x, int y, int alpha = 0x80);
+    void DrawInRect(const Rect& box, int alpha = 0x80);
+    void DrawCenteredInRect(int x, int y, int width, int height, int alpha = 0x80);
     void DrawWithStroke(int x, int y, u32 fill_color, u32 stroke_color, int stroke_px = 2, int alpha = 0x80);
-    void DrawWrapped(int x, int y, int max_width, int line_height = 18, int alpha = 0x80);
+    void DrawWrapped(int x, int y, int max_width, int line_height = 24, int alpha = 0x80);
 
 private:
     std::string m_raw_text;
-    GameText m_text;
-    u32 m_color{ColorWhite};
-    Alignment m_align{Alignment::Left};
-    bool m_dirty{true};
-    int m_cached_width{0};
+    GameText    m_text;
+    u32         m_color{ColorWhite};
+    Alignment   m_align{Alignment::Left};
+    bool        m_drop_shadow{true};
+    int         m_dx{0};
+    int         m_dy{0};
+    bool        m_dirty{true};
+    int         m_cached_width{0};
 };
 
+// Immediate-mode helper to draw justified text inside a screen box
+void DrawTextBox(std::string_view text, const Rect& box, const TextStyle& style = {}, int alpha = 0x80);
+
 // -----------------------------------------------------------------------------
-// Cursor: Pointing hand with target lerp, 2-axis bobbing & drop shadow
+// Cursor: Pointing hand supporting both gamepad lerping and mouse pointing
 // -----------------------------------------------------------------------------
 class Cursor {
 public:
@@ -90,6 +153,9 @@ public:
 
     void SetTarget(float x, float y);
     void SnapTo(float x, float y);
+    void SetPointer(float x, float y);
+    void ClearPointer();
+    bool IsPointing() const { return m_pointing; }
     void Draw(int alpha = 0x80);
 
 private:
@@ -97,7 +163,10 @@ private:
     float m_cur_y{0.0f};
     float m_target_x{0.0f};
     float m_target_y{0.0f};
-    int m_anim_count{0};
+    bool  m_pointing{false};
+    float m_pointer_x{0.0f};
+    float m_pointer_y{0.0f};
+    int   m_anim_count{0};
     CTexture* m_texture{nullptr};
 };
 
@@ -108,6 +177,9 @@ class Brackets {
 public:
     Brackets();
     void Draw(int left, int right, int top, int bottom, int alpha = 0x80);
+    void Draw(const Rect& box, int alpha = 0x80) {
+        Draw(box.Left(), box.Right(), box.Top(), box.Bottom(), alpha);
+    }
 
 private:
     int m_beat{0};
@@ -127,6 +199,50 @@ private:
     int m_bar_frames{0};
     CTexture* m_track_tex{nullptr};
     CTexture* m_thumb_tex{nullptr};
+};
+
+// -----------------------------------------------------------------------------
+// BevelButton: Procedural beveled button with justified/centered text
+// -----------------------------------------------------------------------------
+enum class ButtonPreset {
+    Terracotta,
+    StoneGreen
+};
+
+struct ButtonStyle {
+    ButtonPreset preset      = ButtonPreset::Terracotta;
+    u32          text_color  = ColorWhite;        // Default: White
+    bool         drop_shadow = true;              // Default: Drop shadow on
+    Alignment    align       = Alignment::Center; // Default: Center justified
+    int          text_dx     = 0;
+    int          text_dy     = 0;
+};
+
+class BevelButton {
+public:
+    static void Draw(const Rect& box, std::string_view text,
+                     const ButtonStyle& style = {}, int alpha = 0x80);
+
+    static void Draw(int x, int y, int width, int height, std::string_view text,
+                     u32 text_color = ColorWhite, int alpha = 0x80,
+                     ButtonPreset preset = ButtonPreset::Terracotta,
+                     Alignment align = Alignment::Center,
+                     bool drop_shadow = true);
+};
+
+// -----------------------------------------------------------------------------
+// TextureButton: Sprite-backed button with optional text overlay
+// -----------------------------------------------------------------------------
+class TextureButton {
+public:
+    static void Draw(const Rect& box, CTexture* texture, const Rect& uv,
+                     int alpha = 0x80, std::string_view text = {},
+                     const TextStyle& text_style = {});
+
+    static void Draw(int x, int y, int width, int height,
+                     CTexture* texture, int u, int v, int uv_w, int uv_h,
+                     int alpha = 0x80, std::string_view text = {},
+                     const TextStyle& text_style = {});
 };
 
 } // namespace UI
