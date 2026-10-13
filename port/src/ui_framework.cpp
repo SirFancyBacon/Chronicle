@@ -19,12 +19,12 @@ extern void setbilinear(int n);
 namespace UI {
 
 // -----------------------------------------------------------------------------
-// Window
+// Window: 9-slice parametric dialog background (MenuHelpWinDraw wrapper)
 // -----------------------------------------------------------------------------
 void Window::Draw(int x, int y, int width_px, int height_px, int alpha) {
-    // 24px each side (48px total), 22px above and below (44px total)
-    float w = (width_px - 48) / 16.0f;
-    float h = (height_px - 44) / 16.0f;
+    // 28px horizontal frame cap overhead, 76px vertical border cap overhead
+    float w = (width_px - 28) / 16.0f;
+    float h = (height_px - 76) / 16.0f;
     if (w < 0.0f) w = 0.0f;
     if (h < 0.0f) h = 0.0f;
     MenuHelpWinDraw(x, y, w, h, alpha);
@@ -84,7 +84,6 @@ void Label::DrawWithStroke(int x, int y, u32 fill_color, u32 stroke_color, int s
         draw_x -= width;
     }
 
-    // 1. Render perimeter outline in stroke_color
     m_text.SetColour(stroke_color);
     for (int dy = -stroke_px; dy <= stroke_px; ++dy) {
         for (int dx = -stroke_px; dx <= stroke_px; ++dx) {
@@ -93,7 +92,6 @@ void Label::DrawWithStroke(int x, int y, u32 fill_color, u32 stroke_color, int s
         }
     }
 
-    // 2. Render foreground fill with slight horizontal bold overdraw
     m_text.SetColour(fill_color);
     m_text.Draw(draw_x, y, alpha);
     m_text.Draw(draw_x + 1, y, alpha);
