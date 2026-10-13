@@ -305,8 +305,8 @@ void DrawQuitConfirmModal(int alpha) {
     UI::Label desc_lbl(q_desc, UI::ColorWhite);
     desc_lbl.Draw(box_x + 22, box_y + 26, alpha);
 
-    // Button metrics matching retail dimensions (140px x 28px)
-    const int btn_w  = 140;
+    // Narrowed button width by ~14% (120px x 28px)
+    const int btn_w  = 120;
     const int btn_h  = 28;
     const int btn_x  = (640 - btn_w) / 2;
     const int btn_y0 = box_y + box_h + 10; // 228
@@ -319,25 +319,24 @@ void DrawQuitConfirmModal(int alpha) {
 
     auto DrawBevelButton = [&](int bx, int by, const std::string& text) {
         if (gaiji_tex != nullptr) {
-            // UV (0x6A, 0x6E) samples the pure white glove palm in the gaiji atlas
             CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
 
             // Drop shadow
             DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 2, by + 3, btn_w, btn_h), uv_white, 0, 0, 0, (alpha * 90) >> 7);
-            // Outer dark line (GS 20, 10, 5)
+            // Outer dark perimeter line
             DrawMenu2DSprite(gaiji_tex, CRect_i_(bx, by, btn_w, btn_h), uv_white, 20, 10, 5, alpha);
-            // Top/left highlight bevel (GS 115, 75, 50)
+            // Highlight bevel (top/left)
             DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 1, by + 1, btn_w - 2, btn_h - 2), uv_white, 115, 75, 50, alpha);
-            // Bottom/right shadow bevel (GS 55, 28, 14)
+            // Shadow bevel (bottom/right)
             DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 2, by + 2, btn_w - 3, btn_h - 3), uv_white, 55, 28, 14, alpha);
-            // Terracotta orange face fill (GS 100, 56, 33)
+            // Terracotta orange face fill
             DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 2, by + 2, btn_w - 4, btn_h - 4), uv_white, 100, 56, 33, alpha);
         }
 
         MenuTextureReload(0x1A);
         UI::Label lbl(text, UI::ColorWhite, UI::Alignment::Center);
-        // Centered horizontally and vertically (by + 5)
-        lbl.Draw(bx + (btn_w / 2), by + 5, alpha);
+        // Centered horizontally and vertically (by + 2)
+        lbl.Draw(bx + (btn_w / 2), by + 2, alpha);
     };
 
     std::string txt_yes = LocalizeText("battlemenu.quit.yes", "YES");
@@ -348,10 +347,13 @@ void DrawQuitConfirmModal(int alpha) {
 
     int sel_y = (s_quit_confirm_choice == 0) ? btn_y0 : btn_y1;
 
-    // Tight selection bracket framing (146px x 32px)
-    DrawMenuWaku(btn_x - 3, sel_y - 2, btn_w + 6, btn_h + 4, 0, StayTex, alpha);
+    // Corner sprite size (16px) compensation:
+    // w = btn_w + 2*pad - 16 = 120 + 6 - 16 = 110
+    // h = btn_h + 2*pad - 16 = 28 + 6 - 16 = 18
+    constexpr int pad = 3;
+    DrawMenuWaku(btn_x - pad, sel_y - pad, btn_w + 2 * pad - 16, btn_h + 2 * pad - 16, 0, StayTex, alpha);
 
-    // Hand cursor centered vertically on the active button
+    // Hand cursor vertically centered with the active button
     s_quit_cursor.SetTarget(static_cast<float>(btn_x - 34), static_cast<float>(sel_y + 4));
     s_quit_cursor.Draw(alpha);
 }
@@ -735,7 +737,7 @@ PORT_OVERRIDE int BattleMenuSelect() {
             case BTLMENU_PAGE_QUIT: {
                 s_quit_confirm_active = true;
                 s_quit_confirm_choice = 1;
-                s_quit_cursor.SnapTo((640 - 140) / 2.0f - 34.0f, (164 + 54 + 10 + 28 + 6) + 4.0f);
+                s_quit_cursor.SnapTo((640 - 120) / 2.0f - 34.0f, (164 + 54 + 10 + 28 + 6) + 4.0f);
                 ComMenuSePlay(MENU_SOUND_CONFIRM);
                 return 1;
             }
