@@ -1,108 +1,34 @@
 #include "menu_manual.hpp"
 
-// Port-specific headers
 #include <SDL3/SDL.h>
-#include <cstdlib>
 #include <cstdio>
-#include <cstring>
-#include <cmath>
 #include <vector>
 
-// Retail and engine headers
 #include "clsmes.hpp"
 #include "dataread.hpp"
-#include "dngstatusdata.hpp"
-#include "draw2d_port.hpp"
-#include "eastking.hpp"
 #include "gamepad.hpp"
-#include "gametext.hpp"
 #include "gameutil.hpp"
 #include "memcard.hpp"
 #include "menu_draw.hpp"
 #include "menuetc.hpp"
-#include "mglib.hpp"
-#include "rect.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
-#include "texture.hpp"
-#include "userstatus.hpp"
 
-// Miracle chest database generated from game disc assets
 #include "chests_data.hpp"
+#include "ui_framework.hpp"
 
-// Native Color Palette Enums
-constexpr u32 NATIVE_COLOR_WHITE  = FONT_COLOR_WHITE;
-constexpr u32 NATIVE_COLOR_GOLD   = FONT_COLOR_GOLD;
-constexpr u32 NATIVE_COLOR_YELLOW = FONT_COLOR_YELLOW;
-
-// Native Gamepad Glyph Tokens (no underscores to prevent '?' font corruption)
-#define PAD_GLYPH_UP      "{up}"
-#define PAD_GLYPH_DOWN    "{down}"
-#define PAD_GLYPH_CROSS   "{cross}"
-#define PAD_GLYPH_SQUARE  "{square}"
-#define PAD_GLYPH_CIRCLE  "{circle}"
-
-// ==============================================================
-// MOD UI FRAMEWORK
-// ==============================================================
-namespace ModUI {
-
-    class DynamicText {
-    public:
-        GameText text;
-        u32 color;
-        DynamicText(const char* string, u32 c = NATIVE_COLOR_WHITE) : color(c) {
-            text.Set(string);
-        }
-        void Draw(int x, int y, int alpha = 0x80) {
-            text.SetColour(color); 
-            text.RefreshGlyphs();
-            text.Draw(x, y, alpha);
-        }
-        int GetWidth() {
-            text.RefreshGlyphs();
-            return text.Width();
-        }
-    };
-
-    void DrawWindow(int x, int y, int width_px, int height_px, int alpha = 0x80) {
-        float w = (width_px - 28) / 16.0f;
-        float h = (height_px - 76) / 16.0f;
-        if (w < 0.0f) w = 0.0f;
-        if (h < 0.0f) h = 0.0f;
-        MenuHelpWinDraw(x, y, w, h, alpha);
-    }
-
-    // Renders the authentic pointing hand cursor with idle bounce
-    void DrawHandCursor(int x, int y, int alpha = 0x80) {
-        CTexture* tex = draw2d::Get().find_texture("gaiji");
-        if (tex == nullptr) {
-            tex = TexManager.GetTexture((char*)"gaiji", -1);
-        }
-        if (tex == nullptr) {
-            return;
-        }
-
-        float vibe_angle = static_cast<float>(SDL_GetTicks()) * 0.012f;
-        int bounce_x = static_cast<int>(std::sin(vibe_angle) * 3.5f);
-
-        setbilinear(0);
-        CRect_i_ hand_uv(0x60, 0x60, 0x20, 0x20);
-        CRect_i_ screen_pos(x + bounce_x, y, 0x20, 0x20);
-
-        set2DSprite(Vif1Packet, tex, screen_pos, hand_uv, alpha);
-    }
-
-} // namespace ModUI
-
-// ==============================================================
-// TRACKER DATA, HELPERS & STATE
-// ==============================================================
+// Controller Glyph Tokens without underscores
+#define GLYPH_UP     "{up}"
+#define GLYPH_DOWN   "{down}"
+#define GLYPH_CROSS  "{cross}"
+#define GLYPH_SQUARE "{square}"
+#define GLYPH_CIRCLE "{circle}"
 
 #define MANUAL_MODE_TRACKER 100
 
-static int  tracker_selected_town       = 0;
-static bool tracker_filter_miracle_only = true;
+static int       s_selected_town       = 0;
+static bool      s_miracle_filter_only = true;
+static UI::Cursor s_menu_cursor;
 
 static inline bool IsItemEden(uint16_t id)    { return id == 180; }
 static inline bool IsItemGourd(uint16_t id)   { return id == 182; }
@@ -292,7 +218,7 @@ PORT_OVERRIDE int MenuManualKey() {
         case MANUAL_MODE_SELECT: {
             int  minimum;
             int  maximum;
-            int *selection = NULL;
+            int *selection = nullptr;
 
             if (ManualMenu.selection_level == -2) {
                 minimum = 0;
@@ -307,7 +233,7 @@ PORT_OVERRIDE int MenuManualKey() {
                 selection = &ManualMenu.entry;
             }
 
-            if (selection != NULL) {
+            if (selection != nullptr) {
                 if (GamePad.Down(PAD_UP)) {
                     (*selection)--;
                     ComMenuSePlay(MENU_SOUND_CURSOR);
@@ -339,11 +265,11 @@ PORT_OVERRIDE int MenuManualKey() {
                     if (ManualMenu.category != 4) {
                         Port_ManualImgLoad();
                     }
-                    
                 } else if (ManualMenu.selection_level == -2) {
                     if (ManualMenu.category == 4) {
                         ManualMenu.mode = MANUAL_MODE_TRACKER;
-                        tracker_selected_town = 0;
+                        s_selected_town = 0;
+                        s_menu_cursor.SnapTo(58.0f, 168.0f - 3.0f);
                         ComMenuSePlay(MENU_SOUND_CONFIRM);
                     } else {
                         ManualMenu.selection_level++;
@@ -376,17 +302,17 @@ PORT_OVERRIDE int MenuManualKey() {
                 ComMenuSePlay(MENU_SOUND_REFUSE);
             }
             if (GamePad.Down(PAD_UP)) {
-                tracker_selected_town--;
-                if (tracker_selected_town < 0) tracker_selected_town = TRACKER_TOWN_COUNT - 1;
+                s_selected_town--;
+                if (s_selected_town < 0) s_selected_town = TRACKER_TOWN_COUNT - 1;
                 ComMenuSePlay(MENU_SOUND_CURSOR);
             }
             if (GamePad.Down(PAD_DOWN)) {
-                tracker_selected_town++;
-                if (tracker_selected_town >= TRACKER_TOWN_COUNT) tracker_selected_town = 0;
+                s_selected_town++;
+                if (s_selected_town >= TRACKER_TOWN_COUNT) s_selected_town = 0;
                 ComMenuSePlay(MENU_SOUND_CURSOR);
             }
             if (GamePad.Down(PAD_CROSS | PAD_SQUARE)) {
-                tracker_filter_miracle_only = !tracker_filter_miracle_only;
+                s_miracle_filter_only = !s_miracle_filter_only;
                 ComMenuSePlay(MENU_SOUND_CONFIRM);
             }
             break;
@@ -460,11 +386,11 @@ PORT_OVERRIDE void MenuManualDraw() {
         int text_alpha = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
         int win_alpha  = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
         
-        ModUI::DrawWindow(135, 85, 220, 160, win_alpha);
+        UI::Window::Draw(135, 85, 220, 160, win_alpha);
         
         if (ManualMenu.selection_level == -2) {
-            int hand_y = 100 + (ManualMenu.category * 25) - 3;
-            ModUI::DrawHandCursor(126, hand_y, 0x80);
+            s_menu_cursor.SetTarget(126.0f, static_cast<float>(100 + (ManualMenu.category * 25) - 3));
+            s_menu_cursor.Draw(0x80);
         }
 
         MenuTextureReload(0x1A);
@@ -473,15 +399,11 @@ PORT_OVERRIDE void MenuManualDraw() {
             "Georama", "Dungeon", "Weapon", "Savings/Other", "Miracle Chests"
         };
         
-        int start_y = 100;
         for (int i = 0; i < 5; i++) {
-            int row_y = start_y + (i * 25);
-            u32 color = (i == ManualMenu.category && ManualMenu.selection_level == -2) 
-                        ? NATIVE_COLOR_YELLOW 
-                        : NATIVE_COLOR_WHITE;
-            
-            ModUI::DynamicText text(categories[i], color);
-            text.Draw(160, row_y, text_alpha);
+            uint32_t color = (i == ManualMenu.category && ManualMenu.selection_level == -2) 
+                             ? UI::ColorYellow 
+                             : UI::ColorWhite;
+            UI::Label(categories[i], color).Draw(160, 100 + (i * 25), text_alpha);
         }
         
         if (ManualMenu.selection_level == -2) {
@@ -491,60 +413,52 @@ PORT_OVERRIDE void MenuManualDraw() {
 
     // --- CHEST TRACKER DASHBOARD ---
     if (ManualMenu.mode == MANUAL_MODE_TRACKER) {
-        // Window shrunken by 40px in height (335 -> 295) to end tightly below the content
-        ModUI::DrawWindow(64, 85, 512, 295, 0x80); 
+        // Window bounds: 512x295 placed at Y=85
+        UI::Window::Draw(64, 85, 512, 295, 0x80); 
         MenuTextureReload(0x1A);
 
         // Header Title
-        ModUI::DynamicText header("JOURNAL: CHEST TRACKER", NATIVE_COLOR_GOLD);
-        header.Draw(320 - (header.GetWidth() / 2), 98, 0x80);
+        UI::Label("JOURNAL: CHEST TRACKER", UI::ColorGold, UI::Alignment::Center).Draw(320, 98, 0x80);
 
         // Filter Mode Indicator
-        const char* mode_label = tracker_filter_miracle_only ? "< MIRACLE CHESTS ONLY >" : "< ALL TOWN CHESTS >";
-        u32 mode_color = tracker_filter_miracle_only ? NATIVE_COLOR_YELLOW : NATIVE_COLOR_WHITE;
-        ModUI::DynamicText mode_text(mode_label, mode_color);
-        mode_text.Draw(320 - (mode_text.GetWidth() / 2), 120, 0x80);
+        const char* mode_label = s_miracle_filter_only ? "< MIRACLE CHESTS ONLY >" : "< ALL TOWN CHESTS >";
+        uint32_t mode_color = s_miracle_filter_only ? UI::ColorYellow : UI::ColorWhite;
+        UI::Label(mode_label, mode_color, UI::Alignment::Center).Draw(320, 120, 0x80);
 
         // --- Left Pane: Settlements List ---
-        ModUI::DynamicText left_hdr("SETTLEMENTS", NATIVE_COLOR_YELLOW);
-        left_hdr.Draw(88, 144, 0x80);
+        UI::Label("SETTLEMENTS", UI::ColorYellow).Draw(88, 144, 0x80);
 
-        int left_start_y = 168;
-        int row_spacing  = 24;
+        constexpr int left_start_y = 168;
+        constexpr int row_spacing  = 24;
 
-        int tracker_hand_y = left_start_y + (tracker_selected_town * row_spacing) - 3;
-        ModUI::DrawHandCursor(58, tracker_hand_y, 0x80);
+        s_menu_cursor.SetTarget(58.0f, static_cast<float>(left_start_y + (s_selected_town * row_spacing) - 3));
+        s_menu_cursor.Draw(0x80);
 
         MenuTextureReload(0x1A);
         for (int i = 0; i < TRACKER_TOWN_COUNT; i++) {
             int row_y = left_start_y + (i * row_spacing);
-            u32 name_color = (i == tracker_selected_town) ? NATIVE_COLOR_YELLOW : NATIVE_COLOR_WHITE;
-            
-            ModUI::DynamicText town_name(TRACKER_TOWNS[i].name, name_color);
-            town_name.Draw(88, row_y, 0x80);
+            uint32_t name_color = (i == s_selected_town) ? UI::ColorYellow : UI::ColorWhite;
+            UI::Label(TRACKER_TOWNS[i].name, name_color).Draw(88, row_y, 0x80);
         }
 
         // Left Pane: World Total Section
         TownStats g_stats = GetGlobalStats();
-        int g_collected = tracker_filter_miracle_only ? g_stats.collected_miracle : g_stats.collected_total;
-        int g_max       = tracker_filter_miracle_only ? g_stats.max_miracle       : g_stats.max_total;
+        int g_collected = s_miracle_filter_only ? g_stats.collected_miracle : g_stats.collected_total;
+        int g_max       = s_miracle_filter_only ? g_stats.max_miracle       : g_stats.max_total;
 
-        ModUI::DynamicText total_hdr("World Total", NATIVE_COLOR_GOLD);
-        total_hdr.Draw(88, 300, 0x80);
+        UI::Label("World Total", UI::ColorGold).Draw(88, 300, 0x80);
 
         char g_buf[32];
         snprintf(g_buf, sizeof(g_buf), "[ %2d / %2d ]", g_collected, g_max);
-        u32 g_color = (g_collected == g_max && g_max > 0) ? NATIVE_COLOR_GOLD : NATIVE_COLOR_WHITE;
-        ModUI::DynamicText g_progress(g_buf, g_color);
-        g_progress.Draw(88, 322, 0x80);
+        uint32_t g_color = (g_collected == g_max && g_max > 0) ? UI::ColorGold : UI::ColorWhite;
+        UI::Label(g_buf, g_color).Draw(88, 322, 0x80);
 
         // --- Right Pane: Breakdown & Summary ---
         char right_title[64];
-        snprintf(right_title, sizeof(right_title), "%s Breakdown", TRACKER_TOWNS[tracker_selected_town].name);
-        ModUI::DynamicText right_hdr(right_title, NATIVE_COLOR_YELLOW);
-        right_hdr.Draw(275, 144, 0x80);
+        snprintf(right_title, sizeof(right_title), "%s Breakdown", TRACKER_TOWNS[s_selected_town].name);
+        UI::Label(right_title, UI::ColorYellow).Draw(275, 144, 0x80);
 
-        TownStats cur_stats = GetTownStats(tracker_selected_town);
+        TownStats cur_stats = GetTownStats(s_selected_town);
 
         struct MetricRow {
             const char* label;
@@ -559,64 +473,58 @@ PORT_OVERRIDE void MenuManualDraw() {
             { "Pockets",         cur_stats.collected_pocket, cur_stats.max_pocket }
         };
 
-        if (!tracker_filter_miracle_only) {
+        if (!s_miracle_filter_only) {
             breakdown.push_back({ "Standard Items", cur_stats.collected_std, cur_stats.max_std });
         }
 
-        int right_start_y = 168;
-        int right_spacing = 22;
+        constexpr int right_start_y = 168;
+        constexpr int right_spacing = 22;
 
         for (size_t r = 0; r < breakdown.size(); ++r) {
-            int y = right_start_y + (r * right_spacing);
-            ModUI::DynamicText lbl(breakdown[r].label, NATIVE_COLOR_WHITE);
-            lbl.Draw(275, y, 0x80);
+            int y = right_start_y + (static_cast<int>(r) * right_spacing);
+            UI::Label(breakdown[r].label, UI::ColorWhite).Draw(275, y, 0x80);
 
             char b_buf[32];
             snprintf(b_buf, sizeof(b_buf), "[ %2d / %2d ]", breakdown[r].collected, breakdown[r].max_val);
-            u32 c_col = (breakdown[r].collected == breakdown[r].max_val && breakdown[r].max_val > 0)
-                        ? NATIVE_COLOR_GOLD
-                        : NATIVE_COLOR_WHITE;
-            ModUI::DynamicText cnt(b_buf, c_col);
-            cnt.Draw(455, y, 0x80);
+            uint32_t c_col = (breakdown[r].collected == breakdown[r].max_val && breakdown[r].max_val > 0)
+                             ? UI::ColorGold
+                             : UI::ColorWhite;
+            UI::Label(b_buf, c_col).Draw(455, y, 0x80);
         }
 
         // Right Pane: Progress percentage
-        int town_cur_collected = tracker_filter_miracle_only ? cur_stats.collected_miracle : cur_stats.collected_total;
-        int town_cur_max       = tracker_filter_miracle_only ? cur_stats.max_miracle       : cur_stats.max_total;
-        int summary_y          = tracker_filter_miracle_only ? 264 : 284;
+        int town_cur_collected = s_miracle_filter_only ? cur_stats.collected_miracle : cur_stats.collected_total;
+        int town_cur_max       = s_miracle_filter_only ? cur_stats.max_miracle       : cur_stats.max_total;
+        int summary_y          = s_miracle_filter_only ? 264 : 284;
 
         int pct = (town_cur_max > 0) ? (town_cur_collected * 100) / town_cur_max : 0;
         char pct_buf[32];
         snprintf(pct_buf, sizeof(pct_buf), "Progress: %d%%", pct);
 
-        u32 pct_color = (town_cur_collected == town_cur_max && town_cur_max > 0)
-                            ? NATIVE_COLOR_GOLD
-                            : NATIVE_COLOR_WHITE;
+        uint32_t pct_color = (town_cur_collected == town_cur_max && town_cur_max > 0)
+                             ? UI::ColorGold
+                             : UI::ColorWhite;
+        UI::Label(pct_buf, pct_color).Draw(275, summary_y, 0x80);
 
-        ModUI::DynamicText pct_txt(pct_buf, pct_color);
-        pct_txt.Draw(275, summary_y, 0x80);
-
-        // Right Pane: Area Total (directly under Progress)
+        // Right Pane: Area Total
         int total_row_y = summary_y + 20;
-        ModUI::DynamicText area_total_lbl("Area Total", NATIVE_COLOR_YELLOW);
-        area_total_lbl.Draw(275, total_row_y, 0x80);
+        UI::Label("Area Total", UI::ColorYellow).Draw(275, total_row_y, 0x80);
 
         char area_buf[32];
         snprintf(area_buf, sizeof(area_buf), "[ %2d / %2d ]", town_cur_collected, town_cur_max);
-        u32 area_col = (town_cur_collected == town_cur_max && town_cur_max > 0)
-                       ? NATIVE_COLOR_GOLD
-                       : NATIVE_COLOR_WHITE;
-        ModUI::DynamicText area_total_val(area_buf, area_col);
-        area_total_val.Draw(455, total_row_y, 0x80);
+        uint32_t area_col = (town_cur_collected == town_cur_max && town_cur_max > 0)
+                            ? UI::ColorGold
+                            : UI::ColorWhite;
+        UI::Label(area_buf, area_col).Draw(455, total_row_y, 0x80);
 
-        // Bottom Controls Help Bar docked outside the window with a 15px margin from the screen bottom (480 - 15 - ~17)
-        ModUI::DynamicText controls(
-            PAD_GLYPH_UP " / " PAD_GLYPH_DOWN " Select   "
-            PAD_GLYPH_CROSS " / " PAD_GLYPH_SQUARE " Filter   "
-            PAD_GLYPH_CIRCLE " Return",
-            NATIVE_COLOR_WHITE
-        );
-        controls.Draw(320 - (controls.GetWidth() / 2), 448, 0x80);
+        // Bottom Controls Help Bar docked outside window at Y=436
+        UI::Label(
+            GLYPH_UP " / " GLYPH_DOWN " Select   "
+            GLYPH_CROSS " / " GLYPH_SQUARE " Filter   "
+            GLYPH_CIRCLE " Return",
+            UI::ColorWhite,
+            UI::Alignment::Center
+        ).Draw(320, 436, 0x80);
 
         return; 
     }
@@ -645,11 +553,11 @@ PORT_OVERRIDE void MenuManualDraw() {
             CRect_i_  screen(screen_x, 0, width, SCREEN_HEIGHT);
             CRect_i_  texel(source_x, 0, width, 0x1C0);
             CTexture *texture = ManualMenuTex[image];
-            if (texture != NULL) {
+            if (texture != nullptr) {
                 DrawMenu2DSprite(texture, screen, texel, 100, 100, 100, 0x80);
             } else {
                 int previous = image - 1;
-                while (ManualMenuTex[previous] == NULL) {
+                while (ManualMenuTex[previous] == nullptr) {
                     if (--previous <= 0) break;
                 }
                 if (previous >= 0) {

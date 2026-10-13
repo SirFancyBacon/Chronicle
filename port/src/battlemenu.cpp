@@ -15,7 +15,7 @@
 #include "gamepad.hpp"
 #include "itemdata.hpp"
 #include "mainselect.hpp"
-#include "map.hpp"               // Required for MapNo
+#include "map.hpp"
 #include "memcard.hpp"
 #include "menu_draw.hpp"
 #include "menu_dungeon.hpp"
@@ -23,22 +23,27 @@
 #include "menu_manual.hpp"
 #include "menu_misc.hpp"
 #include "menu_mouse.hpp"
-#include "menu_save.hpp"         // Required for SAVE_MENU_MODE_SAVE
+#include "menu_save.hpp"
 #include "menuetc.hpp"
 #include "mglib.hpp"
 #include "rect.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
-#include "userstatus.hpp"        // Required for CUserStatus
+#include "userstatus.hpp"
 #include "weaponlevelup.hpp"
 
-// EXTERN DECLARATIONS FOR HIJACKED STATIC FUNCTIONS
+// UI Framework
+#include "ui_framework.hpp"
+
+#include <string>
+#include <vector>
+
+// Externs for hijacked static functions
 extern void Btl_InitMenuChara(u_long128 *buffer);
 extern void Btl_InitWeaponSelect(int mode, int chara);
 extern void Btl_InitItemMode(int mode, int chara);
 extern void Btl_BattleManualInit(int*, u_long128*);
 
-// Define a new internal state for our Quit button
 #define BTLMENU_PAGE_QUIT 100
 
 namespace {
@@ -47,10 +52,10 @@ int GetMenuModeMax() {
     int icon_count = 0;
     switch (BtlMenuMode) {
         case BATTLE_MENU_MODE_DUNGEON:
-            icon_count = 8; // Original was 7
+            icon_count = 8;
             break;
         case BATTLE_MENU_MODE_TOWN:
-            icon_count = 9; // Original was 8
+            icon_count = 9;
             break;
     }
     return icon_count;
@@ -80,17 +85,82 @@ void BtlMenuMekeIconInfo(int *icons, int menu_mode) {
     }
 }
 
-// Helper to prevent out-of-bounds reads on the original size-8 NorMenuIcon array
 void GetSafeIconPos(int index, float& out_x, float& out_y) {
     int orig_max = (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON) ? 7 : 8;
     if (index < orig_max) {
         out_x = NorMenuIcon[index].x;
         out_y = NorMenuIcon[index].y;
     } else {
-        // Position extra icons dynamically based on the last original icon's position
         int diff = index - (orig_max - 1);
         out_x = NorMenuIcon[orig_max - 1].x - (16.0f * diff);
         out_y = NorMenuIcon[orig_max - 1].y + (40.0f * diff);
+    }
+}
+
+const char* GetBattleMenuLabel(int index, int mode) {
+    if (mode == BATTLE_MENU_MODE_DUNGEON) {
+        switch (index) {
+            case 0: return "ITEM";
+            case 1: return "WEAPON";
+            case 2: return "ALLIES";
+            case 3: return "GEORAMA PARTS";
+            case 4: {
+                int escape_flag = GetEscapeDngFlag();
+                return (escape_flag == 2) ? "ESCAPE" : "GO OUTSIDE";
+            }
+            case 5: return "OPTION";
+            case 6: return "JOURNAL";
+            case 7: return "QUIT GAME";
+            default: return "";
+        }
+    } else {
+        switch (index) {
+            case 0: return "ITEM";
+            case 1: return "WEAPON";
+            case 2: return "ALLIES";
+            case 3: return "GEORAMA PARTS";
+            case 4: {
+                switch (NowGetGameFlagForBtlMenu(BtlMenuMode)) {
+                    case MENU_MOVE_WORLD_MAP:     return "WORLD MAP";
+                    case MENU_MOVE_INTERIOR_OUT:  return "GO OUTSIDE";
+                    default:                      return "GO TO DUNGEON";
+                }
+            }
+            case 5: return "SAVE";
+            case 6: return "OPTION";
+            case 7: return "JOURNAL";
+            case 8: return "QUIT GAME";
+            default: return "";
+        }
+    }
+}
+
+void GetBattleMenuHelp(int index, int mode, const char*& out_title, const char*& out_desc) {
+    if (mode == BATTLE_MENU_MODE_DUNGEON) {
+        switch (index) {
+            case 0: out_title = "Item";         out_desc = "Use, check, or discard items."; break;
+            case 1: out_title = "Weapon";       out_desc = "Equip, repair, or upgrade weapons."; break;
+            case 2: out_title = "Allies";       out_desc = "Change active party member."; break;
+            case 3: out_title = "Georama";      out_desc = "View collected town parts."; break;
+            case 4: out_title = "Escape";       out_desc = "Escape from the current dungeon."; break;
+            case 5: out_title = "Option";       out_desc = "Adjust game settings."; break;
+            case 6: out_title = "Journal";      out_desc = "Chest Tracker & manuals."; break;
+            case 7: out_title = "Quit Game";    out_desc = "Exit Chronicle to desktop."; break;
+            default: out_title = ""; out_desc = ""; break;
+        }
+    } else {
+        switch (index) {
+            case 0: out_title = "Item";         out_desc = "Use, check, or discard items."; break;
+            case 1: out_title = "Weapon";       out_desc = "Equip, repair, or upgrade weapons."; break;
+            case 2: out_title = "Allies";       out_desc = "Change active party member."; break;
+            case 3: out_title = "Georama";      out_desc = "Assemble and view town pieces."; break;
+            case 4: out_title = "Move";         out_desc = "Travel to dungeon or world locations."; break;
+            case 5: out_title = "Save";         out_desc = "Save current game progress."; break;
+            case 6: out_title = "Option";       out_desc = "Adjust game settings."; break;
+            case 7: out_title = "Journal";      out_desc = "Chest Tracker & manuals."; break;
+            case 8: out_title = "Quit Game";    out_desc = "Exit Chronicle to desktop."; break;
+            default: out_title = ""; out_desc = ""; break;
+        }
     }
 }
 
@@ -121,6 +191,17 @@ void DrawBtlMenuBar() {
     int icons[9] = {};
     BtlMenuMekeIconInfo(icons, BtlMenuMode);
 
+    // 1. Suppress baked texture labels
+    for (i = 0; i < icon_count; i++) {
+        if (icons[i] >= 0) {
+            MENU_ICON_INFO* info = GetMenuIconInfo(icons[i]);
+            if (info != nullptr) {
+                info->label_width = 0;
+            }
+        }
+    }
+
+    // 2. Draw circular medallion icons
     for (i = 0; i < icon_count; i++) {
         icon_alpha = alpha;
         brightness = 128;
@@ -129,7 +210,6 @@ void DrawBtlMenuBar() {
 
         menu_flag = BattleMenuFlag;
 
-        // Hide all unselected icons whenever any sub-menu is active
         if (menu_flag != BTLMENU_STATE_MAIN && menu_flag != BTLMENU_STATE_APPEAR && menu_flag != BTLMENU_STATE_EXIT) {
             if (i != MenuSelect[1]) {
                 continue;
@@ -160,7 +240,34 @@ void DrawBtlMenuBar() {
             DrawMainMenuIcon(x, y, icons[i], selected, brightness, icon_alpha);
         }
     }
+
+    // 3. Render all-caps text centered vertically with medallion icons
+    MenuTextureReload(0x1A);
+    for (i = 0; i < icon_count; i++) {
+        menu_flag = BattleMenuFlag;
+        if (menu_flag != BTLMENU_STATE_MAIN && menu_flag != BTLMENU_STATE_APPEAR && menu_flag != BTLMENU_STATE_EXIT) {
+            if (i != MenuSelect[1]) {
+                continue;
+            }
+        }
+
+        float icon_x, icon_y;
+        GetSafeIconPos(i, icon_x, icon_y);
+
+        float label_x = icon_x + 72.0f;
+        float label_y = icon_y + 11.0f; // Centered with icon center (icon_y + 19)
+
+        if (i == MenuSelect[1]) {
+            label_x -= 10.0f;
+            label_y -= 4.0f; // Centered with selected icon center (icon_y + 15)
+        }
+
+        const char* label_str = GetBattleMenuLabel(i, BtlMenuMode);
+        UI::Label lbl(label_str);
+        lbl.DrawWithStroke(static_cast<int>(label_x), static_cast<int>(label_y), UI::ColorWhite, UI::ColorBlue, 2, alpha);
+    }
 }
+
 int BtlMenuDrawSpecialFlag(int flag) {
     if ((BattleMenuFlag == BTLMENU_STATE_ATLA_OPEN || BattleMenuFlag == BTLMENU_STATE_ATLA ||
          BattleMenuFlag == BTLMENU_STATE_ATLA_CLOSE) && GetMenuAtraEventFlag() != 0) {
@@ -180,7 +287,6 @@ PORT_OVERRIDE void DrawBattleMain() {
     int pos[2];
     int icons[9];
 
-    // Mirror the math from the original GetMenuIconPos
     int next = MenuSelect[1] + 1;
     pos[0] = next * 16 + 80;
     pos[1] = MenuSelect[1] * 40 + 54;
@@ -194,33 +300,6 @@ PORT_OVERRIDE void DrawBattleMain() {
     SysCur[1] += ((float) y - SysCur[1]) / 4.0f;
     
     BtlMenuMekeIconInfo(icons, BtlMenuMode);
-    MENU_ICON_INFO *info = GetMenuIconInfo(icons[MenuSelect[1]]);
-    int mes_no = info->help_mes_no;
-
-    if (MenuSelect[1] == 4) {
-        switch (NowGetGameFlagForBtlMenu(BtlMenuMode)) {
-            case MENU_MOVE_DUNGEON_ESCAPE: {
-                s16 escape[3] = {0x1B, 0x1C, 0x0F};
-                mes_no = escape[GetEscapeDngFlag()];
-                break;
-            }
-            case MENU_MOVE_LOCKED: mes_no = 0x1D; break;
-            case MENU_MOVE_FIRST_DUNGEON: mes_no = 0x12; break;
-            case MENU_MOVE_WORLD_MAP: mes_no = 0x11; break;
-            case MENU_MOVE_INTERIOR_OUT: mes_no = 0x13; break;
-        }
-    }
-
-    int max_icons = GetMenuModeMax();
-    if (MenuSelect[1] == max_icons - 2) {
-        mes_no = 998; // Custom ID for "Journal"
-    } else if (MenuSelect[1] == max_icons - 1) {
-        mes_no = 999; // Custom ID for "Quit Game"
-    }
-
-    if (CommonMenuMes2.mes_made != mes_no) {
-        CommonMenuMes2.MakeMesWin(mes_no);
-    }
 
     if (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON) {
         int limit = GetLimmitMsg();
@@ -237,9 +316,12 @@ PORT_OVERRIDE void DrawBattleMain() {
         }
     }
 
-    int width = info->label_width + 0x4A;
+    // Dynamic bracket width adjusted for the +72px label offset
+    MenuTextureReload(0x1A);
+    const char* label_str = GetBattleMenuLabel(MenuSelect[1], BtlMenuMode);
+    UI::Label lbl(label_str);
+    int width = lbl.GetWidth() + 98;
 
-    // Prevent array bounds fault!
     float icon_x, icon_y;
     GetSafeIconPos(MenuSelect[1], icon_x, icon_y);
 
@@ -248,11 +330,8 @@ PORT_OVERRIDE void DrawBattleMain() {
     DrawMenuObjectVibe((int) SysCur[0], (int) SysCur[1], 1, 0x40);
 }
 
-
 PORT_OVERRIDE void BattleMenuDraw() {
     MenuMouseNoteBattleMenu();
-    int text_x = 0;
-    int text_y = 0;
 
     setbilinear(0);
     MenuWorldTrans(&MenuCamera);
@@ -350,22 +429,75 @@ PORT_OVERRIDE void BattleMenuDraw() {
                 if (BtlHelpWinAlpha > 0x80) BtlHelpWinAlpha = 0x80;
                 break;
         }
-
-        if (draw_help != 0) {
-            MenuHelpWinDraw((int) HelpWinHead[0], (int) HelpWinHead[1], BtlHelpWinW, BtlHelpWinH, BtlHelpWinAlpha);
-        }
     }
 
-    MenuTextureReload(CommonMenuMes2.tex_block);
-    GetMainMenuRightHelpMsgLangOffset(text_x, text_y);
-    CommonMenuMes2.text_x = (int) (HelpWinHead[0] + text_x);
-    CommonMenuMes2.text_y = (int) (HelpWinHead[1] + text_y);
+    // Dynamic text-wrapped help box anchored at bottom right
+    if (BtlMenuReadEndFlag != 0 && draw_help != 0 && BtlHelpWinAlpha > 0) {
+        const int box_w = 280;
+        const int box_right_margin = 18;
+        const int box_x = 640 - box_w - box_right_margin;
+        const int box_bottom = 452;
 
-    if (BtlMenuReadEndFlag != 0 && draw_help != 0) {
-        CommonMenuMes2.stay_frame = false;
-        CommonMenuMes2.edge_alpha = BtlHelpWinAlpha;
-        CommonMenuMes2.Step();
-        CommonMenuMes2.DrawMesWin();
+        const char* title = "";
+        const char* desc  = "";
+        GetBattleMenuHelp(MenuSelect[1], BtlMenuMode, title, desc);
+
+        // Word-wrap description text to fit inner width (280 - 48 = 232)
+        const int max_text_w = box_w - 48;
+        std::vector<std::string> desc_lines;
+
+        MenuTextureReload(0x1A);
+        std::string current_line;
+        const char* p = desc;
+
+        while (*p) {
+            while (*p == ' ') p++;
+            if (*p == '\0') break;
+
+            const char* word_start = p;
+            while (*p && *p != ' ') p++;
+            std::string word(word_start, p - word_start);
+
+            std::string candidate = current_line.empty() ? word : (current_line + " " + word);
+            UI::Label test_lbl(candidate);
+            if (test_lbl.GetWidth() > max_text_w && !current_line.empty()) {
+                desc_lines.push_back(current_line);
+                current_line = word;
+            } else {
+                current_line = candidate;
+            }
+        }
+        if (!current_line.empty()) {
+            desc_lines.push_back(current_line);
+        }
+
+        // Dynamic height: 20 top padding + 20 title + 6 gap + (lines * 20) + 20 bottom padding
+        const int line_h = 20;
+        const int top_padding = 20;
+        const int title_h = 20;
+        const int title_desc_gap = 6;
+        const int desc_h = static_cast<int>(desc_lines.size()) * line_h;
+        const int bottom_padding = 20;
+
+        int box_h = top_padding + title_h + title_desc_gap + desc_h + bottom_padding;
+        if (box_h < 76) box_h = 76;
+
+        int box_y = box_bottom - box_h;
+
+        // Draw dynamic window plate
+        UI::Window::Draw(box_x, box_y, box_w, box_h, BtlHelpWinAlpha);
+        MenuTextureReload(0x1A);
+
+        // Draw title
+        UI::Label title_lbl(title, UI::ColorYellow);
+        title_lbl.Draw(box_x + 24, box_y + top_padding, BtlHelpWinAlpha);
+
+        // Draw wrapped description lines
+        int desc_y = box_y + top_padding + title_h + title_desc_gap;
+        for (size_t i = 0; i < desc_lines.size(); ++i) {
+            UI::Label line_lbl(desc_lines[i], UI::ColorWhite);
+            line_lbl.Draw(box_x + 24, desc_y + (static_cast<int>(i) * line_h), BtlHelpWinAlpha);
+        }
     }
 
     setbilinear(0);
