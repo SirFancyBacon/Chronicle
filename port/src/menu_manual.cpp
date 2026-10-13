@@ -33,16 +33,11 @@
 #include "chests_data.hpp"
 #include "ui_framework.hpp"
 
-// Glyph tokens without underscores
 #define PAD_GLYPH_UP      "{up}"
 #define PAD_GLYPH_DOWN    "{down}"
 #define PAD_GLYPH_CROSS   "{cross}"
 #define PAD_GLYPH_SQUARE  "{square}"
 #define PAD_GLYPH_CIRCLE  "{circle}"
-
-// ==============================================================
-// TRACKER DATA, HELPERS & STATE
-// ==============================================================
 
 #define MANUAL_MODE_TRACKER 100
 
@@ -138,7 +133,6 @@ static TownStats GetGlobalStats() {
     return global;
 }
 
-// Externs mapped from retail menu_manual.cpp
 extern int SetManualMsgBuffer();
 extern void ExitManualMenu();
 extern void DrawPrevNextCursor();
@@ -406,7 +400,7 @@ PORT_OVERRIDE void MenuManualDraw() {
         int text_alpha = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
         int win_alpha  = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
         
-        UI::Window::Draw(135, 85, 220, 160, win_alpha);
+        UI::TrackerWindow::Draw(135, 85, 220, 160, win_alpha);
         
         if (ManualMenu.selection_level == -2) {
             s_menu_cursor.SetTarget(126.0f, static_cast<float>(100 + (ManualMenu.category * 25) - 3));
@@ -437,7 +431,7 @@ PORT_OVERRIDE void MenuManualDraw() {
 
     // --- CHEST TRACKER DASHBOARD ---
     if (ManualMenu.mode == MANUAL_MODE_TRACKER) {
-        UI::Window::Draw(64, 85, 512, 295, 0x80); 
+        UI::TrackerWindow::Draw(64, 85, 512, 278, 0x80); 
         MenuTextureReload(0x1A);
 
         // Header Title
@@ -546,7 +540,7 @@ PORT_OVERRIDE void MenuManualDraw() {
                             : UI::ColorWhite;
         UI::Label(area_buf, area_col).Draw(455, total_row_y, 0x80);
 
-        // Bottom Controls Help Bar docked outside window
+        // Bottom Controls Help Bar centered in negative space (Y = 422)
         std::string controls_str = LocalizeText(
             "tracker.controls",
             PAD_GLYPH_UP " / " PAD_GLYPH_DOWN " Select   "
@@ -557,12 +551,12 @@ PORT_OVERRIDE void MenuManualDraw() {
             controls_str,
             UI::ColorWhite,
             UI::Alignment::Center
-        ).Draw(320, 424, 0x80);
+        ).Draw(320, 422, 0x80);
 
         return; 
     }
 
-    // --- Original PS2 Image Drawing ---
+    // Original PS2 Image Drawing
     if (ManualMenu.mode >= MANUAL_MODE_OPENING && ManualMenu.mode < MANUAL_MODE_COUNT && ManualMenu.images_ready != 0) {
         MenuTextureReload(ManualMenu.image_texture_block);
         int   image_count = GetNowManualPartTgaNum();
@@ -602,7 +596,6 @@ PORT_OVERRIDE void MenuManualDraw() {
         DrawPrevNextCursor();
     }
 
-    // --- Sub-Menus and Tutorial Box ---
     if (ManualMenu.messages_ready != 0 && ManualMenu.mode != MANUAL_MODE_CLOSING) {
         if (ManualMenu.mode != MANUAL_MODE_TRACKER) {
             Port_DrawManualMsg();

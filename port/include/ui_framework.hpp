@@ -18,9 +18,7 @@ namespace UI {
 constexpr u32 ColorWhite  = FONT_COLOR_WHITE;
 constexpr u32 ColorGold   = FONT_COLOR_GOLD;
 constexpr u32 ColorYellow = FONT_COLOR_YELLOW;
-
-// Palette index 3 is the native Blue font in atlas 0x1A
-constexpr u32 ColorBlue   = 3;
+constexpr u32 ColorBlue   = 3; // Native Blue font in atlas 0x1A
 
 constexpr u32 NATIVE_COLOR_WHITE  = FONT_COLOR_WHITE;
 constexpr u32 NATIVE_COLOR_GOLD   = FONT_COLOR_GOLD;
@@ -33,12 +31,25 @@ enum class Alignment {
     Right
 };
 
-// Splits a string into word-wrapped lines against a maximum pixel width
 std::vector<std::string> WrapText(std::string_view text, int max_width);
 
 // -----------------------------------------------------------------------------
-// Window: 9-slice parametric dialog background (MenuHelpWinDraw wrapper)
+// TrackerWindow: Dedicated, immutable window for Chest Tracker & Manuals
 // -----------------------------------------------------------------------------
+class TrackerWindow {
+public:
+    static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80);
+};
+
+// -----------------------------------------------------------------------------
+// HelpBox: Dedicated dynamic window for the Battle Menu help box
+// -----------------------------------------------------------------------------
+class HelpBox {
+public:
+    static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80);
+};
+
+// General window alias mapping to TrackerWindow
 class Window {
 public:
     static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80);
@@ -71,7 +82,7 @@ private:
 };
 
 // -----------------------------------------------------------------------------
-// Cursor: Retail pointing hand with 2-axis bobbing & drop shadow
+// Cursor: Pointing hand with target lerp, 2-axis bobbing & drop shadow
 // -----------------------------------------------------------------------------
 class Cursor {
 public:

@@ -18,9 +18,7 @@ extern void setbilinear(int n);
 
 namespace UI {
 
-// -----------------------------------------------------------------------------
 // Word Wrap Utility
-// -----------------------------------------------------------------------------
 std::vector<std::string> WrapText(std::string_view text, int max_width) {
     std::vector<std::string> lines;
     if (text.empty() || max_width <= 0) return lines;
@@ -74,14 +72,29 @@ std::vector<std::string> WrapText(std::string_view text, int max_width) {
 }
 
 // -----------------------------------------------------------------------------
-// Window
+// TrackerWindow (Locked to the original tested dimensions)
 // -----------------------------------------------------------------------------
-void Window::Draw(int x, int y, int width_px, int height_px, int alpha) {
+void TrackerWindow::Draw(int x, int y, int width_px, int height_px, int alpha) {
     float w = (width_px - 28) / 16.0f;
     float h = (height_px - 76) / 16.0f;
     if (w < 0.0f) w = 0.0f;
     if (h < 0.0f) h = 0.0f;
     MenuHelpWinDraw(x, y, w, h, alpha);
+}
+
+// -----------------------------------------------------------------------------
+// HelpBox (Tuned for dynamic battle menu help box)
+// -----------------------------------------------------------------------------
+void HelpBox::Draw(int x, int y, int width_px, int height_px, int alpha) {
+    float w = (width_px - 48) / 16.0f;
+    float h = (height_px - 44) / 16.0f;
+    if (w < 0.0f) w = 0.0f;
+    if (h < 0.0f) h = 0.0f;
+    MenuHelpWinDraw(x, y, w, h, alpha);
+}
+
+void Window::Draw(int x, int y, int width_px, int height_px, int alpha) {
+    TrackerWindow::Draw(x, y, width_px, height_px, alpha);
 }
 
 // -----------------------------------------------------------------------------
