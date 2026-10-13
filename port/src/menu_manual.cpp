@@ -283,7 +283,7 @@ PORT_OVERRIDE int MenuManualKey() {
                     if (ManualMenu.category == 4) {
                         ManualMenu.mode = MANUAL_MODE_TRACKER;
                         tracker_selected_town = 0;
-                        s_menu_cursor.SnapTo(58.0f, 168.0f - 3.0f);
+                        s_menu_cursor.SnapTo(58.0f, 168.0f - 2.0f);
                         ComMenuSePlay(MENU_SOUND_CONFIRM);
                     } else {
                         ManualMenu.selection_level++;
@@ -400,10 +400,11 @@ PORT_OVERRIDE void MenuManualDraw() {
         int text_alpha = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
         int win_alpha  = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
         
-        UI::TrackerWindow::Draw(135, 85, 220, 160, win_alpha);
+        constexpr int cat_spacing = 28; // +3px vertical row spacing
+        UI::TrackerWindow::Draw(135, 85, 220, 170, win_alpha);
         
         if (ManualMenu.selection_level == -2) {
-            s_menu_cursor.SetTarget(126.0f, static_cast<float>(100 + (ManualMenu.category * 25) - 3));
+            s_menu_cursor.SetTarget(126.0f, static_cast<float>(100 + (ManualMenu.category * cat_spacing) - 2));
             s_menu_cursor.Draw(0x80);
         }
 
@@ -421,7 +422,7 @@ PORT_OVERRIDE void MenuManualDraw() {
             uint32_t color = (i == ManualMenu.category && ManualMenu.selection_level == -2) 
                              ? UI::ColorYellow 
                              : UI::ColorWhite;
-            UI::Label(categories[i], color).Draw(160, 100 + (i * 25), text_alpha);
+            UI::Label(categories[i], color).Draw(160, 100 + (i * cat_spacing), text_alpha);
         }
         
         if (ManualMenu.selection_level == -2) {
@@ -431,7 +432,8 @@ PORT_OVERRIDE void MenuManualDraw() {
 
     // --- CHEST TRACKER DASHBOARD ---
     if (ManualMenu.mode == MANUAL_MODE_TRACKER) {
-        UI::TrackerWindow::Draw(64, 85, 512, 278, 0x80); 
+        // Height trimmed by 16px (276px), ending at Y = 361
+        UI::TrackerWindow::Draw(64, 85, 512, 276, 0x80); 
         MenuTextureReload(0x1A);
 
         // Header Title
@@ -452,9 +454,9 @@ PORT_OVERRIDE void MenuManualDraw() {
         UI::Label(LocalizeText("tracker.settlements", "SETTLEMENTS"), UI::ColorYellow).Draw(88, 144, 0x80);
 
         constexpr int left_start_y = 168;
-        constexpr int row_spacing  = 24;
+        constexpr int row_spacing  = 28; // +2px vertical pitch
 
-        s_menu_cursor.SetTarget(58.0f, static_cast<float>(left_start_y + (tracker_selected_town * row_spacing) - 3));
+        s_menu_cursor.SetTarget(58.0f, static_cast<float>(left_start_y + (tracker_selected_town * row_spacing) - 2));
         s_menu_cursor.Draw(0x80);
 
         MenuTextureReload(0x1A);
@@ -470,12 +472,12 @@ PORT_OVERRIDE void MenuManualDraw() {
         int g_collected = tracker_filter_miracle_only ? g_stats.collected_miracle : g_stats.collected_total;
         int g_max       = tracker_filter_miracle_only ? g_stats.max_miracle       : g_stats.max_total;
 
-        UI::Label(LocalizeText("tracker.world_total", "World Total"), UI::ColorGold).Draw(88, 300, 0x80);
+        UI::Label(LocalizeText("tracker.world_total", "World Total"), UI::ColorGold).Draw(88, 308, 0x80);
 
         char g_buf[32];
         snprintf(g_buf, sizeof(g_buf), "[ %2d / %2d ]", g_collected, g_max);
         uint32_t g_color = (g_collected == g_max && g_max > 0) ? UI::ColorGold : UI::ColorWhite;
-        UI::Label(g_buf, g_color).Draw(88, 322, 0x80);
+        UI::Label(g_buf, g_color).Draw(88, 330, 0x80);
 
         // Right Pane: Breakdown & Summary
         std::string cur_town_name = LocalizeText(std::string("tracker.town.") + std::to_string(tracker_selected_town), TRACKER_TOWNS[tracker_selected_town].name);
@@ -502,7 +504,7 @@ PORT_OVERRIDE void MenuManualDraw() {
         }
 
         constexpr int right_start_y = 168;
-        constexpr int right_spacing = 22;
+        constexpr int right_spacing = 28; // +2px vertical pitch
 
         for (size_t r = 0; r < breakdown.size(); ++r) {
             int y = right_start_y + (static_cast<int>(r) * right_spacing);
@@ -519,7 +521,7 @@ PORT_OVERRIDE void MenuManualDraw() {
         // Right Pane: Progress percentage
         int town_cur_collected = tracker_filter_miracle_only ? cur_stats.collected_miracle : cur_stats.collected_total;
         int town_cur_max       = tracker_filter_miracle_only ? cur_stats.max_miracle       : cur_stats.max_total;
-        int summary_y          = tracker_filter_miracle_only ? 264 : 284;
+        int summary_y          = tracker_filter_miracle_only ? 280 : 306;
 
         int pct = (town_cur_max > 0) ? (town_cur_collected * 100) / town_cur_max : 0;
         std::string pct_buf = LocalizeFormat(LocalizeText("tracker.progress", "Progress: %1%"), {std::to_string(pct)});
@@ -530,7 +532,7 @@ PORT_OVERRIDE void MenuManualDraw() {
         UI::Label(pct_buf, pct_color).Draw(275, summary_y, 0x80);
 
         // Right Pane: Area Total
-        int total_row_y = summary_y + 20;
+        int total_row_y = tracker_filter_miracle_only ? 306 : 330;
         UI::Label(LocalizeText("tracker.area_total", "Area Total"), UI::ColorYellow).Draw(275, total_row_y, 0x80);
 
         char area_buf[32];
@@ -540,7 +542,7 @@ PORT_OVERRIDE void MenuManualDraw() {
                             : UI::ColorWhite;
         UI::Label(area_buf, area_col).Draw(455, total_row_y, 0x80);
 
-        // Bottom Controls Help Bar centered in negative space (Y = 422)
+        // Bottom Controls Help Bar centered in negative space (Y = 418)
         std::string controls_str = LocalizeText(
             "tracker.controls",
             PAD_GLYPH_UP " / " PAD_GLYPH_DOWN " Select   "
@@ -551,7 +553,7 @@ PORT_OVERRIDE void MenuManualDraw() {
             controls_str,
             UI::ColorWhite,
             UI::Alignment::Center
-        ).Draw(320, 422, 0x80);
+        ).Draw(320, 418, 0x80);
 
         return; 
     }

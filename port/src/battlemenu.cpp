@@ -289,7 +289,7 @@ void GetBattleMenuHelpData(int index, int mode, std::string& out_title, std::str
 
 void DrawQuitConfirmModal(int alpha) {
     const int box_w = 260;
-    const int box_h = 54;
+    const int box_h = 58;
     const int box_x = (640 - box_w) / 2;
     const int box_y = 164;
 
@@ -300,17 +300,17 @@ void DrawQuitConfirmModal(int alpha) {
     std::string q_desc  = LocalizeText("battlemenu.quit.confirm_desc", "Return to desktop?");
 
     UI::Label title_lbl(q_title, UI::ColorWhite);
-    title_lbl.Draw(box_x + 22, box_y + 10, alpha);
+    title_lbl.Draw(box_x + 22, box_y + 12, alpha);
 
     UI::Label desc_lbl(q_desc, UI::ColorWhite);
-    desc_lbl.Draw(box_x + 22, box_y + 26, alpha);
+    desc_lbl.Draw(box_x + 22, box_y + 32, alpha);
 
-    // Narrowed button width by ~14% (120px x 28px)
+    // Narrowed button proportions (120px x 28px)
     const int btn_w  = 120;
     const int btn_h  = 28;
     const int btn_x  = (640 - btn_w) / 2;
-    const int btn_y0 = box_y + box_h + 10; // 228
-    const int btn_y1 = btn_y0 + btn_h + 6;  // 262
+    const int btn_y0 = box_y + box_h + 10; // 232
+    const int btn_y1 = btn_y0 + btn_h + 6;  // 266
 
     CTexture* gaiji_tex = draw2d::Get().find_texture("gaiji");
     if (gaiji_tex == nullptr) {
@@ -321,22 +321,17 @@ void DrawQuitConfirmModal(int alpha) {
         if (gaiji_tex != nullptr) {
             CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
 
-            // Drop shadow
             DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 2, by + 3, btn_w, btn_h), uv_white, 0, 0, 0, (alpha * 90) >> 7);
-            // Outer dark perimeter line
             DrawMenu2DSprite(gaiji_tex, CRect_i_(bx, by, btn_w, btn_h), uv_white, 20, 10, 5, alpha);
-            // Highlight bevel (top/left)
             DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 1, by + 1, btn_w - 2, btn_h - 2), uv_white, 115, 75, 50, alpha);
-            // Shadow bevel (bottom/right)
             DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 2, by + 2, btn_w - 3, btn_h - 3), uv_white, 55, 28, 14, alpha);
-            // Terracotta orange face fill
             DrawMenu2DSprite(gaiji_tex, CRect_i_(bx + 2, by + 2, btn_w - 4, btn_h - 4), uv_white, 100, 56, 33, alpha);
         }
 
         MenuTextureReload(0x1A);
         UI::Label lbl(text, UI::ColorWhite, UI::Alignment::Center);
-        // Centered horizontally and vertically (by + 2)
-        lbl.Draw(bx + (btn_w / 2), by + 2, alpha);
+        // Vertically centered at by + 3
+        lbl.Draw(bx + (btn_w / 2), by + 3, alpha);
     };
 
     std::string txt_yes = LocalizeText("battlemenu.quit.yes", "YES");
@@ -347,13 +342,11 @@ void DrawQuitConfirmModal(int alpha) {
 
     int sel_y = (s_quit_confirm_choice == 0) ? btn_y0 : btn_y1;
 
-    // Corner sprite size (16px) compensation:
-    // w = btn_w + 2*pad - 16 = 120 + 6 - 16 = 110
-    // h = btn_h + 2*pad - 16 = 28 + 6 - 16 = 18
+    // Symmetrical 3px bracket padding around button perimeter
     constexpr int pad = 3;
     DrawMenuWaku(btn_x - pad, sel_y - pad, btn_w + 2 * pad - 16, btn_h + 2 * pad - 16, 0, StayTex, alpha);
 
-    // Hand cursor vertically centered with the active button
+    // Hand cursor centered on the active button
     s_quit_cursor.SetTarget(static_cast<float>(btn_x - 34), static_cast<float>(sel_y + 4));
     s_quit_cursor.Draw(alpha);
 }
@@ -400,7 +393,6 @@ PORT_OVERRIDE void DrawBattleMain() {
         }
     }
 
-    // Suppress background brackets and cursor while quit confirmation modal is open
     if (!s_quit_confirm_active) {
         int width = (info != nullptr) ? (info->label_width + 0x4A) : 100;
 
@@ -523,7 +515,8 @@ PORT_OVERRIDE void BattleMenuDraw() {
 
     GetMainMenuRightHelpMsgLangOffset(text_x, text_y);
 
-    // Tightened bottom-right help box (suppressed while quit modal is active)
+    // Dynamic help box sizing and line height
+    // 28px line pitch between description lines
     if (BtlMenuReadEndFlag != 0 && draw_help != 0 && BattleMenuFlag == BTLMENU_STATE_MAIN && BtlHelpWinAlpha > 0 && !s_quit_confirm_active) {
         std::string title;
         std::string desc;
@@ -537,27 +530,27 @@ PORT_OVERRIDE void BattleMenuDraw() {
             const int draw_x = box_x + (text_x > 0 ? text_x : 22);
 
             const int max_text_w = 230;
+            constexpr int line_height = 28; // Expanded line pitch for wrapped TTF lines
             std::vector<std::string> lines = UI::WrapText(desc, max_text_w);
             int num_lines = std::max(1, static_cast<int>(lines.size()));
 
-            // Tightened height: 50px for 1 line, 66px for 2 lines, 82px for 3 lines
-            int box_h = 34 + (num_lines * 16);
-            if (box_h < 50) box_h = 50;
+            // Dynamic height: 32px base + (num_lines * 28px)
+            int box_h = 32 + (num_lines * line_height);
             const int box_bottom = 452;
             int box_y = box_bottom - box_h;
 
             UI::HelpBox::Draw(box_x, box_y, box_w, box_h, BtlHelpWinAlpha);
 
             MenuTextureReload(0x1A);
-            int title_y = box_y + 10;
-            int desc_y  = box_y + 26;
+            int title_y = box_y + 12;
+            int desc_y  = title_y + 24;
 
             UI::Label title_lbl(title, UI::ColorWhite);
             title_lbl.Draw(draw_x, title_y, BtlHelpWinAlpha);
 
             for (size_t i = 0; i < lines.size(); ++i) {
                 UI::Label line_lbl(lines[i], UI::ColorWhite);
-                line_lbl.Draw(draw_x, desc_y + static_cast<int>(i) * 16, BtlHelpWinAlpha);
+                line_lbl.Draw(draw_x, desc_y + static_cast<int>(i) * line_height, BtlHelpWinAlpha);
             }
         }
     }
@@ -737,7 +730,7 @@ PORT_OVERRIDE int BattleMenuSelect() {
             case BTLMENU_PAGE_QUIT: {
                 s_quit_confirm_active = true;
                 s_quit_confirm_choice = 1;
-                s_quit_cursor.SnapTo((640 - 120) / 2.0f - 34.0f, (164 + 54 + 10 + 28 + 6) + 4.0f);
+                s_quit_cursor.SnapTo((640 - 120) / 2.0f - 34.0f, (164 + 58 + 10 + 28 + 6) + 4.0f);
                 ComMenuSePlay(MENU_SOUND_CONFIRM);
                 return 1;
             }
