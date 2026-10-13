@@ -210,22 +210,19 @@ PORT_OVERRIDE void DrawBattleMain() {
         }
     }
 
-    // Identify custom slots that lack allmenu.mes message buffers
     int max_icons = GetMenuModeMax();
     bool is_custom_slot = false;
     if (BtlMenuMode == BATTLE_MENU_MODE_TOWN && MenuSelect[1] == 5) {
         is_custom_slot = true; // Save
     } else if (MenuSelect[1] >= max_icons - 2) {
-        is_custom_slot = true; // Journal (max - 2) or Quit (max - 1)
+        is_custom_slot = true; // Journal or Quit
     }
 
+    // Suppress vanilla ClsMes state to avoid stale buffer rendering
     if (is_custom_slot) {
-        // Suppress vanilla ClsMes so the previous slot's text does not linger
-        BtlWakuMake2 = 0;
         CommonMenuMes2.mes_made = -1;
         CommonMenuMes2.stay_frame = false;
     } else {
-        BtlWakuMake2 = 1;
         if (CommonMenuMes2.mes_made != mes_no && mes_no > 0) {
             CommonMenuMes2.MakeMesWin(mes_no);
         }
@@ -344,7 +341,7 @@ PORT_OVERRIDE void BattleMenuDraw() {
         CursorVibeCnt = 0;
     }
 
-    int draw_help = BtlMenuDrawSpecialFlag(BtlWakuMake2);
+    int draw_help = BtlMenuDrawSpecialFlag(1);
 
     if (BtlMenuReadEndFlag != 0) {
         switch (BattleMenuFlag) {
@@ -358,56 +355,60 @@ PORT_OVERRIDE void BattleMenuDraw() {
                 break;
         }
 
-        // Vanilla help frame
+        // Draw help window plate using retail coordinates
         if (draw_help != 0) {
             MenuHelpWinDraw((int) HelpWinHead[0], (int) HelpWinHead[1], BtlHelpWinW, BtlHelpWinH, BtlHelpWinAlpha);
         }
     }
 
-    MenuTextureReload(CommonMenuMes2.tex_block);
+    // Retrieve native text offsets
     GetMainMenuRightHelpMsgLangOffset(text_x, text_y);
-    CommonMenuMes2.text_x = (int) (HelpWinHead[0] + text_x);
-    CommonMenuMes2.text_y = (int) (HelpWinHead[1] + text_y);
 
-    // Vanilla ClsMes text
-    if (BtlMenuReadEndFlag != 0 && draw_help != 0) {
-        CommonMenuMes2.stay_frame = false;
-        CommonMenuMes2.edge_alpha = BtlHelpWinAlpha;
-        CommonMenuMes2.Step();
-        CommonMenuMes2.DrawMesWin();
+    int max_icons = GetMenuModeMax();
+    bool is_custom_slot = false;
+    if (BtlMenuMode == BATTLE_MENU_MODE_TOWN && MenuSelect[1] == 5) {
+        is_custom_slot = true;
+    } else if (MenuSelect[1] >= max_icons - 2) {
+        is_custom_slot = true;
     }
 
-    // Custom help frame for Save, Journal, and Quit
-    if (BtlMenuReadEndFlag != 0 && draw_help == 0 && BtlHelpWinAlpha > 0 && BattleMenuFlag == BTLMENU_STATE_MAIN) {
-        const char* title = nullptr;
-        const char* desc  = nullptr;
-        int max_icons = GetMenuModeMax();
+    if (BtlMenuReadEndFlag != 0 && draw_help != 0 && BattleMenuFlag == BTLMENU_STATE_MAIN) {
+        if (!is_custom_slot) {
+            // Vanilla slots: render ClsMes text
+            MenuTextureReload(CommonMenuMes2.tex_block);
+            CommonMenuMes2.text_x = (int) (HelpWinHead[0] + text_x);
+            CommonMenuMes2.text_y = (int) (HelpWinHead[1] + text_y);
+            CommonMenuMes2.stay_frame = false;
+            CommonMenuMes2.edge_alpha = BtlHelpWinAlpha;
+            CommonMenuMes2.Step();
+            CommonMenuMes2.DrawMesWin();
+        } else if (BtlHelpWinAlpha > 0) {
+            // Custom slots: render using native HelpWinHead origin and language offsets
+            const char* title = nullptr;
+            const char* desc  = nullptr;
 
-        if (BtlMenuMode == BATTLE_MENU_MODE_TOWN && MenuSelect[1] == 5) {
-            title = "Save";
-            desc  = "Record your game progress.";
-        } else if (MenuSelect[1] == max_icons - 2) {
-            title = "Journal";
-            desc  = "Chest Tracker & manuals.";
-        } else if (MenuSelect[1] == max_icons - 1) {
-            title = "Quit Game";
-            desc  = "Exit Chronicle to desktop.";
-        }
+            if (BtlMenuMode == BATTLE_MENU_MODE_TOWN && MenuSelect[1] == 5) {
+                title = "Save";
+                desc  = "Record your game progress.";
+            } else if (MenuSelect[1] == max_icons - 2) {
+                title = "Journal";
+                desc  = "Chest Tracker & manuals.";
+            } else if (MenuSelect[1] == max_icons - 1) {
+                title = "Quit Game";
+                desc  = "Exit Chronicle to desktop.";
+            }
 
-        if (title != nullptr && desc != nullptr) {
-            int box_w = 276;
-            int box_h = 96;
-            int box_x = 640 - box_w - 20;
-            int box_y = 452 - box_h;
+            if (title != nullptr && desc != nullptr) {
+                MenuTextureReload(0x1A);
+                int draw_x = (int) HelpWinHead[0] + text_x;
+                int draw_y = (int) HelpWinHead[1] + text_y;
 
-            UI::Window::Draw(box_x, box_y, box_w, box_h, BtlHelpWinAlpha);
-            MenuTextureReload(0x1A);
+                UI::Label title_lbl(title, UI::ColorYellow);
+                title_lbl.Draw(draw_x, draw_y, BtlHelpWinAlpha);
 
-            UI::Label title_lbl(title, UI::ColorYellow);
-            title_lbl.Draw(box_x + 18, box_y + 14, BtlHelpWinAlpha);
-
-            UI::Label desc_lbl(desc, UI::ColorWhite);
-            desc_lbl.Draw(box_x + 18, box_y + 36, BtlHelpWinAlpha);
+                UI::Label desc_lbl(desc, UI::ColorWhite);
+                desc_lbl.Draw(draw_x, draw_y + 22, BtlHelpWinAlpha);
+            }
         }
     }
 
