@@ -14,6 +14,7 @@
 #include "eastking.hpp"
 #include "gamepad.hpp"
 #include "itemdata.hpp"
+#include "localize.hpp"
 #include "mainselect.hpp"
 #include "map.hpp"
 #include "memcard.hpp"
@@ -34,6 +35,8 @@
 
 // UI Framework
 #include "ui_framework.hpp"
+
+#include <string>
 
 // Externs for retail static functions
 extern void Btl_InitMenuChara(u_long128 *buffer);
@@ -210,15 +213,14 @@ PORT_OVERRIDE void DrawBattleMain() {
         }
     }
 
-    // Help window is active for the main selection wheel
     BtlWakuMake2 = 1;
 
     int max_icons = GetMenuModeMax();
     bool is_custom_slot = false;
     if (BtlMenuMode == BATTLE_MENU_MODE_TOWN && MenuSelect[1] == 5) {
-        is_custom_slot = true; // Save
+        is_custom_slot = true;
     } else if (MenuSelect[1] >= max_icons - 2) {
-        is_custom_slot = true; // Journal or Quit
+        is_custom_slot = true;
     }
 
     if (is_custom_slot) {
@@ -343,7 +345,6 @@ PORT_OVERRIDE void BattleMenuDraw() {
         CursorVibeCnt = 0;
     }
 
-    // Check BtlWakuMake2 to respect sub-menu transitions
     int draw_help = BtlMenuDrawSpecialFlag(BtlWakuMake2);
 
     if (BtlMenuReadEndFlag != 0) {
@@ -363,7 +364,6 @@ PORT_OVERRIDE void BattleMenuDraw() {
                 break;
         }
 
-        // Help window plate drawn only when draw_help is active
         if (draw_help != 0 && BtlHelpWinAlpha > 0) {
             MenuHelpWinDraw((int) HelpWinHead[0], (int) HelpWinHead[1], BtlHelpWinW, BtlHelpWinH, BtlHelpWinAlpha);
         }
@@ -389,21 +389,21 @@ PORT_OVERRIDE void BattleMenuDraw() {
             CommonMenuMes2.Step();
             CommonMenuMes2.DrawMesWin();
         } else if (BtlHelpWinAlpha > 0) {
-            const char* title = nullptr;
-            const char* desc  = nullptr;
+            std::string title;
+            std::string desc;
 
             if (BtlMenuMode == BATTLE_MENU_MODE_TOWN && MenuSelect[1] == 5) {
-                title = "Save";
-                desc  = "Record your game progress.";
+                title = LocalizeText("battlemenu.save.title", "Save");
+                desc  = LocalizeText("battlemenu.save.help", "Record your game progress.");
             } else if (MenuSelect[1] == max_icons - 2) {
-                title = "Journal";
-                desc  = "Chest Tracker & manuals.";
+                title = LocalizeText("battlemenu.journal.title", "Journal");
+                desc  = LocalizeText("battlemenu.journal.help", "Chest Tracker & manuals.");
             } else if (MenuSelect[1] == max_icons - 1) {
-                title = "Quit Game";
-                desc  = "Exit Chronicle to desktop.";
+                title = LocalizeText("battlemenu.quit.title", "Quit Game");
+                desc  = LocalizeText("battlemenu.quit.help", "Exit Chronicle to desktop.");
             }
 
-            if (title != nullptr && desc != nullptr) {
+            if (!title.empty() && !desc.empty()) {
                 MenuTextureReload(0x1A);
                 int draw_x = (int) HelpWinHead[0] + text_x;
                 int draw_y = (int) HelpWinHead[1] + text_y;
@@ -490,19 +490,15 @@ PORT_OVERRIDE int BattleMenuSelect() {
                         return 1;
                     }
                 }
-                BtlWakuMake2 = 0;
                 Btl_InitMenuChara(buffer);
                 break;
             case BTLMENU_PAGE_WEAPON:
-                BtlWakuMake2 = 0;
                 Btl_InitWeaponSelect(WEP_OPEN_FROM_BAR, chara);
                 break;
             case BTLMENU_PAGE_ITEM:
-                BtlWakuMake2 = 0;
                 Btl_InitItemMode(0, chara);
                 break;
             case BTLMENU_PAGE_ATLA: {
-                BtlWakuMake2 = 0;
                 int blocks[2] = {0, 0};
                 blocks[0] = BtlMenuReadBlock;
                 blocks[1] = MenuExtendReadBlock;
@@ -540,7 +536,6 @@ PORT_OVERRIDE int BattleMenuSelect() {
                 break;
             }
             case BTLMENU_PAGE_OPTION:
-                BtlWakuMake2 = 0;
                 InitMenuOption(OPTION_OPEN_GAME_MENU, MenuExtendReadBlock, buffer);
                 break;
             case BTLMENU_PAGE_SAVE:
