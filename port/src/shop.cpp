@@ -206,8 +206,7 @@ void ChargeShopMaxDraw(int max, int x, int y, int alpha) {
 
 } // namespace
 
-// The stock board's 60 cells (12 rows) are filled and drawn; retail drew 128 cells from its 120-cell
-// arrays, reading past them, and the rows past the twelfth lie below the board's clip in any case.
+// Draws the 60 cells it fills; retail drew 128 from 120-cell arrays.
 PORT_OVERRIDE void ChargeShopBoardDraw(int x, int y, int alpha) {
     s16 items[60];
     u8  values[60];
@@ -650,12 +649,7 @@ PORT_OVERRIDE int FishingExchangeKey() {
     return result;
 }
 
-// Retail's, but for one frame. On the item shop's stock board retail moves the cursor before it
-// reads that frame's cross or triangle: right from the board's last column hands the cursor to the
-// personal board in that board's numbering, and down from its last row to the check button, and
-// the press then took the stock board's good at the new number. On the personal board's last rows
-// that is past the board's 30 goods, in the never-cleared work buffer behind them: the Broken
-// Dagger glitch (#109). Such a frame's cross and triangle wait for the next press.
+// Cross and triangle wait a frame when that frame's press moves the cursor off the stock board (#109).
 PORT_OVERRIDE int CommonShopLoop() {
     int done = 0;
 
