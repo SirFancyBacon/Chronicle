@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "battlemenu.hpp"
 #include "caption_text.hpp"
 #include "captionfont.hpp"
 #include "clsmes.hpp"
@@ -54,6 +55,36 @@ CTexture* GetWhitePixelTex() {
     CTexture* tex = draw2d::Get().find_texture("gaiji");
     if (tex == nullptr) {
         tex = TexManager.GetTexture((char*)"gaiji", -1);
+    }
+    return tex;
+}
+
+CTexture* GetPerBoardTex() {
+    if (PerBoardTex != nullptr) {
+        if (PerBoardTex->block >= 0) MenuTextureReload(PerBoardTex->block);
+        return PerBoardTex;
+    }
+    CTexture* tex = draw2d::Get().find_texture("perbrd");
+    if (tex == nullptr) {
+        tex = TexManager.GetTexture((char*)"perbrd", -1);
+    }
+    if (tex != nullptr && tex->block >= 0) {
+        MenuTextureReload(tex->block);
+    }
+    return tex;
+}
+
+CTexture* GetWepStatusTex() {
+    if (WepStatus != nullptr) {
+        if (WepStatus->block >= 0) MenuTextureReload(WepStatus->block);
+        return WepStatus;
+    }
+    CTexture* tex = draw2d::Get().find_texture("wepstatus");
+    if (tex == nullptr) {
+        tex = TexManager.GetTexture((char*)"wepstatus", -1);
+    }
+    if (tex != nullptr && tex->block >= 0) {
+        MenuTextureReload(tex->block);
     }
     return tex;
 }
@@ -251,7 +282,7 @@ std::vector<std::string> WrapText(std::string_view text, int max_width) {
 }
 
 // -----------------------------------------------------------------------------
-// Windows, Plates & Dividers
+// Windows, Banners, Indentations & Dividers
 // -----------------------------------------------------------------------------
 void TrackerWindow::Draw(int x, int y, int width_px, int height_px, int alpha) {
     float w = (width_px - 28) / 16.0f;
@@ -259,6 +290,71 @@ void TrackerWindow::Draw(int x, int y, int width_px, int height_px, int alpha) {
     if (w < 0.0f) w = 0.0f;
     if (h < 0.0f) h = 0.0f;
     MenuHelpWinDraw(x, y, w, h, alpha);
+}
+
+void TrackerWindow::DrawIndentation(const Rect& box, bool dark_variant, int alpha) {
+    if (box.Empty() || alpha <= 0) return;
+
+    CTexture* perbrd = GetPerBoardTex();
+    if (perbrd == nullptr) return;
+
+    setbilinear(0);
+    // Blue stone rounded bar from "perbrd" (src_y = 0x80), skipping u = 0x23..0x3F
+    constexpr int src_y   = 0x80;
+    const int     left_w  = std::min(3, box.w / 3);
+    const int     right_w = std::min(8, box.w - left_w);
+    const int     mid_w   = std::max(0, box.w - left_w - right_w);
+
+    const u8 r = dark_variant ? 0x46 : 0x80;
+    const u8 g = dark_variant ? 0x50 : 0x80;
+    const u8 b = dark_variant ? 0x64 : 0x80;
+
+    DrawMenu2DSprite(perbrd, CRect_i_(box.x, box.y, left_w, box.h),
+                     CRect_i_(0x20, src_y, 3, 0x18), r, g, b, alpha);
+
+    int cur_x = box.x + left_w;
+    int rem_w = mid_w;
+    while (rem_w > 0) {
+        int seg_w = std::min(32, rem_w);
+        DrawMenu2DSprite(perbrd, CRect_i_(cur_x, box.y, seg_w, box.h),
+                         CRect_i_(0x40, src_y, seg_w, 0x18), r, g, b, alpha);
+        cur_x += seg_w;
+        rem_w -= seg_w;
+    }
+
+    if (right_w > 0) {
+        DrawMenu2DSprite(perbrd, CRect_i_(box.x + left_w + mid_w, box.y, right_w, box.h),
+                         CRect_i_(0x78, src_y, 0x08, 0x18), r, g, b, alpha);
+    }
+    setbilinear(1);
+}
+
+void TrackerWindow::DrawStoneBanner(const Rect& box, int alpha, int brightness) {
+    if (box.Empty() || alpha <= 0) return;
+
+    CTexture* wep_tex = GetWepStatusTex();
+    if (wep_tex == nullptr) {
+        DrawIndentation(box, false, alpha);
+        return;
+    }
+
+    setbilinear(0);
+    // 3-slice scroll banner from DrawWeaponNameBoard in battlemenu.cpp
+    const int left_w  = std::min(40, box.w / 3);
+    const int right_w = std::min(32, box.w / 3);
+    const int mid_w   = std::max(0, box.w - left_w - right_w);
+
+    DrawMenu2DSprite(wep_tex, CRect_i_(box.x, box.y, left_w, box.h),
+                     CRect_i_(0xE0, 0x1A8, 0x28, 0x20), brightness, brightness, brightness, alpha);
+    if (mid_w > 0) {
+        DrawMenu2DSprite(wep_tex, CRect_i_(box.x + left_w, box.y, mid_w, box.h),
+                         CRect_i_(0x108, 0x1A8, 0x78, 0x20), brightness, brightness, brightness, alpha);
+    }
+    if (right_w > 0) {
+        DrawMenu2DSprite(wep_tex, CRect_i_(box.x + left_w + mid_w, box.y, right_w, box.h),
+                         CRect_i_(0xD4, 0x1D4, 0x20, 0x20), brightness, brightness, brightness, alpha);
+    }
+    setbilinear(1);
 }
 
 void HelpBox::Draw(int x, int y, int width_px, int height_px, int alpha) {
@@ -428,7 +524,8 @@ void Label::DrawInRect(const Rect& box, int alpha) {
             center_x = static_cast<float>(box.x + box.w - 6) - static_cast<float>(width) * 0.5f;
         }
         float cap_height = kBaseCapHeight * m_scale;
-        float cap_top = static_cast<float>(box.y) + (static_cast<float>(box.h) - cap_height) * 0.5f - 1.0f;
+        // -4.0f compensates for TrueType baseline descent so text sits dead-center vertically
+        float cap_top = static_cast<float>(box.y) + (static_cast<float>(box.h) - cap_height) * 0.5f - 4.0f;
         DrawScaledText(m_raw_text, center_x + static_cast<float>(m_dx), cap_top + static_cast<float>(m_dy),
                        m_scale, m_xscale, m_color, m_weight, m_drop_shadow, alpha);
         return;
@@ -501,10 +598,26 @@ void DrawTextBox(std::string_view text, const Rect& box, const TextStyle& style,
 }
 
 // -----------------------------------------------------------------------------
-// ItemIcon: Looks up item UV in ::ItemIcon / ::WepIcon and renders scaled icon
+// ItemIcon: Draws recessed "wepstatus" stone socket + item icon
 // -----------------------------------------------------------------------------
-bool ItemIcon::Draw(int item_no, int x, int y, int size, int alpha, bool drop_shadow) {
+void ItemIcon::DrawSocket(int x, int y, int size, bool filled, int alpha) {
+    CTexture* wep_tex = GetWepStatusTex();
+    if (wep_tex == nullptr || size <= 0) return;
+
+    setbilinear(0);
+    int src_y = filled ? 0x10A : 0xE0;
+    CRect_i_ src(0xD4, src_y, 0x2A, 0x2A);
+    DrawMenu2DSprite(wep_tex, CRect_i_(x + 1, y + 2, size, size), src, 0, 0, 0, (alpha * 80) >> 7);
+    DrawMenu2DSprite(wep_tex, CRect_i_(x, y, size, size), src, 0x80, 0x80, 0x80, alpha);
+    setbilinear(1);
+}
+
+bool ItemIcon::Draw(int item_no, int x, int y, int size, int alpha, bool drop_shadow, bool with_socket) {
     if (item_no <= 0 || size <= 0) return false;
+
+    if (with_socket) {
+        DrawSocket(x - 2, y - 2, size + 4, false, alpha);
+    }
 
     COM_ITEM_INFO* info = GetCommonItemInfo(item_no);
     if (info == nullptr || info->icon_index < 0) return false;
@@ -639,7 +752,6 @@ void Brackets::Draw(int left, int right, int top, int bottom, int alpha) {
         return;
     }
 
-    // Fallback to StayTex ("stayframe") via native DrawMenuWaku using the exact outer offsets from battlemenu.cpp
     if (StayTex == nullptr) {
         StayTex = TexManager.GetTexture((char*)"stayframe", -1);
     }
@@ -779,39 +891,29 @@ void TextureButton::Draw(int x, int y, int width, int height,
 }
 
 // -----------------------------------------------------------------------------
-// ProgressBar: Recessed gauge bar with proportional fill and scaled text
+// ProgressBar: Rounded blue-stone trough + PS2 MenuColorInfo2 gradation fill
 // -----------------------------------------------------------------------------
 void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
                        const ProgressBarStyle& style, int alpha) {
-    CTexture* gaiji_tex = GetWhitePixelTex();
-
-    const float clamped = std::clamp(progress, 0.0f, 1.0f);
+    const float clamped  = std::clamp(progress, 0.0f, 1.0f);
     const bool  complete = (clamped >= 1.0f);
 
-    if (gaiji_tex != nullptr) {
-        CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
+    // 1. Draw the rounded blue-stone trough
+    TrackerWindow::DrawIndentation(box, true, alpha);
 
-        DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 3, box.w, box.h), uv_white, 0, 0, 0, (alpha * 90) >> 7);
-        DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x, box.y, box.w, box.h), uv_white, 14, 16, 20, alpha);
-        DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 1, box.y + 1, box.w - 2, box.h - 2), uv_white, 10, 12, 15, alpha);
-        DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 2, box.w - 3, box.h - 3), uv_white, 48, 52, 58, alpha);
-        DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 2, box.w - 4, box.h - 4), uv_white, 18, 20, 24, alpha);
+    // 2. Fill the interior using the native PS2 4-corner gradation (DrawMenuColorGradation)
+    const int max_fill_w = std::max(0, box.w - 8);
+    const int fill_w     = static_cast<int>(std::round(clamped * static_cast<float>(max_fill_w)));
 
-        const int max_fill_w = std::max(0, box.w - 4);
-        const int fill_w = static_cast<int>(std::round(clamped * static_cast<float>(max_fill_w)));
-
-        if (fill_w > 0 && box.h > 4) {
-            u8 r  = complete ? style.done_r    : style.fill_r;
-            u8 g  = complete ? style.done_g    : style.fill_g;
-            u8 b  = complete ? style.done_b    : style.fill_b;
-            u8 hr = complete ? style.done_hi_r : style.hi_r;
-            u8 hg = complete ? style.done_hi_g : style.hi_g;
-            u8 hb = complete ? style.done_hi_b : style.hi_b;
-
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 2, fill_w, box.h - 4), uv_white, r, g, b, alpha);
-            if (box.h > 6) {
-                DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 2, fill_w, 2), uv_white, hr, hg, hb, alpha);
+    if (fill_w > 0 && box.h > 6) {
+        GRADATION_COLOR_INFO2* grad_src = GetGradationColorInfo2(complete ? 4 : 3);
+        if (grad_src != nullptr) {
+            GRADATION_COLOR_INFO2 grad = *grad_src;
+            for (int c = 0; c < 4; ++c) {
+                grad.colors[c].a = static_cast<u8>((alpha * 115) >> 7);
             }
+            CRect_i_ fill_rect(box.x + 4, box.y + 3, fill_w, box.h - 7);
+            DrawMenuColorGradation(fill_rect, &grad.colors[0], &grad.colors[1], &grad.colors[2], &grad.colors[3]);
         }
     }
 
@@ -824,7 +926,9 @@ void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
             .scale       = style.text_scale,
             .weight      = style.text_weight
         };
-        DrawTextBox(text, box, txt_style, alpha);
+        // Bias text box up 4px so lowercase glyphs center inside the green fill strip
+        Rect text_box(box.x, box.y - 4, box.w, std::max(1, box.h - 4));
+        DrawTextBox(text, text_box, txt_style, alpha);
     }
 }
 

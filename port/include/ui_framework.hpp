@@ -81,14 +81,21 @@ struct TextStyle {
 std::vector<std::string> WrapText(std::string_view text, int max_width);
 
 // -----------------------------------------------------------------------------
-// Windows, Plates & Dividers
+// Windows, Stone Boards & Skeuomorphic Indentation Primitives
 // -----------------------------------------------------------------------------
 class TrackerWindow {
 public:
+    // Draws the skeuomorphic "perbrd" stone frame + indented tile grid (falls back to HelpWin if unloaded)
     static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80);
     static void Draw(const Rect& box, int alpha = 0x80) {
         Draw(box.x, box.y, box.w, box.h, alpha);
     }
+
+    // Draws a 3-slice recessed stone trough ("perbrd" / "wepstatus") for rows or headers
+    static void DrawIndentation(const Rect& box, bool dark_variant = true, int alpha = 0x80);
+
+    // Draws the 3-slice molded stone banner from "wepstatus" (DrawWeaponNameBoard)
+    static void DrawStoneBanner(const Rect& box, int alpha = 0x80, int brightness = 0x80);
 };
 
 class HelpBox {
@@ -112,7 +119,7 @@ public:
     static void Draw(int left, int right, int y, int alpha = 0x80);
 };
 
-// Beveled groove divider lines for separating panes and totals
+// Molded stone ridges ("perbrd") for separating panes and totals
 class Divider {
 public:
     static void DrawVertical(int x, int top_y, int bottom_y, int alpha = 0x80);
@@ -169,11 +176,13 @@ private:
 void DrawTextBox(std::string_view text, const Rect& box, const TextStyle& style = {}, int alpha = 0x80);
 
 // -----------------------------------------------------------------------------
-// ItemIcon: Draws a game item/attachment/weapon icon from ItemIcon/WepIcon
+// ItemIcon: Draws a game item icon (optionally inside a recessed "wepstatus" stone socket)
 // -----------------------------------------------------------------------------
 class ItemIcon {
 public:
-    static bool Draw(int item_no, int x, int y, int size = 24, int alpha = 0x80, bool drop_shadow = true);
+    static void DrawSocket(int x, int y, int size = 26, bool filled = false, int alpha = 0x80);
+    static bool Draw(int item_no, int x, int y, int size = 24, int alpha = 0x80,
+                     bool drop_shadow = true, bool with_socket = false);
 };
 
 // -----------------------------------------------------------------------------
@@ -282,7 +291,7 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-// ProgressBar: Recessed gauge bar with proportional fill and scaled text
+// ProgressBar: Skeuomorphic recessed stone trough + PS2 gradation fill
 // -----------------------------------------------------------------------------
 struct ProgressBarStyle {
     u32        text_color  = ColorWhite;

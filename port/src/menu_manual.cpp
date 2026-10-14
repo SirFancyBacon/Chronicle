@@ -430,8 +430,11 @@ PORT_OVERRIDE void MenuManualDraw() {
 
     // --- CHEST TRACKER DASHBOARD ---
     if (ManualMenu.mode == MANUAL_MODE_TRACKER) {
-        // Single unified background window
-        UI::TrackerWindow::Draw(64, 85, 512, 282, 0x80);
+        // 1. Seamless 9-tile background window (Image 2)
+        UI::TrackerWindow::Draw(64, 82, 512, 286, 0x80);
+
+        // 2. Parchment scroll banner for the header title
+        UI::TrackerWindow::DrawStoneBanner(UI::Rect(150, 86, 340, 28), 0x80, 0x80);
 
         constexpr float kHeaderScale = 0.92f;
         constexpr float kBodyScale   = 0.84f;
@@ -442,7 +445,7 @@ PORT_OVERRIDE void MenuManualDraw() {
         constexpr int kLabelX     = kRightPaneX + 30; // 24px icon + 6px gap
         constexpr int kCountX     = 460;              // 82px wide counter ends at X = 542
 
-        // Beveled groove divider lines separating the panes and footer totals (from Picture 3)
+        // 3. Clean 2px beveled groove divider lines (Image 2)
         UI::Divider::DrawVertical(kDividerX, 140, 356, 0x80);
         UI::Divider::DrawHorizontal(84, kDividerX - 10, 300, 0x80);
         UI::Divider::DrawHorizontal(kRightPaneX, 542, 300, 0x80);
@@ -457,12 +460,14 @@ PORT_OVERRIDE void MenuManualDraw() {
             UI::Label("]", col, UI::Alignment::Right, true, kBodyScale).Draw(x + 82, y, 0x80);
         };
 
-        // Header Title
+        // Header Title centered vertically inside the parchment scroll banner (Y = 87)
         UI::Label(
             LocalizeText("tracker.title", "JOURNAL: CHEST TRACKER"),
             UI::ColorGold,
-            UI::Alignment::Center
-        ).Draw(320, 96, 0x80);
+            UI::Alignment::Center,
+            true,
+            0.92f
+        ).Draw(320, 87, 0x80);
 
         // Filter Mode Indicator
         std::string mode_label = tracker_filter_miracle_only
@@ -591,7 +596,7 @@ PORT_OVERRIDE void MenuManualDraw() {
                             : UI::ColorWhite;
         DrawCounter(kCountX, total_row_y, town_cur_collected, town_cur_max, area_col);
 
-        // Right Pane: Progress Bar
+        // Right Pane: Round Progress Bar with centered text
         float progress_ratio = (town_cur_max > 0)
                                ? static_cast<float>(town_cur_collected) / static_cast<float>(town_cur_max)
                                : 0.0f;
@@ -602,26 +607,17 @@ PORT_OVERRIDE void MenuManualDraw() {
         bar_style.text_scale = 0.76f;
 
         UI::ProgressBar::Draw(
-            UI::Rect(kRightPaneX, 332, 270, 22),
+            UI::Rect(kRightPaneX, 331, 270, 22),
             progress_ratio,
-            pct_buf,
+            {},
             bar_style,
             0x80
         );
-
-        // Bottom Controls Help Bar
         MenuTextureReload(0x1A);
-        std::string controls_str = LocalizeText(
-            "tracker.controls",
-            PAD_GLYPH_UP " / " PAD_GLYPH_DOWN " Select   "
-            PAD_GLYPH_CROSS " / " PAD_GLYPH_SQUARE " Filter   "
-            PAD_GLYPH_CIRCLE " Return"
-        );
-        UI::Label(
-            controls_str,
-            UI::ColorWhite,
-            UI::Alignment::Center
-        ).Draw(320, 418, 0x80);
+        uint32_t pct_col = (town_cur_collected == town_cur_max && town_cur_max > 0)
+                           ? UI::ColorGold
+                           : UI::ColorWhite;
+        UI::Label(pct_buf, pct_col, UI::Alignment::Center, true, 0.76f).Draw(kRightPaneX + 135, 329, 0x80);
 
         // Topmost layer: Vanilla 4-corner pulsing selection box + pointing hand cursor
         int sel_y = left_start_y + (tracker_selected_town * row_spacing);
