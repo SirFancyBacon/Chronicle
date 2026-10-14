@@ -31,6 +31,12 @@ enum class Alignment {
     Right
 };
 
+enum class FontWeight {
+    Thin,
+    Normal,
+    Bold
+};
+
 // -----------------------------------------------------------------------------
 // Rect: Screen-space and UV bounding box primitive
 // -----------------------------------------------------------------------------
@@ -58,15 +64,17 @@ struct Rect {
 };
 
 // -----------------------------------------------------------------------------
-// TextStyle: Declarative text styling (Color, Drop Shadow, Justification)
+// TextStyle: Declarative text styling (Color, Shadow, Justification, Scale, Weight)
 // -----------------------------------------------------------------------------
 struct TextStyle {
-    u32       color       = ColorWhite;        // Default: White
-    bool      drop_shadow = true;              // Default: Drop shadow enabled
-    Alignment align       = Alignment::Center; // Default: Center justification
-    int       line_height = 24;
-    int       text_dx     = 0;
-    int       text_dy     = 0;
+    u32        color       = ColorWhite;        // Default: White
+    bool       drop_shadow = true;              // Default: Drop shadow enabled
+    Alignment  align       = Alignment::Center; // Default: Center justification
+    float      scale       = 1.0f;              // Font size multiplier (1.0 = standard 15px cap height)
+    FontWeight weight      = FontWeight::Normal;// Thin, Normal, or Bold
+    int        line_height = 24;
+    int        text_dx     = 0;
+    int        text_dy     = 0;
 };
 
 std::vector<std::string> WrapText(std::string_view text, int max_width);
@@ -104,19 +112,22 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-// Label: GameText wrapper with glyph parsing, auto-width, shadow & box layout
+// Label: Supports standard GameText AND scaled/weighted TrueType rendering
 // -----------------------------------------------------------------------------
 class Label {
 public:
     Label() = default;
     explicit Label(std::string_view text, u32 color = ColorWhite,
-                   Alignment align = Alignment::Left, bool drop_shadow = true);
+                   Alignment align = Alignment::Left, bool drop_shadow = true,
+                   float scale = 1.0f, FontWeight weight = FontWeight::Normal);
     Label(std::string_view text, const TextStyle& style);
 
     void SetText(std::string_view text);
     void SetColor(u32 color);
     void SetAlignment(Alignment align);
     void SetDropShadow(bool enabled);
+    void SetScale(float scale);
+    void SetWeight(FontWeight weight);
     void SetOffset(int dx, int dy);
     void SetStyle(const TextStyle& style);
 
@@ -135,6 +146,8 @@ private:
     u32         m_color{ColorWhite};
     Alignment   m_align{Alignment::Left};
     bool        m_drop_shadow{true};
+    float       m_scale{1.0f};
+    FontWeight  m_weight{FontWeight::Normal};
     int         m_dx{0};
     int         m_dy{0};
     bool        m_dirty{true};
@@ -143,6 +156,15 @@ private:
 
 // Immediate-mode helper to draw justified text inside a screen box
 void DrawTextBox(std::string_view text, const Rect& box, const TextStyle& style = {}, int alpha = 0x80);
+
+// -----------------------------------------------------------------------------
+// ItemIcon: Draws a game item/attachment/weapon icon from ItemIcon/WepIcon
+// -----------------------------------------------------------------------------
+class ItemIcon {
+public:
+    // Returns true if the icon texture was found and drawn; false if caller should fallback
+    static bool Draw(int item_no, int x, int y, int size = 24, int alpha = 0x80, bool drop_shadow = true);
+};
 
 // -----------------------------------------------------------------------------
 // Cursor: Pointing hand supporting both gamepad lerping and mouse pointing
@@ -214,6 +236,8 @@ struct ButtonStyle {
     u32          text_color  = ColorWhite;        // Default: White
     bool         drop_shadow = true;              // Default: Drop shadow on
     Alignment    align       = Alignment::Center; // Default: Center justified
+    float        text_scale  = 1.0f;
+    FontWeight   text_weight = FontWeight::Normal;
     int          text_dx     = 0;
     int          text_dy     = 0;
 };
@@ -243,6 +267,26 @@ public:
                      CTexture* texture, int u, int v, int uv_w, int uv_h,
                      int alpha = 0x80, std::string_view text = {},
                      const TextStyle& text_style = {});
+};
+
+// -----------------------------------------------------------------------------
+// ProgressBar: Recessed gauge bar with proportional fill and scaled text
+// -----------------------------------------------------------------------------
+struct ProgressBarStyle {
+    u32        text_color  = ColorWhite;
+    bool       drop_shadow = true;
+    float      text_scale  = 0.78f; // Scaled down to fit cleanly inside the bar
+    FontWeight text_weight = FontWeight::Normal;
+    u8         fill_r = 28,  fill_g = 68,  fill_b = 45;
+    u8         hi_r   = 45,  hi_g   = 95,  hi_b   = 65;
+    u8         done_r = 95,  done_g = 70,  done_b = 18;
+    u8         done_hi_r = 125, done_hi_g = 98, done_hi_b = 32;
+};
+
+class ProgressBar {
+public:
+    static void Draw(const Rect& box, float progress, std::string_view text = {},
+                     const ProgressBarStyle& style = {}, int alpha = 0x80);
 };
 
 } // namespace UI
