@@ -50,6 +50,31 @@ struct ScopedShadow {
     }
 };
 
+CTexture* GetWhitePixelTex() {
+    CTexture* tex = draw2d::Get().find_texture("gaiji");
+    if (tex == nullptr) {
+        tex = TexManager.GetTexture((char*)"gaiji", -1);
+    }
+    return tex;
+}
+
+void DrawRoundedRect(CTexture* tex, int x, int y, int w, int h,
+                     unsigned char r, unsigned char g, unsigned char b, int alpha, bool rounded) {
+    if (tex == nullptr || w <= 0 || h <= 0 || alpha <= 0) return;
+    CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
+
+    if (!rounded || w < 6 || h < 6) {
+        DrawMenu2DSprite(tex, CRect_i_(x, y, w, h), uv_white, r, g, b, alpha);
+        return;
+    }
+
+    DrawMenu2DSprite(tex, CRect_i_(x + 2, y,         w - 4, 1),     uv_white, r, g, b, alpha);
+    DrawMenu2DSprite(tex, CRect_i_(x + 1, y + 1,     w - 2, 1),     uv_white, r, g, b, alpha);
+    DrawMenu2DSprite(tex, CRect_i_(x,     y + 2,     w,     h - 4), uv_white, r, g, b, alpha);
+    DrawMenu2DSprite(tex, CRect_i_(x + 1, y + h - 2, w - 2, 1),     uv_white, r, g, b, alpha);
+    DrawMenu2DSprite(tex, CRect_i_(x + 2, y + h - 1, w - 4, 1),     uv_white, r, g, b, alpha);
+}
+
 void ColorToRgb(u32 color, unsigned char (&out)[3]) {
     switch (color) {
         case ColorGold:
@@ -63,7 +88,7 @@ void ColorToRgb(u32 color, unsigned char (&out)[3]) {
             break;
         case ColorWhite:
         default:
-            out[0] = 225; out[1] = 225; out[2] = 225;
+            out[0] = 240; out[1] = 238; out[2] = 232;
             break;
     }
 }
@@ -90,8 +115,10 @@ std::u32string DecodeUtf8(std::string_view in) {
     return out;
 }
 
-bool UseScaledRenderer(std::string_view text, float scale, FontWeight weight) {
-    if (std::abs(scale - 1.0f) <= 0.001f && weight == FontWeight::Normal) {
+bool UseScaledRenderer(std::string_view text, float scale, float xscale, FontWeight weight) {
+    if (std::abs(scale - 1.0f) <= 0.001f &&
+        std::abs(xscale - 1.0f) <= 0.001f &&
+        weight == FontWeight::Normal) {
         return false;
     }
     if (text.find('{') != std::string::npos) {
@@ -100,7 +127,7 @@ bool UseScaledRenderer(std::string_view text, float scale, FontWeight weight) {
     return caption::Ready();
 }
 
-int MeasureScaledText(std::string_view text, float scale, FontWeight weight) {
+int MeasureScaledText(std::string_view text, float scale, float xscale, FontWeight weight) {
     if (text.empty()) return 0;
 
     struct VariantGuard {
@@ -120,10 +147,10 @@ int MeasureScaledText(std::string_view text, float scale, FontWeight weight) {
     for (char32_t ch : DecodeUtf8(text)) {
         capfont::Glyph glyph;
         if (ch == U' ') {
-            natural += cap_height * 0.32f;
+            natural += cap_height * 0.32f + (3.0f * scale);
             drawn++;
         } else if (capfont::GetGlyph(ch, em_px, glyph) && glyph.width > 0) {
-            natural += glyph.width / mapping.scale_x + gap;
+            natural += (glyph.width / mapping.scale_x * xscale) + gap;
             drawn++;
         }
     }
@@ -133,7 +160,7 @@ int MeasureScaledText(std::string_view text, float scale, FontWeight weight) {
     return static_cast<int>(std::round(natural));
 }
 
-void DrawScaledText(std::string_view text, float center_x, float cap_top, float scale,
+void DrawScaledText(std::string_view text, float center_x, float cap_top, float scale, float xscale,
                     u32 color, FontWeight weight, bool drop_shadow, int alpha) {
     if (text.empty() || alpha <= 0) return;
 
@@ -144,6 +171,8 @@ void DrawScaledText(std::string_view text, float center_x, float cap_top, float 
     caption::LineStyle style{};
     style.thin = (weight == FontWeight::Thin && caption::ThinReady());
     style.weight = (weight == FontWeight::Bold) ? 1.1f : 0.0f;
+    style.xscale = xscale;
+    style.word = 3.0f * scale;
     style.ink_fit = false;
 
     if (drop_shadow && ConfigGet().text_shadow > 0) {
@@ -222,7 +251,7 @@ std::vector<std::string> WrapText(std::string_view text, int max_width) {
 }
 
 // -----------------------------------------------------------------------------
-// Windows & Plates
+// Windows, Plates & Dividers
 // -----------------------------------------------------------------------------
 void TrackerWindow::Draw(int x, int y, int width_px, int height_px, int alpha) {
     float w = (width_px - 28) / 16.0f;
@@ -252,16 +281,35 @@ void TabPlate::Draw(int left, int right, int y, int alpha) {
     MenuHelpWinDraw(left - 14, y - (kPlateHeight - 20) / 2, middle, 0.0f, alpha);
 }
 
+void Divider::DrawVertical(int x, int top_y, int bottom_y, int alpha) {
+    CTexture* tex = GetWhitePixelTex();
+    if (tex == nullptr || bottom_y <= top_y) return;
+    CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
+    int h = bottom_y - top_y;
+    DrawMenu2DSprite(tex, CRect_i_(x, top_y, 1, h), uv_white, 10, 12, 15, (alpha * 95) >> 7);
+    DrawMenu2DSprite(tex, CRect_i_(x + 1, top_y, 1, h), uv_white, 52, 56, 62, (alpha * 70) >> 7);
+}
+
+void Divider::DrawHorizontal(int left_x, int right_x, int y, int alpha) {
+    CTexture* tex = GetWhitePixelTex();
+    if (tex == nullptr || right_x <= left_x) return;
+    CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
+    int w = right_x - left_x;
+    DrawMenu2DSprite(tex, CRect_i_(left_x, y, w, 1), uv_white, 10, 12, 15, (alpha * 95) >> 7);
+    DrawMenu2DSprite(tex, CRect_i_(left_x, y + 1, w, 1), uv_white, 52, 56, 62, (alpha * 70) >> 7);
+}
+
 // -----------------------------------------------------------------------------
 // Label
 // -----------------------------------------------------------------------------
 Label::Label(std::string_view text, u32 color, Alignment align, bool drop_shadow,
-             float scale, FontWeight weight)
+             float scale, FontWeight weight, float xscale)
     : m_raw_text(text),
       m_color(color),
       m_align(align),
       m_drop_shadow(drop_shadow),
       m_scale(scale),
+      m_xscale(xscale),
       m_weight(weight) {
     m_text.Set(m_raw_text.c_str());
 }
@@ -272,6 +320,7 @@ Label::Label(std::string_view text, const TextStyle& style)
       m_align(style.align),
       m_drop_shadow(style.drop_shadow),
       m_scale(style.scale),
+      m_xscale(style.xscale),
       m_weight(style.weight),
       m_dx(style.text_dx),
       m_dy(style.text_dy) {
@@ -301,6 +350,11 @@ void Label::SetScale(float scale) {
     m_dirty = true;
 }
 
+void Label::SetXScale(float xscale) {
+    m_xscale = xscale;
+    m_dirty = true;
+}
+
 void Label::SetWeight(FontWeight weight) {
     m_weight = weight;
     m_dirty = true;
@@ -316,6 +370,7 @@ void Label::SetStyle(const TextStyle& style) {
     m_align = style.align;
     m_drop_shadow = style.drop_shadow;
     m_scale = style.scale;
+    m_xscale = style.xscale;
     m_weight = style.weight;
     m_dx = style.text_dx;
     m_dy = style.text_dy;
@@ -323,8 +378,8 @@ void Label::SetStyle(const TextStyle& style) {
 }
 
 int Label::GetWidth() {
-    if (UseScaledRenderer(m_raw_text, m_scale, m_weight)) {
-        m_cached_width = MeasureScaledText(m_raw_text, m_scale, m_weight);
+    if (UseScaledRenderer(m_raw_text, m_scale, m_xscale, m_weight)) {
+        m_cached_width = MeasureScaledText(m_raw_text, m_scale, m_xscale, m_weight);
         m_dirty = false;
         return m_cached_width;
     }
@@ -339,7 +394,7 @@ void Label::Draw(int x, int y, int alpha) {
     int draw_y = y + m_dy;
     int width = GetWidth();
 
-    if (UseScaledRenderer(m_raw_text, m_scale, m_weight)) {
+    if (UseScaledRenderer(m_raw_text, m_scale, m_xscale, m_weight)) {
         float center_x = static_cast<float>(draw_x);
         if (m_align == Alignment::Left) {
             center_x = static_cast<float>(draw_x) + static_cast<float>(width) * 0.5f;
@@ -348,7 +403,7 @@ void Label::Draw(int x, int y, int alpha) {
         }
         float cap_height = kBaseCapHeight * m_scale;
         float cap_top = static_cast<float>(draw_y) + 3.0f + (kBaseCapHeight - cap_height) * 0.5f;
-        DrawScaledText(m_raw_text, center_x, cap_top, m_scale, m_color, m_weight, m_drop_shadow, alpha);
+        DrawScaledText(m_raw_text, center_x, cap_top, m_scale, m_xscale, m_color, m_weight, m_drop_shadow, alpha);
         return;
     }
 
@@ -364,7 +419,7 @@ void Label::Draw(int x, int y, int alpha) {
 }
 
 void Label::DrawInRect(const Rect& box, int alpha) {
-    if (UseScaledRenderer(m_raw_text, m_scale, m_weight)) {
+    if (UseScaledRenderer(m_raw_text, m_scale, m_xscale, m_weight)) {
         int width = GetWidth();
         float center_x = static_cast<float>(box.x) + static_cast<float>(box.w) * 0.5f;
         if (m_align == Alignment::Left) {
@@ -375,7 +430,7 @@ void Label::DrawInRect(const Rect& box, int alpha) {
         float cap_height = kBaseCapHeight * m_scale;
         float cap_top = static_cast<float>(box.y) + (static_cast<float>(box.h) - cap_height) * 0.5f - 1.0f;
         DrawScaledText(m_raw_text, center_x + static_cast<float>(m_dx), cap_top + static_cast<float>(m_dy),
-                       m_scale, m_color, m_weight, m_drop_shadow, alpha);
+                       m_scale, m_xscale, m_color, m_weight, m_drop_shadow, alpha);
         return;
     }
 
@@ -434,7 +489,7 @@ void Label::DrawWithStroke(int x, int y, u32 fill_color, u32 stroke_color, int s
 void Label::DrawWrapped(int x, int y, int max_width, int line_height, int alpha) {
     std::vector<std::string> lines = WrapText(m_raw_text, max_width);
     for (size_t i = 0; i < lines.size(); ++i) {
-        Label line_lbl(lines[i], m_color, m_align, m_drop_shadow, m_scale, m_weight);
+        Label line_lbl(lines[i], m_color, m_align, m_drop_shadow, m_scale, m_weight, m_xscale);
         line_lbl.SetOffset(m_dx, m_dy);
         line_lbl.Draw(x, y + static_cast<int>(i) * line_height, alpha);
     }
@@ -478,7 +533,6 @@ bool ItemIcon::Draw(int item_no, int x, int y, int size, int alpha, bool drop_sh
         MenuTextureReload(texture->block);
     }
 
-    // Disable bilinear filtering and inset UV by 1px on all sides to prevent neighboring atlas bleed
     setbilinear(0);
     CRect_i_ source(u + 1, v + 1, 30, 30);
 
@@ -555,7 +609,7 @@ void Cursor::Draw(int alpha) {
 }
 
 // -----------------------------------------------------------------------------
-// Brackets: Scaled to single-line proportions with bounded corners
+// Brackets: Uses option2 when in Options, or StayTex (DrawMenuWaku) in game menus
 // -----------------------------------------------------------------------------
 Brackets::Brackets() {
     m_texture = TexManager.GetTexture((char*)"option2", -1);
@@ -563,26 +617,40 @@ Brackets::Brackets() {
 
 void Brackets::Draw(int left, int right, int top, int bottom, int alpha) {
     m_texture = TexManager.GetTexture((char*)"option2", -1);
-    if (m_texture == nullptr) return;
+    if (m_texture != nullptr) {
+        constexpr int kBracketBeats = 30;
+        constexpr float kBracketClose = 4.0f;
 
-    constexpr int kBracketBeats = 30;
-    constexpr float kBracketClose = 4.0f;
+        float pulse = kBracketClose * static_cast<float>(m_beat) / static_cast<float>(kBracketBeats - 1);
+        m_beat = (m_beat + 1) % kBracketBeats;
 
-    float pulse = kBracketClose * static_cast<float>(m_beat) / static_cast<float>(kBracketBeats - 1);
-    m_beat = (m_beat + 1) % kBracketBeats;
+        int x0 = static_cast<int>(left + pulse);
+        int x1 = static_cast<int>(right - pulse);
+        int y0 = static_cast<int>(top + pulse);
+        int y1 = static_cast<int>(bottom - pulse);
 
-    int x0 = static_cast<int>(left + pulse);
-    int x1 = static_cast<int>(right - pulse);
-    int y0 = static_cast<int>(top + pulse);
-    int y1 = static_cast<int>(bottom - pulse);
+        constexpr int corner_w = 12;
+        constexpr int corner_h = 8;
 
-    constexpr int corner_w = 12;
-    constexpr int corner_h = 8;
+        DrawMenu2DSprite(m_texture, CRect_i_(x0, y0, corner_w, corner_h), CRect_i_(0xB2, 0xF8, 16, 16), alpha);
+        DrawMenu2DSprite(m_texture, CRect_i_(x1 - corner_w, y0, corner_w, corner_h), CRect_i_(0xC2, 0xF8, 16, 16), alpha);
+        DrawMenu2DSprite(m_texture, CRect_i_(x0, y1 - corner_h, corner_w, corner_h), CRect_i_(0xB2, 0x108, 16, 16), alpha);
+        DrawMenu2DSprite(m_texture, CRect_i_(x1 - corner_w, y1 - corner_h, corner_w, corner_h), CRect_i_(0xC2, 0x108, 16, 16), alpha);
+        return;
+    }
 
-    DrawMenu2DSprite(m_texture, CRect_i_(x0, y0, corner_w, corner_h), CRect_i_(0xB2, 0xF8, 16, 16), alpha);
-    DrawMenu2DSprite(m_texture, CRect_i_(x1 - corner_w, y0, corner_w, corner_h), CRect_i_(0xC2, 0xF8, 16, 16), alpha);
-    DrawMenu2DSprite(m_texture, CRect_i_(x0, y1 - corner_h, corner_w, corner_h), CRect_i_(0xB2, 0x108, 16, 16), alpha);
-    DrawMenu2DSprite(m_texture, CRect_i_(x1 - corner_w, y1 - corner_h, corner_w, corner_h), CRect_i_(0xC2, 0x108, 16, 16), alpha);
+    // Fallback to StayTex ("stayframe") via native DrawMenuWaku using the exact outer offsets from battlemenu.cpp
+    if (StayTex == nullptr) {
+        StayTex = TexManager.GetTexture((char*)"stayframe", -1);
+    }
+    if (StayTex != nullptr) {
+        if (StayTex->block >= 0) {
+            MenuTextureReload(StayTex->block);
+        }
+        int box_w = std::max(16, right - left);
+        int box_h = std::max(16, bottom - top);
+        DrawMenuWaku(left - 14, top - 6, box_w + 12, box_h - 4, 0, StayTex, alpha);
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -622,8 +690,7 @@ void ScrollBar::Draw(int x, int top_y, int height, int total_rows, int visible_r
     if (m_track_tex != nullptr) {
         DrawMenu2DSprite(m_track_tex, CRect_i_(x, track_top, 8, track_height), CRect_i_(22, 22, 16, 20), cur_alpha);
     } else {
-        CTexture* gaiji_tex = draw2d::Get().find_texture("gaiji");
-        if (gaiji_tex == nullptr) gaiji_tex = TexManager.GetTexture((char*)"gaiji", -1);
+        CTexture* gaiji_tex = GetWhitePixelTex();
         if (gaiji_tex != nullptr) {
             DrawMenu2DSprite(gaiji_tex, CRect_i_(x, track_top, 8, track_height), CRect_i_(0x6A, 0x6E, 1, 1), 25, 28, 30, cur_alpha);
         }
@@ -637,30 +704,25 @@ void ScrollBar::Draw(int x, int top_y, int height, int total_rows, int visible_r
 }
 
 // -----------------------------------------------------------------------------
-// BevelButton: Procedural beveled button with justified/centered text
+// BevelButton: Rounded corners, soft bevels, and wide vanilla text stretch
 // -----------------------------------------------------------------------------
 void BevelButton::Draw(const Rect& box, std::string_view text,
                        const ButtonStyle& style, int alpha) {
-    CTexture* gaiji_tex = draw2d::Get().find_texture("gaiji");
-    if (gaiji_tex == nullptr) {
-        gaiji_tex = TexManager.GetTexture((char*)"gaiji", -1);
-    }
+    CTexture* gaiji_tex = GetWhitePixelTex();
 
     if (gaiji_tex != nullptr) {
-        CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
-
-        DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 3, box.w, box.h), uv_white, 0, 0, 0, (alpha * 90) >> 7);
+        DrawRoundedRect(gaiji_tex, box.x + 2, box.y + 3, box.w, box.h, 0, 0, 0, (alpha * 85) >> 7, style.rounded);
 
         if (style.preset == ButtonPreset::Terracotta) {
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x, box.y, box.w, box.h), uv_white, 20, 10, 5, alpha);
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 1, box.y + 1, box.w - 2, box.h - 2), uv_white, 115, 75, 50, alpha);
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 2, box.w - 3, box.h - 3), uv_white, 55, 28, 14, alpha);
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 2, box.w - 4, box.h - 4), uv_white, 100, 56, 33, alpha);
+            DrawRoundedRect(gaiji_tex, box.x,     box.y,     box.w,     box.h,     42,  20, 10, alpha, style.rounded);
+            DrawRoundedRect(gaiji_tex, box.x + 1, box.y + 1, box.w - 2, box.h - 2, 122, 82, 58, alpha, style.rounded);
+            DrawRoundedRect(gaiji_tex, box.x + 2, box.y + 2, box.w - 3, box.h - 3, 68,  34, 18, alpha, style.rounded);
+            DrawRoundedRect(gaiji_tex, box.x + 2, box.y + 2, box.w - 4, box.h - 4, 108, 62, 38, alpha, style.rounded);
         } else { // StoneGreen
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x, box.y, box.w, box.h), uv_white, 15, 20, 15, alpha);
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 1, box.y + 1, box.w - 2, box.h - 2), uv_white, 80, 110, 85, alpha);
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 2, box.w - 3, box.h - 3), uv_white, 30, 45, 35, alpha);
-            DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 2, box.w - 4, box.h - 4), uv_white, 45, 70, 50, alpha);
+            DrawRoundedRect(gaiji_tex, box.x,     box.y,     box.w,     box.h,     18, 26,  20, alpha, style.rounded);
+            DrawRoundedRect(gaiji_tex, box.x + 1, box.y + 1, box.w - 2, box.h - 2, 82, 112, 88, alpha, style.rounded);
+            DrawRoundedRect(gaiji_tex, box.x + 2, box.y + 2, box.w - 3, box.h - 3, 32, 48,  38, alpha, style.rounded);
+            DrawRoundedRect(gaiji_tex, box.x + 2, box.y + 2, box.w - 4, box.h - 4, 48, 72,  54, alpha, style.rounded);
         }
     }
 
@@ -671,6 +733,7 @@ void BevelButton::Draw(const Rect& box, std::string_view text,
             .drop_shadow = style.drop_shadow,
             .align       = style.align,
             .scale       = style.text_scale,
+            .xscale      = style.text_xscale,
             .weight      = style.text_weight,
             .text_dx     = style.text_dx,
             .text_dy     = style.text_dy
@@ -720,10 +783,7 @@ void TextureButton::Draw(int x, int y, int width, int height,
 // -----------------------------------------------------------------------------
 void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
                        const ProgressBarStyle& style, int alpha) {
-    CTexture* gaiji_tex = draw2d::Get().find_texture("gaiji");
-    if (gaiji_tex == nullptr) {
-        gaiji_tex = TexManager.GetTexture((char*)"gaiji", -1);
-    }
+    CTexture* gaiji_tex = GetWhitePixelTex();
 
     const float clamped = std::clamp(progress, 0.0f, 1.0f);
     const bool  complete = (clamped >= 1.0f);
@@ -731,18 +791,12 @@ void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
     if (gaiji_tex != nullptr) {
         CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
 
-        // Drop shadow
         DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 3, box.w, box.h), uv_white, 0, 0, 0, (alpha * 90) >> 7);
-        // Outer dark perimeter
         DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x, box.y, box.w, box.h), uv_white, 14, 16, 20, alpha);
-        // Recessed top/left shadow bevel
         DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 1, box.y + 1, box.w - 2, box.h - 2), uv_white, 10, 12, 15, alpha);
-        // Recessed bottom/right highlight bevel
         DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 2, box.w - 3, box.h - 3), uv_white, 48, 52, 58, alpha);
-        // Inner dark trough background
         DrawMenu2DSprite(gaiji_tex, CRect_i_(box.x + 2, box.y + 2, box.w - 4, box.h - 4), uv_white, 18, 20, 24, alpha);
 
-        // Proportional gauge fill
         const int max_fill_w = std::max(0, box.w - 4);
         const int fill_w = static_cast<int>(std::round(clamped * static_cast<float>(max_fill_w)));
 

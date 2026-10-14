@@ -330,9 +330,12 @@ void DrawQuitConfirmModal(int alpha) {
 
     UI::ButtonStyle btn_style{
         .preset      = UI::ButtonPreset::Terracotta,
-        .text_color  = UI::ColorYellow,
+        .text_color  = UI::ColorWhite,
         .drop_shadow = true,
-        .align       = UI::Alignment::Center
+        .align       = UI::Alignment::Center,
+        .text_scale  = 1.0f,
+        .text_xscale = 1.25f,
+        .rounded     = true
     };
 
     UI::BevelButton::Draw(UI::Rect(btn_x, btn_y0, btn_w, btn_h), txt_yes, btn_style, alpha);

@@ -41,9 +41,10 @@
 
 #define MANUAL_MODE_TRACKER 100
 
-static int       tracker_selected_town       = 0;
-static bool      tracker_filter_miracle_only = true;
-static UI::Cursor s_menu_cursor;
+static int          tracker_selected_town       = 0;
+static bool         tracker_filter_miracle_only = true;
+static UI::Cursor   s_menu_cursor;
+static UI::Brackets s_menu_brackets;
 
 static inline bool IsItemEden(uint16_t id)    { return id == 180; }
 static inline bool IsItemGourd(uint16_t id)   { return id == 182; }
@@ -400,13 +401,8 @@ PORT_OVERRIDE void MenuManualDraw() {
         int text_alpha = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
         int win_alpha  = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
         
-        constexpr int cat_spacing = 28; // +3px vertical row spacing
+        constexpr int cat_spacing = 28;
         UI::TrackerWindow::Draw(135, 85, 220, 170, win_alpha);
-        
-        if (ManualMenu.selection_level == -2) {
-            s_menu_cursor.SetTarget(126.0f, static_cast<float>(100 + (ManualMenu.category * cat_spacing) - 2));
-            s_menu_cursor.Draw(0x80);
-        }
 
         MenuTextureReload(0x1A);
         
@@ -424,41 +420,56 @@ PORT_OVERRIDE void MenuManualDraw() {
                              : UI::ColorWhite;
             UI::Label(categories[i], color).Draw(160, 100 + (i * cat_spacing), text_alpha);
         }
-        
+
         if (ManualMenu.selection_level == -2) {
+            s_menu_cursor.SetTarget(126.0f, static_cast<float>(100 + (ManualMenu.category * cat_spacing) - 2));
+            s_menu_cursor.Draw(0x80);
             return; 
         }
     }
 
-// --- CHEST TRACKER DASHBOARD ---
+    // --- CHEST TRACKER DASHBOARD ---
     if (ManualMenu.mode == MANUAL_MODE_TRACKER) {
+        // Single unified background window
         UI::TrackerWindow::Draw(64, 85, 512, 282, 0x80);
-        MenuTextureReload(0x1A);
 
         constexpr float kHeaderScale = 0.92f;
         constexpr float kBodyScale   = 0.84f;
 
-        constexpr int kLeftPaneX  = 88;
+        constexpr int kLeftPaneX  = 92;
+        constexpr int kDividerX   = 258;
         constexpr int kRightPaneX = 272;
         constexpr int kLabelX     = kRightPaneX + 30; // 24px icon + 6px gap
-        constexpr int kCountX     = 460;
+        constexpr int kCountX     = 460;              // 82px wide counter ends at X = 542
+
+        // Beveled groove divider lines separating the panes and footer totals (from Picture 3)
+        UI::Divider::DrawVertical(kDividerX, 140, 356, 0x80);
+        UI::Divider::DrawHorizontal(84, kDividerX - 10, 300, 0x80);
+        UI::Divider::DrawHorizontal(kRightPaneX, 542, 300, 0x80);
+
+        MenuTextureReload(0x1A);
+
+        auto DrawCounter = [&](int x, int y, int cur, int max_v, uint32_t col) {
+            UI::Label("[", col, UI::Alignment::Left, true, kBodyScale).Draw(x, y, 0x80);
+            UI::Label(std::to_string(cur), col, UI::Alignment::Right, true, kBodyScale).Draw(x + 28, y, 0x80);
+            UI::Label("/", col, UI::Alignment::Center, true, kBodyScale).Draw(x + 38, y, 0x80);
+            UI::Label(std::to_string(max_v), col, UI::Alignment::Right, true, kBodyScale).Draw(x + 73, y, 0x80);
+            UI::Label("]", col, UI::Alignment::Right, true, kBodyScale).Draw(x + 82, y, 0x80);
+        };
 
         // Header Title
         UI::Label(
             LocalizeText("tracker.title", "JOURNAL: CHEST TRACKER"),
             UI::ColorGold,
-            UI::Alignment::Center,
-            true,
-            1.0f,
-            UI::FontWeight::Bold
+            UI::Alignment::Center
         ).Draw(320, 96, 0x80);
 
         // Filter Mode Indicator
         std::string mode_label = tracker_filter_miracle_only
-            ? LocalizeText("tracker.filter.miracle_only", "< MIRACLE CHESTS ONLY >")
+            ? LocalizeText("tracker.filter.stat_boosts_only", "< STAT BOOSTS ONLY >")
             : LocalizeText("tracker.filter.all_chests", "< ALL TOWN CHESTS >");
         uint32_t mode_color = tracker_filter_miracle_only ? UI::ColorYellow : UI::ColorWhite;
-        UI::Label(mode_label, mode_color, UI::Alignment::Center, true, kBodyScale).Draw(320, 120, 0x80);
+        UI::Label(mode_label, mode_color, UI::Alignment::Center, true, kBodyScale).Draw(320, 118, 0x80);
 
         // Left Pane: Settlements List
         UI::Label(
@@ -470,17 +481,18 @@ PORT_OVERRIDE void MenuManualDraw() {
         ).Draw(kLeftPaneX, 144, 0x80);
 
         constexpr int left_start_y = 168;
-        constexpr int row_spacing  = 26;
+        constexpr int row_spacing  = 25;
 
-        s_menu_cursor.SetTarget(58.0f, static_cast<float>(left_start_y + (tracker_selected_town * row_spacing) - 2));
-        s_menu_cursor.Draw(0x80);
-
-        MenuTextureReload(0x1A);
         for (int i = 0; i < TRACKER_TOWN_COUNT; i++) {
             int row_y = left_start_y + (i * row_spacing);
-            uint32_t name_color = (i == tracker_selected_town) ? UI::ColorYellow : UI::ColorWhite;
+            bool selected = (i == tracker_selected_town);
+
+            uint32_t name_color = selected ? UI::ColorYellow : UI::ColorWhite;
+            int row_alpha = selected ? 0x80 : 0x48;
             std::string town_name = LocalizeText(std::string("tracker.town.") + std::to_string(i), TRACKER_TOWNS[i].name);
-            UI::Label(town_name, name_color, UI::Alignment::Left, true, kBodyScale).Draw(kLeftPaneX, row_y, 0x80);
+
+            UI::Label town_lbl(town_name, name_color, UI::Alignment::Left, true, kBodyScale);
+            town_lbl.Draw(kLeftPaneX, row_y, row_alpha);
         }
 
         // Left Pane: World Total Section
@@ -496,10 +508,8 @@ PORT_OVERRIDE void MenuManualDraw() {
             kHeaderScale
         ).Draw(kLeftPaneX, 308, 0x80);
 
-        char g_buf[32];
-        snprintf(g_buf, sizeof(g_buf), "[ %2d / %2d ]", g_collected, g_max);
         uint32_t g_color = (g_collected == g_max && g_max > 0) ? UI::ColorGold : UI::ColorWhite;
-        UI::Label(g_buf, g_color, UI::Alignment::Left, true, kBodyScale).Draw(kLeftPaneX, 336, 0x80);
+        DrawCounter(kLeftPaneX, 333, g_collected, g_max, g_color);
 
         // Right Pane: Breakdown Header
         std::string cur_town_name = LocalizeText(std::string("tracker.town.") + std::to_string(tracker_selected_town), TRACKER_TOWNS[tracker_selected_town].name);
@@ -546,29 +556,24 @@ PORT_OVERRIDE void MenuManualDraw() {
         }
 
         constexpr int right_start_y = 168;
-        constexpr int right_spacing = 26;
+        constexpr int right_spacing = 25;
 
         for (size_t r = 0; r < breakdown.size(); ++r) {
             int y = right_start_y + (static_cast<int>(r) * right_spacing);
 
-            // 1. Draw 24x24 item icon on the left of the row
             bool icon_drawn = UI::ItemIcon::Draw(breakdown[r].item_no, kRightPaneX, y - 3, 24, 0x80);
 
-            // 2. Draw item name label after the icon (or at pane start if icon texture wasn't available)
             MenuTextureReload(0x1A);
             int text_x = icon_drawn ? kLabelX : kRightPaneX;
             UI::Label(breakdown[r].label, UI::ColorWhite, UI::Alignment::Left, true, kBodyScale).Draw(text_x, y, 0x80);
 
-            // 3. Draw [ collected / max ] count
-            char b_buf[32];
-            snprintf(b_buf, sizeof(b_buf), "[ %2d / %2d ]", breakdown[r].collected, breakdown[r].max_val);
             uint32_t c_col = (breakdown[r].collected == breakdown[r].max_val && breakdown[r].max_val > 0)
                              ? UI::ColorGold
                              : UI::ColorWhite;
-            UI::Label(b_buf, c_col, UI::Alignment::Left, true, kBodyScale).Draw(kCountX, y, 0x80);
+            DrawCounter(kCountX, y, breakdown[r].collected, breakdown[r].max_val, c_col);
         }
 
-        // Right Pane: Area Total (aligned with World Total at Y = 308)
+        // Right Pane: Area Total
         int town_cur_collected = tracker_filter_miracle_only ? cur_stats.collected_miracle : cur_stats.collected_total;
         int town_cur_max       = tracker_filter_miracle_only ? cur_stats.max_miracle       : cur_stats.max_total;
 
@@ -581,14 +586,12 @@ PORT_OVERRIDE void MenuManualDraw() {
             kHeaderScale
         ).Draw(kRightPaneX, total_row_y, 0x80);
 
-        char area_buf[32];
-        snprintf(area_buf, sizeof(area_buf), "[ %2d / %2d ]", town_cur_collected, town_cur_max);
         uint32_t area_col = (town_cur_collected == town_cur_max && town_cur_max > 0)
                             ? UI::ColorGold
                             : UI::ColorWhite;
-        UI::Label(area_buf, area_col, UI::Alignment::Left, true, kBodyScale).Draw(kCountX, total_row_y, 0x80);
+        DrawCounter(kCountX, total_row_y, town_cur_collected, town_cur_max, area_col);
 
-        // Right Pane: Progress Bar spanning from kRightPaneX (272) to the right edge of the counters (542)
+        // Right Pane: Progress Bar
         float progress_ratio = (town_cur_max > 0)
                                ? static_cast<float>(town_cur_collected) / static_cast<float>(town_cur_max)
                                : 0.0f;
@@ -599,7 +602,7 @@ PORT_OVERRIDE void MenuManualDraw() {
         bar_style.text_scale = 0.76f;
 
         UI::ProgressBar::Draw(
-            UI::Rect(kRightPaneX, 335, 270, 24),
+            UI::Rect(kRightPaneX, 332, 270, 22),
             progress_ratio,
             pct_buf,
             bar_style,
@@ -619,6 +622,13 @@ PORT_OVERRIDE void MenuManualDraw() {
             UI::ColorWhite,
             UI::Alignment::Center
         ).Draw(320, 418, 0x80);
+
+        // Topmost layer: Vanilla 4-corner pulsing selection box + pointing hand cursor
+        int sel_y = left_start_y + (tracker_selected_town * row_spacing);
+        s_menu_brackets.Draw(UI::Rect(kLeftPaneX - 4, sel_y - 1, 152, 22), 0x80);
+
+        s_menu_cursor.SetTarget(48.0f, static_cast<float>(sel_y - 2));
+        s_menu_cursor.Draw(0x80);
 
         return;
     }

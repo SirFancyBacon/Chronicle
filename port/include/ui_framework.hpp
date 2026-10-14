@@ -64,13 +64,14 @@ struct Rect {
 };
 
 // -----------------------------------------------------------------------------
-// TextStyle: Declarative text styling (Color, Shadow, Justification, Scale, Weight)
+// TextStyle: Declarative text styling (Color, Shadow, Justification, Scale, Stretch)
 // -----------------------------------------------------------------------------
 struct TextStyle {
     u32        color       = ColorWhite;        // Default: White
     bool       drop_shadow = true;              // Default: Drop shadow enabled
     Alignment  align       = Alignment::Center; // Default: Center justification
-    float      scale       = 1.0f;              // Font size multiplier (1.0 = standard 15px cap height)
+    float      scale       = 1.0f;              // Font size multiplier
+    float      xscale      = 1.0f;              // Horizontal stretch multiplier (>1.0 = wider)
     FontWeight weight      = FontWeight::Normal;// Thin, Normal, or Bold
     int        line_height = 24;
     int        text_dx     = 0;
@@ -80,7 +81,7 @@ struct TextStyle {
 std::vector<std::string> WrapText(std::string_view text, int max_width);
 
 // -----------------------------------------------------------------------------
-// Windows & Plates
+// Windows, Plates & Dividers
 // -----------------------------------------------------------------------------
 class TrackerWindow {
 public:
@@ -111,15 +112,23 @@ public:
     static void Draw(int left, int right, int y, int alpha = 0x80);
 };
 
+// Beveled groove divider lines for separating panes and totals
+class Divider {
+public:
+    static void DrawVertical(int x, int top_y, int bottom_y, int alpha = 0x80);
+    static void DrawHorizontal(int left_x, int right_x, int y, int alpha = 0x80);
+};
+
 // -----------------------------------------------------------------------------
-// Label: Supports standard GameText AND scaled/weighted TrueType rendering
+// Label: Supports standard GameText AND scaled/stretched TrueType rendering
 // -----------------------------------------------------------------------------
 class Label {
 public:
     Label() = default;
     explicit Label(std::string_view text, u32 color = ColorWhite,
                    Alignment align = Alignment::Left, bool drop_shadow = true,
-                   float scale = 1.0f, FontWeight weight = FontWeight::Normal);
+                   float scale = 1.0f, FontWeight weight = FontWeight::Normal,
+                   float xscale = 1.0f);
     Label(std::string_view text, const TextStyle& style);
 
     void SetText(std::string_view text);
@@ -127,6 +136,7 @@ public:
     void SetAlignment(Alignment align);
     void SetDropShadow(bool enabled);
     void SetScale(float scale);
+    void SetXScale(float xscale);
     void SetWeight(FontWeight weight);
     void SetOffset(int dx, int dy);
     void SetStyle(const TextStyle& style);
@@ -147,6 +157,7 @@ private:
     Alignment   m_align{Alignment::Left};
     bool        m_drop_shadow{true};
     float       m_scale{1.0f};
+    float       m_xscale{1.0f};
     FontWeight  m_weight{FontWeight::Normal};
     int         m_dx{0};
     int         m_dy{0};
@@ -162,7 +173,6 @@ void DrawTextBox(std::string_view text, const Rect& box, const TextStyle& style 
 // -----------------------------------------------------------------------------
 class ItemIcon {
 public:
-    // Returns true if the icon texture was found and drawn; false if caller should fallback
     static bool Draw(int item_no, int x, int y, int size = 24, int alpha = 0x80, bool drop_shadow = true);
 };
 
@@ -193,7 +203,7 @@ private:
 };
 
 // -----------------------------------------------------------------------------
-// Brackets: 4-corner pulsing selection framing
+// Brackets: 4-corner pulsing selection framing (works in all menus)
 // -----------------------------------------------------------------------------
 class Brackets {
 public:
@@ -224,7 +234,7 @@ private:
 };
 
 // -----------------------------------------------------------------------------
-// BevelButton: Procedural beveled button with justified/centered text
+// BevelButton: Rounded procedural beveled button with wide vanilla text option
 // -----------------------------------------------------------------------------
 enum class ButtonPreset {
     Terracotta,
@@ -233,11 +243,13 @@ enum class ButtonPreset {
 
 struct ButtonStyle {
     ButtonPreset preset      = ButtonPreset::Terracotta;
-    u32          text_color  = ColorWhite;        // Default: White
+    u32          text_color  = ColorWhite;        // Default: White (matches vanilla YES/NO)
     bool         drop_shadow = true;              // Default: Drop shadow on
     Alignment    align       = Alignment::Center; // Default: Center justified
     float        text_scale  = 1.0f;
+    float        text_xscale = 1.25f;             // Wide X-axis stretch matching vanilla button font
     FontWeight   text_weight = FontWeight::Normal;
+    bool         rounded     = true;              // Rounded/chamfered button corners
     int          text_dx     = 0;
     int          text_dy     = 0;
 };
@@ -275,7 +287,7 @@ public:
 struct ProgressBarStyle {
     u32        text_color  = ColorWhite;
     bool       drop_shadow = true;
-    float      text_scale  = 0.78f; // Scaled down to fit cleanly inside the bar
+    float      text_scale  = 0.78f;
     FontWeight text_weight = FontWeight::Normal;
     u8         fill_r = 28,  fill_g = 68,  fill_b = 45;
     u8         hi_r   = 45,  hi_g   = 95,  hi_b   = 65;

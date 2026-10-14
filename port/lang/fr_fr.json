@@ -316,7 +316,7 @@
     "manual.category.savings": "Épargne/Autre",
     "manual.category.miracle_chests": "Coffres miraculeux",
     "tracker.title": "JOURNAL : COFFRES MIRACULEUX",
-    "tracker.filter.miracle_only": "< COFFRES MIRACULEUX SEULS >",
+    "tracker.filter.miracle_only": "< BONUS DE STATS SEULS >",
     "tracker.filter.all_chests": "< TOUS LES COFFRES DU VILLAGE >",
     "tracker.settlements": "VILLAGES",
     "tracker.world_total": "Total mondial",

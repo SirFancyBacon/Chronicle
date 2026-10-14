@@ -45,7 +45,7 @@
     "manual.category.savings": "Savings/Other",
     "manual.category.miracle_chests": "Miracle Chests",
     "tracker.title": "JOURNAL: CHEST TRACKER",
-    "tracker.filter.miracle_only": "< MIRACLE CHESTS ONLY >",
+    "tracker.filter.miracle_only": "< STAT BOOSTS ONLY >",
     "tracker.filter.all_chests": "< ALL TOWN CHESTS >",
     "tracker.settlements": "SETTLEMENTS",
     "tracker.world_total": "World Total",

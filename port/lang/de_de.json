@@ -316,7 +316,7 @@
     "manual.category.savings": "Sparen/Sonstiges",
     "manual.category.miracle_chests": "Wundertruhen",
     "tracker.title": "LOGBUCH: WUNDERTRUHEN",
-    "tracker.filter.miracle_only": "< NUR WUNDERTRUHEN >",
+    "tracker.filter.miracle_only": "< NUR STATUS-BONI >",
     "tracker.filter.all_chests": "< ALLE TRUHEN >",
     "tracker.settlements": "SIEDLUNGEN",
     "tracker.world_total": "Gesamt Welt",
