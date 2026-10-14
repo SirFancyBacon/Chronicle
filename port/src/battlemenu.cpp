@@ -38,6 +38,7 @@
 // UI Framework
 #include "ui_framework.hpp"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -53,160 +54,112 @@ namespace {
 bool       s_quit_confirm_active = false;
 int        s_quit_confirm_choice = 1;
 UI::Cursor s_quit_cursor;
+char       g_frame_image_name[]  = "frame_image";
 
 int GetMenuModeMax() {
-    int icon_count = 0;
-    switch (BtlMenuMode) {
-        case BATTLE_MENU_MODE_DUNGEON:
-            icon_count = 8;
-            break;
-        case BATTLE_MENU_MODE_TOWN:
-            icon_count = 9;
-            break;
-    }
-    return icon_count;
+    return (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON) ? 8 : 9;
 }
 
-void BtlMenuMekeIconInfo(int *icons, int menu_mode) {
-    int icon_count = GetMenuModeMax();
-
-    s16 custom_draw_tbl[2][9] = {
+void BtlMenuMekeIconInfo(int *icons, int /*menu_mode*/) {
+    constexpr s16 kCustomDrawTbl[2][9] = {
         {0, 1, 2, 3, 7, 4, 6, 12, 0}, // Dungeon (6: Journal/Book, 12: Quit/House)
         {0, 1, 2, 3, 8, 5, 4,  6, 12}  // Town    (6: Journal/Book, 12: Quit/House)
     };
 
+    const int icon_count = GetMenuModeMax();
     for (int i = 0; i < icon_count; i++) {
-        icons[i] = custom_draw_tbl[BtlMenuMode][i];
+        icons[i] = kCustomDrawTbl[BtlMenuMode][i];
     }
 
     if (BtlMenuMode != BATTLE_MENU_MODE_DUNGEON) {
-        int special_icon = 0;
         switch (NowGetGameFlagForBtlMenu(BtlMenuMode)) {
             case MENU_MOVE_LOCKED:
-            case MENU_MOVE_FIRST_DUNGEON: special_icon = 9; break;
-            case MENU_MOVE_WORLD_MAP:     special_icon = 8; break;
-            case MENU_MOVE_INTERIOR_OUT:  special_icon = 12; break; // Retains Go Outside
+            case MENU_MOVE_FIRST_DUNGEON: icons[4] = 9;  break;
+            case MENU_MOVE_WORLD_MAP:     icons[4] = 8;  break;
+            case MENU_MOVE_INTERIOR_OUT:  icons[4] = 12; break;
+            default:                      icons[4] = 0;  break;
         }
-        icons[4] = special_icon;
     }
 }
 
 void GetSafeIconPos(int index, float& out_x, float& out_y) {
-    int orig_max = (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON) ? 7 : 8;
+    const int orig_max = (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON) ? 7 : 8;
     if (index < orig_max) {
         out_x = NorMenuIcon[index].x;
         out_y = NorMenuIcon[index].y;
     } else {
-        int diff = index - (orig_max - 1);
+        const int diff = index - (orig_max - 1);
         out_x = NorMenuIcon[orig_max - 1].x - (16.0f * diff);
         out_y = NorMenuIcon[orig_max - 1].y + (40.0f * diff);
     }
 }
 
+struct HelpSpec {
+    const char* title_key;
+    const char* title_def;
+    const char* desc_key;
+    const char* desc_def;
+};
+
 void GetBattleMenuHelpData(int index, int mode, std::string& out_title, std::string& out_desc) {
-    if (mode == BATTLE_MENU_MODE_DUNGEON) {
-        switch (index) {
-            case 0:
-                out_title = LocalizeText("battlemenu.item.title", "\"Item\"");
-                out_desc  = LocalizeText("battlemenu.item.help", "Use current item or\nSet active items.");
-                break;
-            case 1:
-                out_title = LocalizeText("battlemenu.weapon.title", "\"Weapon\"");
-                out_desc  = LocalizeText("battlemenu.weapon.help", "Change and customise\nweapons.");
-                break;
-            case 2:
-                out_title = LocalizeText("battlemenu.allies.title", "\"Allies\"");
-                out_desc  = LocalizeText("battlemenu.allies.help", "Change controllable\ncharacter.");
-                break;
-            case 3:
-                out_title = LocalizeText("battlemenu.georama.title", "\"Georama Parts\"");
-                out_desc  = LocalizeText("battlemenu.georama.help", "Check acquired\ngeorama parts.");
-                break;
-            case 4: {
-                int escape_flag = GetEscapeDngFlag();
-                if (escape_flag == 2) {
-                    out_title = LocalizeText("battlemenu.escape.title", "\"Escape\"");
-                    out_desc  = LocalizeText("battlemenu.escape.help", "Escape from the\ncurrent dungeon.");
-                } else {
+    out_title.clear();
+    out_desc.clear();
+
+    static constexpr HelpSpec kCommonTop[4] = {
+        {"battlemenu.item.title",    "\"Item\"",          "battlemenu.item.help",    "Use current item or\nSet active items."},
+        {"battlemenu.weapon.title",  "\"Weapon\"",        "battlemenu.weapon.help",  "Change and customise\nweapons."},
+        {"battlemenu.allies.title",  "\"Allies\"",        "battlemenu.allies.help",  "Change controllable\ncharacter."},
+        {"battlemenu.georama.title", "\"Georama Parts\"", "battlemenu.georama.help", "Check acquired\ngeorama parts."},
+    };
+    static constexpr HelpSpec kSaveSpec    = {"battlemenu.save.title",    "\"Save\"",      "battlemenu.save.help",    "Record current\ngame progress."};
+    static constexpr HelpSpec kOptionSpec  = {"battlemenu.option.title",  "\"Options\"",   "battlemenu.option.help",  "Change game\nconfigurations."};
+    static constexpr HelpSpec kJournalSpec = {"battlemenu.journal.title", "\"Journal\"",   "battlemenu.journal.help", "Check manuals and\nchest tracker."};
+    static constexpr HelpSpec kQuitSpec    = {"battlemenu.quit.title",    "\"Quit Game\"", "battlemenu.quit.help",    "Exit the game and\nreturn to desktop."};
+
+    const HelpSpec* spec = nullptr;
+
+    if (index >= 0 && index < 4) {
+        spec = &kCommonTop[index];
+    } else if (index == 4) {
+        if (mode == BATTLE_MENU_MODE_DUNGEON) {
+            if (GetEscapeDngFlag() == 2) {
+                out_title = LocalizeText("battlemenu.escape.title", "\"Escape\"");
+                out_desc  = LocalizeText("battlemenu.escape.help", "Escape from the\ncurrent dungeon.");
+            } else {
+                out_title = LocalizeText("battlemenu.go_outside.title", "\"Go Outside\"");
+                out_desc  = LocalizeText("battlemenu.go_outside.help", "Go outside of\nthe building.");
+            }
+        } else {
+            switch (NowGetGameFlagForBtlMenu(BtlMenuMode)) {
+                case MENU_MOVE_WORLD_MAP:
+                    out_title = LocalizeText("battlemenu.world_map.title", "\"World Map\"");
+                    out_desc  = LocalizeText("battlemenu.world_map.help", "Move to another\narea on world map.");
+                    break;
+                case MENU_MOVE_INTERIOR_OUT:
                     out_title = LocalizeText("battlemenu.go_outside.title", "\"Go Outside\"");
                     out_desc  = LocalizeText("battlemenu.go_outside.help", "Go outside of\nthe building.");
-                }
-                break;
+                    break;
+                default:
+                    out_title = LocalizeText("battlemenu.dungeon.title", "\"Go to Dungeon\"");
+                    out_desc  = LocalizeText("battlemenu.dungeon.help", "Go to Divine\nBeast Cave.");
+                    break;
             }
-            case 5:
-                out_title = LocalizeText("battlemenu.option.title", "\"Options\"");
-                out_desc  = LocalizeText("battlemenu.option.help", "Change game\nconfigurations.");
-                break;
-            case 6:
-                out_title = LocalizeText("battlemenu.journal.title", "\"Journal\"");
-                out_desc  = LocalizeText("battlemenu.journal.help", "Check manuals and\nchest tracker.");
-                break;
-            case 7:
-                out_title = LocalizeText("battlemenu.quit.title", "\"Quit Game\"");
-                out_desc  = LocalizeText("battlemenu.quit.help", "Exit the game and\nreturn to desktop.");
-                break;
-            default:
-                out_title.clear();
-                out_desc.clear();
-                break;
         }
+        return;
+    } else if (mode == BATTLE_MENU_MODE_DUNGEON) {
+        if (index == 5)      spec = &kOptionSpec;
+        else if (index == 6) spec = &kJournalSpec;
+        else if (index == 7) spec = &kQuitSpec;
     } else {
-        switch (index) {
-            case 0:
-                out_title = LocalizeText("battlemenu.item.title", "\"Item\"");
-                out_desc  = LocalizeText("battlemenu.item.help", "Use current item or\nSet active items.");
-                break;
-            case 1:
-                out_title = LocalizeText("battlemenu.weapon.title", "\"Weapon\"");
-                out_desc  = LocalizeText("battlemenu.weapon.help", "Change and customise\nweapons.");
-                break;
-            case 2:
-                out_title = LocalizeText("battlemenu.allies.title", "\"Allies\"");
-                out_desc  = LocalizeText("battlemenu.allies.help", "Change controllable\ncharacter.");
-                break;
-            case 3:
-                out_title = LocalizeText("battlemenu.georama.title", "\"Georama Parts\"");
-                out_desc  = LocalizeText("battlemenu.georama.help", "Check acquired\ngeorama parts.");
-                break;
-            case 4: {
-                int flag = NowGetGameFlagForBtlMenu(BtlMenuMode);
-                switch (flag) {
-                    case MENU_MOVE_WORLD_MAP:
-                        out_title = LocalizeText("battlemenu.world_map.title", "\"World Map\"");
-                        out_desc  = LocalizeText("battlemenu.world_map.help", "Move to another\narea on world map.");
-                        break;
-                    case MENU_MOVE_INTERIOR_OUT:
-                        out_title = LocalizeText("battlemenu.go_outside.title", "\"Go Outside\"");
-                        out_desc  = LocalizeText("battlemenu.go_outside.help", "Go outside of\nthe building.");
-                        break;
-                    default:
-                        out_title = LocalizeText("battlemenu.dungeon.title", "\"Go to Dungeon\"");
-                        out_desc  = LocalizeText("battlemenu.dungeon.help", "Go to Divine\nBeast Cave.");
-                        break;
-                }
-                break;
-            }
-            case 5:
-                out_title = LocalizeText("battlemenu.save.title", "\"Save\"");
-                out_desc  = LocalizeText("battlemenu.save.help", "Record current\ngame progress.");
-                break;
-            case 6:
-                out_title = LocalizeText("battlemenu.option.title", "\"Options\"");
-                out_desc  = LocalizeText("battlemenu.option.help", "Change game\nconfigurations.");
-                break;
-            case 7:
-                out_title = LocalizeText("battlemenu.journal.title", "\"Journal\"");
-                out_desc  = LocalizeText("battlemenu.journal.help", "Check manuals and\nchest tracker.");
-                break;
-            case 8:
-                out_title = LocalizeText("battlemenu.quit.title", "\"Quit Game\"");
-                out_desc  = LocalizeText("battlemenu.quit.help", "Exit the game and\nreturn to desktop.");
-                break;
-            default:
-                out_title.clear();
-                out_desc.clear();
-                break;
-        }
+        if (index == 5)      spec = &kSaveSpec;
+        else if (index == 6) spec = &kOptionSpec;
+        else if (index == 7) spec = &kJournalSpec;
+        else if (index == 8) spec = &kQuitSpec;
+    }
+
+    if (spec != nullptr) {
+        out_title = LocalizeText(spec->title_key, spec->title_def);
+        out_desc  = LocalizeText(spec->desc_key,  spec->desc_def);
     }
 }
 
@@ -220,39 +173,22 @@ std::string GetBattleMenuCaption(int index, int mode) {
 }
 
 void DrawBtlMenuBar() {
-    int alpha;
-    int icon_alpha;
-    int i;
-    int x;
-    int menu_flag;
-    int brightness;
-    int selected;
-    int y;
-
+    int alpha = 128;
     if (BtlEffectFlag == BTLEFFECT_PAGE_CLOSE || BattleMenuFlag == BTLMENU_STATE_APPEAR) {
-        alpha = 10.0f * BtlEffectCt;
-        if (alpha >= 128) alpha = 128;
-    }
-
-    if (BtlEffectFlag == BTLEFFECT_PAGE_OPEN || BattleMenuFlag == BTLMENU_STATE_EXIT) {
-        alpha = 128.0f - 10.0f * BtlEffectCt;
-        if (alpha < 0) alpha = 0;
-    } else {
-        alpha = 128;
+        alpha = std::min(128, static_cast<int>(10.0f * BtlEffectCt));
+    } else if (BtlEffectFlag == BTLEFFECT_PAGE_OPEN || BattleMenuFlag == BTLMENU_STATE_EXIT) {
+        alpha = std::max(0, static_cast<int>(128.0f - 10.0f * BtlEffectCt));
     }
 
     NowGetGameFlagForBtlMenu(BtlMenuMode);
-    int icon_count = GetMenuModeMax();
-    int icons[9] = {};
+    const int icon_count = GetMenuModeMax();
+    int       icons[9]   = {};
     BtlMenuMekeIconInfo(icons, BtlMenuMode);
 
-    for (i = 0; i < icon_count; i++) {
-        icon_alpha = alpha;
-        brightness = 128;
-
-        if (MenuWarningMsgFlag != 0) brightness = 64;
-
-        menu_flag = BattleMenuFlag;
+    for (int i = 0; i < icon_count; i++) {
+        int       icon_alpha = alpha;
+        const int brightness = (MenuWarningMsgFlag != 0) ? 64 : 128;
+        const int menu_flag  = BattleMenuFlag;
 
         if (menu_flag != BTLMENU_STATE_MAIN && menu_flag != BTLMENU_STATE_APPEAR && menu_flag != BTLMENU_STATE_EXIT) {
             if (i != MenuSelect[1]) {
@@ -260,31 +196,22 @@ void DrawBtlMenuBar() {
             }
         }
 
-        selected = 0;
-        
-        float icon_x, icon_y;
+        float icon_x = 0.0f, icon_y = 0.0f;
         GetSafeIconPos(i, icon_x, icon_y);
 
-        x = icon_x;
-        float lowered_y = 2.0f + icon_y;
-        y = 1.0f + lowered_y;
+        int selected = 0;
+        int x        = static_cast<int>(icon_x);
+        int y        = static_cast<int>(icon_y + 3.0f);
 
         if (i == MenuSelect[1]) {
-            if ((menu_flag == BTLMENU_STATE_APPEAR || menu_flag == BTLMENU_STATE_EXIT) &&
-                menu_flag == BTLMENU_STATE_MOVE_OPEN) {
-                icon_alpha = alpha;
-            }
-            selected = 1;
-            x = icon_x - 10.0f;
-            y = 1.0f + (icon_y - 2.0f);
+            selected   = 1;
+            x          = static_cast<int>(icon_x - 10.0f);
+            y          = static_cast<int>(icon_y - 1.0f);
             icon_alpha = 128;
         }
 
         if (icons[i] >= 0) {
-            // Guarantee 100% synchronization: feed the title directly to caption rendering
-            std::string cap = GetBattleMenuCaption(i, BtlMenuMode);
-            caption::SetNextCaptionText(cap);
-
+            caption::SetNextCaptionText(GetBattleMenuCaption(i, BtlMenuMode));
             DrawMainMenuIcon(x, y, icons[i], selected, brightness, icon_alpha);
         }
     }
@@ -302,78 +229,36 @@ int BtlMenuDrawSpecialFlag(int flag) {
 }
 
 void DrawQuitConfirmModal(int alpha) {
-    const int box_w = 260;
-    const int box_h = 58;
-    const int box_x = (640 - box_w) / 2;
-    const int box_y = 164;
-
-    UI::HelpBox::Draw(box_x, box_y, box_w, box_h, alpha);
-
-    MenuTextureReload(0x1A);
-    std::string q_title = LocalizeText("battlemenu.quit.confirm_title", "\"Quit Game\"");
-    std::string q_desc  = LocalizeText("battlemenu.quit.confirm_desc", "Return to desktop?");
-
-    UI::Label title_lbl(q_title, UI::ColorWhite);
-    title_lbl.Draw(box_x + 22, box_y + 12, alpha);
-
-    UI::Label desc_lbl(q_desc, UI::ColorWhite);
-    desc_lbl.Draw(box_x + 22, box_y + 32, alpha);
-
-    const int btn_w  = 100;
-    const int btn_h  = 26;
-    const int btn_x  = (640 - btn_w) / 2;
-    const int btn_y0 = box_y + box_h + 10;
-    const int btn_y1 = btn_y0 + btn_h + 6;
-
-    std::string txt_yes = LocalizeText("battlemenu.quit.yes", "YES");
-    std::string txt_no  = LocalizeText("battlemenu.quit.no", "NO");
-
-    UI::ButtonStyle btn_style{
-        .preset      = UI::ButtonPreset::Terracotta,
-        .text_color  = UI::ColorWhite,
-        .drop_shadow = true,
-        .align       = UI::Alignment::Center,
-        .text_scale  = 1.0f,
-        .text_xscale = 1.25f,
-        .rounded     = true
-    };
-
-    UI::BevelButton::Draw(UI::Rect(btn_x, btn_y0, btn_w, btn_h), txt_yes, btn_style, alpha);
-    UI::BevelButton::Draw(UI::Rect(btn_x, btn_y1, btn_w, btn_h), txt_no,  btn_style, alpha);
-
-    int sel_y = (s_quit_confirm_choice == 0) ? btn_y0 : btn_y1;
-
-    DrawMenuWaku(btn_x - 14, sel_y - 6, btn_w + 12, btn_h - 4, 0, StayTex, alpha);
-
-    s_quit_cursor.SetTarget(static_cast<float>(btn_x - 34), static_cast<float>(sel_y + 3));
-    s_quit_cursor.Draw(alpha);
+    UI::ConfirmModal::Draw(
+        LocalizeText("battlemenu.quit.confirm_title", "\"Quit Game\""),
+        LocalizeText("battlemenu.quit.confirm_desc",  "Return to desktop?"),
+        LocalizeText("battlemenu.quit.yes",           "YES"),
+        LocalizeText("battlemenu.quit.no",            "NO"),
+        s_quit_confirm_choice,
+        s_quit_cursor,
+        alpha
+    );
 }
-
-char g_frame_image_name[] = "frame_image";
 
 } // namespace
 
 PORT_OVERRIDE void DrawBattleMain() {
-    int pos[2];
-    int icons[9];
-
-    int next = MenuSelect[1] + 1;
-    pos[0] = next * 16 + 80;
-    pos[1] = MenuSelect[1] * 40 + 54;
+    int icons[9] = {};
+    int next     = MenuSelect[1] + 1;
+    int pos_x    = next * 16 + 80;
+    int pos_y    = MenuSelect[1] * 40 + 54;
     if (next > 4) {
-        pos[0] -= ((MenuSelect[1] - 4) << 5) + 16;
+        pos_x -= ((MenuSelect[1] - 4) << 5) + 16;
     }
 
-    int x = pos[0] - 0x2C;
-    int y = pos[1];
-    SysCur[0] += ((float) x - SysCur[0]) / 4.0f;
-    SysCur[1] += ((float) y - SysCur[1]) / 4.0f;
-    
+    SysCur[0] += (static_cast<float>(pos_x - 0x2C) - SysCur[0]) / 4.0f;
+    SysCur[1] += (static_cast<float>(pos_y) - SysCur[1]) / 4.0f;
+
     BtlMenuMekeIconInfo(icons, BtlMenuMode);
     MENU_ICON_INFO *info = GetMenuIconInfo(icons[MenuSelect[1]]);
 
-    BtlWakuMake2 = 1;
-    CommonMenuMes2.mes_made = -1;
+    BtlWakuMake2              = 1;
+    CommonMenuMes2.mes_made   = -1;
     CommonMenuMes2.stay_frame = false;
 
     if (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON) {
@@ -383,8 +268,8 @@ PORT_OVERRIDE void DrawBattleMain() {
         }
         if (limit >= 0) {
             MenuTextureReload(CommonMenuMes1.tex_block);
-            CommonMenuMes1.text_x = 0x50;
-            CommonMenuMes1.text_y = 0x14A;
+            CommonMenuMes1.text_x     = 0x50;
+            CommonMenuMes1.text_y     = 0x14A;
             CommonMenuMes1.stay_frame = true;
             CommonMenuMes1.Step();
             CommonMenuMes1.DrawMesWin();
@@ -392,51 +277,39 @@ PORT_OVERRIDE void DrawBattleMain() {
     }
 
     if (!s_quit_confirm_active) {
-        std::string cap = GetBattleMenuCaption(MenuSelect[1], BtlMenuMode);
-        UI::Label cap_lbl(cap);
-        int width = cap_lbl.GetWidth() + 0x4A;
+        UI::Label cap_lbl(GetBattleMenuCaption(MenuSelect[1], BtlMenuMode));
+        int       width = cap_lbl.GetWidth() + 0x4A;
         if (info != nullptr && width < (info->label_width + 0x4A)) {
             width = info->label_width + 0x4A;
         }
 
-        float icon_x, icon_y;
+        float icon_x = 0.0f, icon_y = 0.0f;
         GetSafeIconPos(MenuSelect[1], icon_x, icon_y);
 
-        float waku_y = icon_y - 8.0f;
-        DrawMenuWaku(icon_x - 18.0f, waku_y, width, 0x22, 0, StayTex, 0x80);
-        DrawMenuObjectVibe((int) SysCur[0], (int) SysCur[1], 1, 0x40);
+        DrawMenuWaku(icon_x - 18.0f, icon_y - 8.0f, width, 0x22, 0, StayTex, 0x80);
+        DrawMenuObjectVibe(static_cast<int>(SysCur[0]), static_cast<int>(SysCur[1]), 1, 0x40);
     }
 }
 
 PORT_OVERRIDE void BattleMenuDraw() {
     MenuMouseNoteBattleMenu();
-    int text_x = 0;
-    int text_y = 0;
 
     setbilinear(0);
     MenuWorldTrans(&MenuCamera);
     MenuTextureReload(BtlMenuReadBlock);
-    CTexture  frame = *TexManager.GetTexture(g_frame_image_name, -1);
-    CTexture *texture = &frame;
-    int       tcc = 0;
 
-    if (texture != NULL) {
-        ((sceGsTex0 *) &frame.tex0)->bits.tcc = tcc;
-    } else {
+    CTexture *raw_frame = TexManager.GetTexture(g_frame_image_name, -1);
+    if (raw_frame == nullptr) {
         return;
     }
+    CTexture frame = *raw_frame;
+    reinterpret_cast<sceGsTex0 *>(&frame.tex0)->bits.tcc = 0;
 
     int bright = 0x40;
-
-    switch (BattleMenuFlag) {
-        case BTLMENU_STATE_APPEAR:
-            bright = (int) (128.0f - 4.0f * BtlEffectCt);
-            if (bright < 0x40) bright = 0x40;
-            break;
-        case BTLMENU_STATE_EXIT:
-            bright += 4.0f * BtlEffectCt;
-            if (bright > 0x80) bright = 0x80;
-            break;
+    if (BattleMenuFlag == BTLMENU_STATE_APPEAR) {
+        bright = std::max(0x40, static_cast<int>(128.0f - 4.0f * BtlEffectCt));
+    } else if (BattleMenuFlag == BTLMENU_STATE_EXIT) {
+        bright = std::min(0x80, static_cast<int>(bright + 4.0f * BtlEffectCt));
     }
 
     DrawMenu2DSprite(&frame, MenuDispRc, MenuDispRc, bright, bright, bright, 0x80);
@@ -490,75 +363,32 @@ PORT_OVERRIDE void BattleMenuDraw() {
             break;
     }
 
-    CursorVibeCnt++;
+    CursorVibeCnt = (CursorVibeCnt + 1 >= 0x405F7E00) ? 0 : (CursorVibeCnt + 1);
 
-    if (CursorVibeCnt >= 0x405F7E00) {
-        CursorVibeCnt = 0;
-    }
-
-    int draw_help = BtlMenuDrawSpecialFlag(BtlWakuMake2);
-
+    const int draw_help = BtlMenuDrawSpecialFlag(BtlWakuMake2);
     if (BtlMenuReadEndFlag != 0) {
-        switch (BattleMenuFlag) {
-            case BTLMENU_STATE_EXIT:
-                BtlHelpWinAlpha -= 8;
-                if (BtlHelpWinAlpha < 0) BtlHelpWinAlpha = 0;
-                break;
-            default:
-                if (BattleMenuFlag == BTLMENU_STATE_MAIN || BattleMenuFlag == BTLMENU_STATE_APPEAR) {
-                    BtlHelpWinAlpha += 9;
-                    if (BtlHelpWinAlpha > 0x80) BtlHelpWinAlpha = 0x80;
-                } else {
-                    BtlHelpWinAlpha -= 8;
-                    if (BtlHelpWinAlpha < 0) BtlHelpWinAlpha = 0;
-                }
-                break;
+        if (BattleMenuFlag == BTLMENU_STATE_MAIN || BattleMenuFlag == BTLMENU_STATE_APPEAR) {
+            BtlHelpWinAlpha = std::min(0x80, BtlHelpWinAlpha + 9);
+        } else {
+            BtlHelpWinAlpha = std::max(0, BtlHelpWinAlpha - 8);
         }
     }
 
+    int text_x = 0, text_y = 0;
     GetMainMenuRightHelpMsgLangOffset(text_x, text_y);
 
-    if (BtlMenuReadEndFlag != 0 && draw_help != 0 && BattleMenuFlag == BTLMENU_STATE_MAIN && BtlHelpWinAlpha > 0 && !s_quit_confirm_active) {
-        std::string title;
-        std::string desc;
+    if (BtlMenuReadEndFlag != 0 && draw_help != 0 && BattleMenuFlag == BTLMENU_STATE_MAIN &&
+        BtlHelpWinAlpha > 0 && !s_quit_confirm_active) {
+        std::string title, desc;
         GetBattleMenuHelpData(MenuSelect[1], BtlMenuMode, title, desc);
 
-        if (!title.empty() && !desc.empty()) {
-            MenuTextureReload(0x1A);
-
-            const int box_w = 276;
-            const int box_x = (HelpWinHead[0] > 0) ? static_cast<int>(HelpWinHead[0]) : (640 - box_w - 20);
-            const int draw_x = box_x + (text_x > 0 ? text_x : 22);
-
-            const int max_text_w = 230;
-            constexpr int line_height = 28;
-            std::vector<std::string> lines = UI::WrapText(desc, max_text_w);
-            int num_lines = std::max(1, static_cast<int>(lines.size()));
-
-            int box_h = 32 + (num_lines * line_height);
-            const int box_bottom = 452;
-            int box_y = box_bottom - box_h;
-
-            UI::HelpBox::Draw(box_x, box_y, box_w, box_h, BtlHelpWinAlpha);
-
-            MenuTextureReload(0x1A);
-            int title_y = box_y + 12;
-            int desc_y  = title_y + 24;
-
-            UI::Label title_lbl(title, UI::ColorWhite);
-            title_lbl.Draw(draw_x, title_y, BtlHelpWinAlpha);
-
-            for (size_t i = 0; i < lines.size(); ++i) {
-                UI::Label line_lbl(lines[i], UI::ColorWhite);
-                line_lbl.Draw(draw_x, desc_y + static_cast<int>(i) * line_height, BtlHelpWinAlpha);
-            }
-        }
+        constexpr int box_w = 276;
+        const int     box_x = (HelpWinHead[0] > 0) ? static_cast<int>(HelpWinHead[0]) : (640 - box_w - 20);
+        UI::HelpBox::DrawTitled(box_x, 452, box_w, text_x, title, desc, BtlHelpWinAlpha);
     }
 
     setbilinear(0);
-    draw_help = BtlMenuDrawSpecialFlag(1);
-
-    if (draw_help != 0) {
+    if (BtlMenuDrawSpecialFlag(1) != 0) {
         DrawBtlMenuBar();
     }
 
@@ -575,9 +405,7 @@ PORT_OVERRIDE void BattleMenuDraw() {
 
     if (GetInteriorOutFlag() != 0) {
         BtlEffectCt += 1.0f;
-        int fade = (int) (3.0f * BtlEffectCt);
-        if (fade > 0x80) fade = 0x80;
-        AllFadeForMenu(fade);
+        AllFadeForMenu(std::min(0x80, static_cast<int>(3.0f * BtlEffectCt)));
     }
 
     setbilinear(1);
@@ -595,71 +423,53 @@ PORT_OVERRIDE int BattleMenuSelect() {
         if (GamePad.Down(PAD_UP | PAD_DOWN)) {
             s_quit_confirm_choice = 1 - s_quit_confirm_choice;
             ComMenuSePlay(MENU_SOUND_CURSOR);
-        }
-
-        if (GamePad.Down(PAD_CROSS)) {
+        } else if (GamePad.Down(PAD_CROSS)) {
             if (s_quit_confirm_choice == 0) {
                 ComMenuSePlay(MENU_SOUND_CONFIRM);
                 SDL_Event event{};
                 event.type = SDL_EVENT_QUIT;
                 SDL_PushEvent(&event);
-                return 1;
             } else {
                 ComMenuSePlay(MENU_SOUND_REFUSE);
                 s_quit_confirm_active = false;
-                return 1;
             }
-        }
-
-        if (GamePad.Down(PAD_CIRCLE)) {
+        } else if (GamePad.Down(PAD_CIRCLE)) {
             ComMenuSePlay(MENU_SOUND_REFUSE);
             s_quit_confirm_active = false;
-            return 1;
         }
-
         return 1;
     }
 
-    int old = MenuSelect[1];
-    int max = GetMenuModeMax();
+    const int old = MenuSelect[1];
+    const int max = GetMenuModeMax();
 
     if (GamePad.Down(PAD_UP | PAD_LEFT) != 0) {
-        MenuSelect[1]--;
-        if (MenuSelect[1] < 0) {
-            MenuSelect[1] = max - 1;
-        }
+        if (--MenuSelect[1] < 0) MenuSelect[1] = max - 1;
     }
-
     if (GamePad.Down(PAD_RIGHT | PAD_DOWN) != 0) {
-        MenuSelect[1]++;
-        if (MenuSelect[1] > max - 1) {
-            MenuSelect[1] = 0;
-        }
+        if (++MenuSelect[1] > max - 1) MenuSelect[1] = 0;
     }
-
     if (old != MenuSelect[1]) {
         ComMenuSePlay(MENU_SOUND_CURSOR);
     }
 
     if (GamePad.Down(PAD_CROSS)) {
-        int pages[2][9] = {
+        constexpr int kPages[2][9] = {
             {BTLMENU_PAGE_ITEM, BTLMENU_PAGE_WEAPON, BTLMENU_PAGE_CHARA, BTLMENU_PAGE_ATLA, BTLMENU_PAGE_MOVE, BTLMENU_PAGE_OPTION, BTLMENU_PAGE_MANUAL, BTLMENU_PAGE_QUIT, BTLMENU_PAGE_NONE},
             {BTLMENU_PAGE_ITEM, BTLMENU_PAGE_WEAPON, BTLMENU_PAGE_CHARA, BTLMENU_PAGE_ATLA, BTLMENU_PAGE_MOVE, BTLMENU_PAGE_SAVE,   BTLMENU_PAGE_OPTION, BTLMENU_PAGE_MANUAL, BTLMENU_PAGE_QUIT}
         };
-        MenuSelect[0] = pages[BtlMenuMode][MenuSelect[1]];
+        MenuSelect[0]             = kPages[BtlMenuMode][MenuSelect[1]];
         CommonMenuMes1.stay_frame = false;
-        CUserStatus *status = (CUserStatus *) BtlMenuStatusPt;
-        int          chara = status->cur_chara;
-        u_long128   *buffer = BtlMenuReadBuf;
+        CUserStatus *status       = reinterpret_cast<CUserStatus *>(BtlMenuStatusPt);
+        const int    chara        = status->cur_chara;
+        u_long128   *buffer       = BtlMenuReadBuf;
 
         switch (MenuSelect[0]) {
             case BTLMENU_PAGE_CHARA:
-                if (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON) {
-                    int zone = status->res_limit_zone_current;
-                    if (zone < 6 && zone >= 0) {
-                        ComMenuSePlay(MENU_SOUND_REFUSE);
-                        return 1;
-                    }
+                if (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON &&
+                    status->res_limit_zone_current >= 0 && status->res_limit_zone_current < 6) {
+                    ComMenuSePlay(MENU_SOUND_REFUSE);
+                    return 1;
                 }
                 BtlWakuMake2 = 0;
                 Btl_InitMenuChara(buffer);
@@ -673,41 +483,24 @@ PORT_OVERRIDE int BattleMenuSelect() {
                 Btl_InitItemMode(0, chara);
                 break;
             case BTLMENU_PAGE_ATLA: {
-                BtlWakuMake2 = 0;
-                int blocks[2] = {0, 0};
-                blocks[0] = BtlMenuReadBlock;
-                blocks[1] = MenuExtendReadBlock;
-                int map = 0;
-                switch (BtlMenuMode) {
-                    case BATTLE_MENU_MODE_DUNGEON:
-                        map = status->cur_georama;
-                        if (map < 0) map = 0;
-                        if (map >= 6) map = 0;
-                        break;
-                    case BATTLE_MENU_MODE_TOWN:
-                        map = GetNowMapTransAtraMap(MapNo);
-                        if (map < 0 || map > 5) map = 0;
-                        break;
-                }
+                BtlWakuMake2  = 0;
+                int blocks[2] = {BtlMenuReadBlock, MenuExtendReadBlock};
+                int map       = (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON)
+                                ? status->cur_georama
+                                : GetNowMapTransAtraMap(MapNo);
+                if (map < 0 || map >= 6) map = 0;
                 InitMenuAtora1(BtlMenuMode, map, blocks, buffer);
                 InitMenuAtoraSelect(map);
                 break;
             }
             case BTLMENU_PAGE_MOVE: {
-                int flag = NowGetGameFlagForBtlMenu(BtlMenuMode);
-                switch (flag) {
-                    case MENU_MOVE_LOCKED:
-                        ComMenuSePlay(MENU_SOUND_REFUSE);
-                        return 1;
-                    default:
-                    case MENU_MOVE_WORLD_MAP:
-                    case MENU_MOVE_FIRST_DUNGEON:
-                    case MENU_MOVE_INTERIOR_OUT:
-                    case MENU_MOVE_DUNGEON_ESCAPE:
-                        InitMenuMove(flag, MenuExtendReadBlock, buffer);
-                        BtlWakuMake2 = 0;
-                        break;
+                const int flag = NowGetGameFlagForBtlMenu(BtlMenuMode);
+                if (flag == MENU_MOVE_LOCKED) {
+                    ComMenuSePlay(MENU_SOUND_REFUSE);
+                    return 1;
                 }
+                InitMenuMove(flag, MenuExtendReadBlock, buffer);
+                BtlWakuMake2 = 0;
                 break;
             }
             case BTLMENU_PAGE_OPTION:
@@ -719,29 +512,23 @@ PORT_OVERRIDE int BattleMenuSelect() {
                 InitMenuSave(SAVE_MENU_MODE_SAVE, MenuExtendReadBlock, buffer);
                 break;
             case BTLMENU_PAGE_MANUAL: {
-                BtlWakuMake2 = 0;
-                int blocks[3] = {0, 0, 0};
-                blocks[0] = MenuExtendReadBlock;
-                blocks[1] = BtlMenuExReadBlock;
-                blocks[2] = BtlMenuManualReadBlock;
+                BtlWakuMake2  = 0;
+                int blocks[3] = {MenuExtendReadBlock, BtlMenuExReadBlock, BtlMenuManualReadBlock};
                 Btl_BattleManualInit(blocks, buffer);
                 break;
             }
-            case BTLMENU_PAGE_QUIT: {
+            case BTLMENU_PAGE_QUIT:
                 s_quit_confirm_active = true;
                 s_quit_confirm_choice = 1;
                 s_quit_cursor.SnapTo((640 - 100) / 2.0f - 34.0f, (164 + 58 + 10 + 26 + 6) + 3.0f);
                 ComMenuSePlay(MENU_SOUND_CONFIRM);
                 return 1;
-            }
         }
 
-        if (MenuSelect[0] != BTLMENU_PAGE_QUIT) {
-            BattleMenuFlag = MenuSelect[0] + BTLMENU_STATE_OPEN_OFFSET;
-            BtlEffectFlag = BTLEFFECT_PAGE_OPEN;
-            BtlEffectCt = 0;
-            ComMenuSePlay(MENU_SOUND_CONFIRM);
-        }
+        BattleMenuFlag = MenuSelect[0] + BTLMENU_STATE_OPEN_OFFSET;
+        BtlEffectFlag  = BTLEFFECT_PAGE_OPEN;
+        BtlEffectCt    = 0;
+        ComMenuSePlay(MENU_SOUND_CONFIRM);
     } else if (GamePad.Down(PAD_CIRCLE) != 0) {
         ComMenuSePlay(MENU_SOUND_REFUSE);
         BattleMenuFlag = BTLMENU_STATE_EXIT;

@@ -81,21 +81,56 @@ struct TextStyle {
 std::vector<std::string> WrapText(std::string_view text, int max_width);
 
 // -----------------------------------------------------------------------------
-// Windows, Stone Boards & Skeuomorphic Indentation Primitives
+// Windows, Stone/Paper Boards & Skeuomorphic Indentation Primitives
 // -----------------------------------------------------------------------------
+enum class WindowPreset {
+    BlueStone,
+    Paper
+};
+
+constexpr WindowPreset BLUE_STONE_MENU = WindowPreset::BlueStone;
+constexpr WindowPreset PAPER_MENU      = WindowPreset::Paper;
+
 class TrackerWindow {
 public:
-    // Draws the skeuomorphic "perbrd" stone frame + indented tile grid (falls back to HelpWin if unloaded)
-    static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80);
-    static void Draw(const Rect& box, int alpha = 0x80) {
-        Draw(box.x, box.y, box.w, box.h, alpha);
+    // Draws the seamless procedural window (BlueStone by default, or Paper)
+    static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80,
+                     WindowPreset preset = WindowPreset::BlueStone);
+    static void Draw(const Rect& box, int alpha = 0x80,
+                     WindowPreset preset = WindowPreset::BlueStone) {
+        Draw(box.x, box.y, box.w, box.h, alpha, preset);
     }
 
-    // Draws a 3-slice recessed stone trough ("perbrd" / "wepstatus") for rows or headers
+    // Convenience helpers for the Paper variant
+    static void DrawPaper(int x, int y, int width_px, int height_px, int alpha = 0x80) {
+        Draw(x, y, width_px, height_px, alpha, WindowPreset::Paper);
+    }
+    static void DrawPaper(const Rect& box, int alpha = 0x80) {
+        Draw(box.x, box.y, box.w, box.h, alpha, WindowPreset::Paper);
+    }
+
+    // Draws a 3-slice recessed stone trough ("perbrd" / "wepstatus") for rows or bars
     static void DrawIndentation(const Rect& box, bool dark_variant = true, int alpha = 0x80);
 
-    // Draws the 3-slice molded stone banner from "wepstatus" (DrawWeaponNameBoard)
-    static void DrawStoneBanner(const Rect& box, int alpha = 0x80, int brightness = 0x80);
+    // Draws the 3-slice molded scroll banner from "wepstatus" with optional centered title text
+    static void DrawStoneBanner(const Rect& box, int alpha = 0x80, int brightness = 0x80,
+                                std::string_view title = {},
+                                const TextStyle& title_style = {
+                                    .color = ColorGold,
+                                    .drop_shadow = true,
+                                    .align = Alignment::Center,
+                                    .scale = 0.92f
+                                });
+};
+
+class PaperWindow {
+public:
+    static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80) {
+        TrackerWindow::Draw(x, y, width_px, height_px, alpha, WindowPreset::Paper);
+    }
+    static void Draw(const Rect& box, int alpha = 0x80) {
+        TrackerWindow::Draw(box.x, box.y, box.w, box.h, alpha, WindowPreset::Paper);
+    }
 };
 
 class HelpBox {
@@ -104,13 +139,20 @@ public:
     static void Draw(const Rect& box, int alpha = 0x80) {
         Draw(box.x, box.y, box.w, box.h, alpha);
     }
+
+    // Draws an auto-sized, bottom-anchored help window with a title and wrapped description
+    static void DrawTitled(int box_x, int bottom_y, int box_w, int text_offset_x,
+                           std::string_view title, std::string_view desc,
+                           int alpha = 0x80, int line_height = 28);
 };
 
 class Window {
 public:
-    static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80);
-    static void Draw(const Rect& box, int alpha = 0x80) {
-        Draw(box.x, box.y, box.w, box.h, alpha);
+    static void Draw(int x, int y, int width_px, int height_px, int alpha = 0x80,
+                     WindowPreset preset = WindowPreset::BlueStone);
+    static void Draw(const Rect& box, int alpha = 0x80,
+                     WindowPreset preset = WindowPreset::BlueStone) {
+        Draw(box.x, box.y, box.w, box.h, alpha, preset);
     }
 };
 
@@ -119,7 +161,7 @@ public:
     static void Draw(int left, int right, int y, int alpha = 0x80);
 };
 
-// Molded stone ridges ("perbrd") for separating panes and totals
+// Chiseled stone grooves for separating panes and totals
 class Divider {
 public:
     static void DrawVertical(int x, int top_y, int bottom_y, int alpha = 0x80);
@@ -174,6 +216,11 @@ private:
 
 // Immediate-mode helper to draw justified text inside a screen box
 void DrawTextBox(std::string_view text, const Rect& box, const TextStyle& style = {}, int alpha = 0x80);
+
+// Immediate-mode helper to draw a formatted "[ cur / max ]" counter
+void DrawCounter(int x, int y, int current_val, int max_val,
+                 float scale = 0.84f, int alpha = 0x80,
+                 u32 normal_color = ColorWhite, u32 complete_color = ColorGold);
 
 // -----------------------------------------------------------------------------
 // ItemIcon: Draws a game item icon (optionally inside a recessed "wepstatus" stone socket)
@@ -255,7 +302,7 @@ struct ButtonStyle {
     u32          text_color  = ColorWhite;        // Default: White (matches vanilla YES/NO)
     bool         drop_shadow = true;              // Default: Drop shadow on
     Alignment    align       = Alignment::Center; // Default: Center justified
-    float        text_scale  = 1.0f;
+    float        text_scale  = 1.08f;             // Slightly larger scale matching vanilla YES/NO height
     float        text_xscale = 1.25f;             // Wide X-axis stretch matching vanilla button font
     FontWeight   text_weight = FontWeight::Normal;
     bool         rounded     = true;              // Rounded/chamfered button corners
@@ -273,6 +320,16 @@ public:
                      ButtonPreset preset = ButtonPreset::Terracotta,
                      Alignment align = Alignment::Center,
                      bool drop_shadow = true);
+};
+
+// -----------------------------------------------------------------------------
+// ConfirmModal: Centered two-choice confirmation dialog with BevelButtons
+// -----------------------------------------------------------------------------
+class ConfirmModal {
+public:
+    static void Draw(std::string_view title, std::string_view description,
+                     std::string_view yes_label, std::string_view no_label,
+                     int selected_choice, Cursor& cursor, int alpha = 0x80);
 };
 
 // -----------------------------------------------------------------------------
