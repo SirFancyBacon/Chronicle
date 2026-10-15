@@ -13,6 +13,7 @@
 #include "captionfont.hpp"
 #include "clsmes.hpp"
 #include "draw2d_port.hpp"
+#include "gamepad.hpp"
 #include "gameutil.hpp"
 #include "gfx/gfx.hpp"
 #include "itemdata.hpp"
@@ -25,6 +26,8 @@
 #include "mglib.hpp"
 #include "platform/config.hpp"
 #include "platform/imagefile.hpp"
+#include "platform/input.hpp"
+#include "snd.hpp"
 #include "texture.hpp"
 #include "texture_port.hpp"
 #include "textwipe.hpp"
@@ -39,16 +42,27 @@ namespace {
 
 constexpr float kBaseCapHeight = 14.5f;
 
+struct QueuedDrawCmd {
+    ZLayer                layer;
+    std::size_t           order;
+    std::function<void()> fn;
+};
+
+std::vector<QueuedDrawCmd>& GetLayerQueueStorage() {
+    static std::vector<QueuedDrawCmd> s_queue;
+    return s_queue;
+}
+
 struct ScopedShadow {
     int  saved_shadow = 0;
     bool active       = false;
 
     explicit ScopedShadow(bool enable_shadow) {
         if (!enable_shadow) {
-            Config& cfg  = const_cast<Config&>(ConfigGet());
-            saved_shadow = cfg.text_shadow;
+            Config& cfg     = const_cast<Config&>(ConfigGet());
+            saved_shadow    = cfg.text_shadow;
             cfg.text_shadow = 0;
-            active = true;
+            active          = true;
         }
     }
 
@@ -292,12 +306,12 @@ const BaseSurfaceData& GetBaseSurface(WindowPreset preset) {
             float detail = FbmPeriodic512(fx, fy, 32, 3, s + 202);
             float soft_r = SoftRidgedPeriodic512(fx + wx * 0.4f, fy - wy * 0.4f, 64, 2, s + 404);
 
-            size_t i        = static_cast<size_t>(y) * kSize + x;
-            height_map[i]   = macro * 0.35f + med * 0.38f + detail * 0.15f + soft_r * 0.12f;
-            tone_map[i]     = (macro - 0.48f) * spec.macro_weight +
-                              (med - 0.48f) * spec.med_weight +
-                              (detail - 0.47f) * spec.detail_weight +
-                              (soft_r - 0.32f) * spec.ridge_weight;
+            size_t i      = static_cast<size_t>(y) * kSize + x;
+            height_map[i] = macro * 0.35f + med * 0.38f + detail * 0.15f + soft_r * 0.12f;
+            tone_map[i]   = (macro - 0.48f) * spec.macro_weight +
+                            (med - 0.48f) * spec.med_weight +
+                            (detail - 0.47f) * spec.detail_weight +
+                            (soft_r - 0.32f) * spec.ridge_weight;
         }
     }
 
@@ -585,16 +599,21 @@ void DrawScaledText(std::string_view text, float center_x, float cap_top, float 
                     u32 color, FontWeight weight, bool drop_shadow, int alpha) {
     if (text.empty() || alpha <= 0) return;
 
-    const float cap_height = kBaseCapHeight * scale;
-    const float rows       = draw2d::RowScale();
-    const float fade       = std::clamp(static_cast<float>(alpha) / 128.0f, 0.0f, 1.0f);
+    // Ensure bilinear filtering is active and coordinates are pixel-snapped so scaled
+    // TrueType glyphs never exhibit nearest-neighbor stair-stepping or sub-pixel shimmer.
+    setbilinear(1);
+    const float snapped_x   = std::round(center_x);
+    const float snapped_top = std::round(cap_top);
+    const float cap_height  = kBaseCapHeight * scale;
+    const float rows        = draw2d::RowScale();
+    const float fade        = std::clamp(static_cast<float>(alpha) / 128.0f, 0.0f, 1.0f);
 
     caption::LineStyle style{};
-    style.thin    = (weight == FontWeight::Thin && caption::ThinReady());
-    style.weight  = (weight == FontWeight::Bold) ? 1.1f : 0.0f;
-    style.xscale  = xscale;
-    style.word    = 3.0f * scale;
-    style.ink_fit = false;
+    style.thin       = (weight == FontWeight::Thin && caption::ThinReady());
+    style.weight     = (weight == FontWeight::Bold) ? 1.1f : 0.0f;
+    style.xscale     = xscale;
+    style.word       = 3.0f * scale;
+    style.ink_fit    = false;
     style.edge_width = 0.0f;
 
     if (drop_shadow && ConfigGet().text_shadow > 0) {
@@ -605,22 +624,52 @@ void DrawScaledText(std::string_view text, float center_x, float cap_top, float 
         shadow_style.edge[0]    = 0;
         shadow_style.edge[1]    = 0;
         shadow_style.edge[2]    = 0;
-        shadow_style.edge_width = 0.8f;
+        shadow_style.edge_width = 0.6f * scale;
         shadow_style.opacity    = std::clamp(static_cast<float>(ConfigGet().text_shadow) / 100.0f, 0.0f, 1.0f);
 
-        const float s_dx = 2.0f * scale;
-        const float s_dy = 2.0f * scale;
-        caption::DrawLine(text, center_x + s_dx, cap_top + s_dy, cap_height, 1.0f, 0.0f, shadow_style, fade, rows, nullptr);
+        const float s_dx = std::round(2.0f * scale);
+        const float s_dy = std::round(2.0f * scale);
+        caption::DrawLine(text, snapped_x + s_dx, snapped_top + s_dy, cap_height, 1.0f, 0.0f, shadow_style, fade, rows, nullptr);
     }
 
     ColorToRgb(color, style.fill);
     style.opacity = 1.0f;
-    caption::DrawLine(text, center_x, cap_top, cap_height, 1.0f, 0.0f, style, fade, rows, nullptr);
+    caption::DrawLine(text, snapped_x, snapped_top, cap_height, 1.0f, 0.0f, style, fade, rows, nullptr);
 }
 
 } // namespace
 
-std::vector<std::string> WrapText(std::string_view text, int max_width) {
+// -----------------------------------------------------------------------------
+// LayerQueue Implementation
+// -----------------------------------------------------------------------------
+void LayerQueue::Begin() {
+    GetLayerQueueStorage().clear();
+}
+
+void LayerQueue::Submit(ZLayer layer, std::function<void()> draw_fn) {
+    if (!draw_fn) return;
+    auto& queue = GetLayerQueueStorage();
+    queue.push_back(QueuedDrawCmd{layer, queue.size(), std::move(draw_fn)});
+}
+
+void LayerQueue::Flush() {
+    auto& queue = GetLayerQueueStorage();
+    if (queue.empty()) return;
+
+    std::stable_sort(queue.begin(), queue.end(), [](const QueuedDrawCmd& a, const QueuedDrawCmd& b) {
+        if (a.layer != b.layer) {
+            return static_cast<int>(a.layer) < static_cast<int>(b.layer);
+        }
+        return a.order < b.order;
+    });
+
+    for (const auto& cmd : queue) {
+        cmd.fn();
+    }
+    queue.clear();
+}
+
+std::vector<std::string> WrapText(std::string_view text, int max_width, float scale) {
     std::vector<std::string> lines;
     if (text.empty() || max_width <= 0) return lines;
 
@@ -656,7 +705,7 @@ std::vector<std::string> WrapText(std::string_view text, int max_width) {
 
         std::string candidate = current_line.empty() ? word : (current_line + " " + word);
 
-        Label test_lbl(candidate);
+        Label test_lbl(candidate, ColorWhite, Alignment::Left, true, scale);
         if (test_lbl.GetWidth() > max_width && !current_line.empty()) {
             lines.push_back(current_line);
             current_line = word;
@@ -673,9 +722,21 @@ std::vector<std::string> WrapText(std::string_view text, int max_width) {
 }
 
 // -----------------------------------------------------------------------------
-// Windows, Banners, Indentations & Dividers
+// Windows, Banners, Indentations, SubWindows & Dividers
 // -----------------------------------------------------------------------------
 void TrackerWindow::Draw(int x, int y, int width_px, int height_px, int alpha, WindowPreset preset) {
+    if (preset == WindowPreset::None || width_px <= 0 || height_px <= 0 || alpha <= 0) {
+        return;
+    }
+    if (preset == WindowPreset::DarkTranslucent) {
+        HelpBox::Draw(x, y, width_px, height_px, alpha);
+        return;
+    }
+    if (preset == WindowPreset::Recessed) {
+        DrawIndentation(Rect(x, y, width_px, height_px), true, alpha);
+        return;
+    }
+
     CTexture* surface = (width_px >= 48 && height_px >= 48)
                         ? GetProceduralWindowTex(width_px, height_px, preset)
                         : nullptr;
@@ -700,26 +761,17 @@ void TrackerWindow::DrawIndentation(const Rect& box, bool dark_variant, int alph
     CTexture* tex = GetWhitePixelTex();
     if (tex == nullptr) return;
 
-    // Shade-mask recessed trough: uses pure black/white translucent layers so it
-    // automatically inherits the hue of the underlying Paper or BlueStone panel
-    // and looks carved into the surface rather than raised.
     const int rim_light_a  = (alpha * (dark_variant ? 42 : 55)) >> 7;
     const int rim_shadow_a = (alpha * (dark_variant ? 95 : 70)) >> 7;
     const int mid_shadow_a = (alpha * (dark_variant ? 75 : 52)) >> 7;
     const int floor_a      = (alpha * (dark_variant ? 56 : 36)) >> 7;
 
-    // 1. Bottom-right catch-light rim (1px offset down/right where light hits the lower lip)
     DrawRoundedRect(tex, box.x + 1, box.y + 1, box.w, box.h, 255, 248, 230, rim_light_a, true);
-
-    // 2. Outer top-left cast shadow lip
     DrawRoundedRect(tex, box.x, box.y, box.w - 1, box.h - 1, 0, 0, 0, rim_shadow_a, true);
 
-    // 3. Inner bevel shadow step
     if (box.w > 4 && box.h > 4) {
         DrawRoundedRect(tex, box.x + 1, box.y + 1, box.w - 2, box.h - 2, 0, 0, 0, mid_shadow_a, true);
     }
-
-    // 4. Recessed interior floor (slightly lighter than the top-left shadow lip so the lip reads as a cliff)
     if (box.w > 6 && box.h > 6) {
         DrawRoundedRect(tex, box.x + 2, box.y + 2, box.w - 3, box.h - 3, 0, 0, 0, floor_a, false);
     }
@@ -806,7 +858,6 @@ void Divider::DrawVertical(int x, int top_y, int bottom_y, int alpha) {
     CRect_i_  uv_white(0x6A, 0x6E, 1, 1);
     const int h = bottom_y - top_y;
 
-    // 4px-wide recessed vertical groove (shade-masked so it matches Paper or BlueStone)
     DrawMenu2DSprite(tex, CRect_i_(x - 1, top_y,     1, h),     uv_white, 0,   0,   0,   (alpha * 50) >> 7);
     DrawMenu2DSprite(tex, CRect_i_(x,     top_y,     1, h),     uv_white, 0,   0,   0,   (alpha * 95) >> 7);
     DrawMenu2DSprite(tex, CRect_i_(x + 1, top_y,     1, h),     uv_white, 0,   0,   0,   (alpha * 65) >> 7);
@@ -819,11 +870,51 @@ void Divider::DrawHorizontal(int left_x, int right_x, int y, int alpha) {
     CRect_i_  uv_white(0x6A, 0x6E, 1, 1);
     const int w = right_x - left_x;
 
-    // 4px-tall recessed horizontal groove (shade-masked so it matches Paper or BlueStone)
     DrawMenu2DSprite(tex, CRect_i_(left_x,     y - 1, w,     1), uv_white, 0,   0,   0,   (alpha * 50) >> 7);
     DrawMenu2DSprite(tex, CRect_i_(left_x,     y,     w,     1), uv_white, 0,   0,   0,   (alpha * 95) >> 7);
     DrawMenu2DSprite(tex, CRect_i_(left_x,     y + 1, w,     1), uv_white, 0,   0,   0,   (alpha * 65) >> 7);
     DrawMenu2DSprite(tex, CRect_i_(left_x + 1, y + 2, w - 1, 1), uv_white, 255, 248, 230, (alpha * 48) >> 7);
+}
+
+// -----------------------------------------------------------------------------
+// SubWindow Implementation
+// -----------------------------------------------------------------------------
+void SubWindow::DrawBackground(int alpha) const {
+    if (m_preset != WindowPreset::None) {
+        TrackerWindow::Draw(m_outer, alpha, m_preset);
+    }
+}
+
+void SubWindow::DrawBanner(std::string_view title, int banner_w, int banner_h,
+                           int y_offset, int alpha) const {
+    Rect banner_box = m_outer.Anchored(Anchor::TopCenter, banner_w, banner_h, 0, y_offset);
+    TrackerWindow::DrawStoneBanner(banner_box, alpha, 0x80, title);
+}
+
+void SubWindow::DrawAnchoredLabel(std::string_view text, Anchor anchor, const TextStyle& style,
+                                  int dx, int dy, int alpha) const {
+    Label lbl(text, style);
+    lbl.DrawAnchored(m_content, anchor, dx, dy, alpha);
+}
+
+std::pair<SubWindow, SubWindow> SubWindow::SplitVertical(int left_w, int gap,
+                                                         bool draw_divider, int alpha) const {
+    int divider_x = 0;
+    auto [left_r, right_r] = m_content.SplitVertical(left_w, gap, &divider_x);
+    if (draw_divider) {
+        Divider::DrawVertical(divider_x, m_content.Top(), m_content.Bottom(), alpha);
+    }
+    return {SubWindow(left_r), SubWindow(right_r)};
+}
+
+std::pair<SubWindow, SubWindow> SubWindow::SplitHorizontal(int top_h, int gap,
+                                                           bool draw_divider, int alpha) const {
+    int divider_y = 0;
+    auto [top_r, bot_r] = m_content.SplitHorizontal(top_h, gap, &divider_y);
+    if (draw_divider) {
+        Divider::DrawHorizontal(m_content.Left(), m_content.Right(), divider_y, alpha);
+    }
+    return {SubWindow(top_r), SubWindow(bot_r)};
 }
 
 // -----------------------------------------------------------------------------
@@ -860,13 +951,13 @@ void Label::SetText(std::string_view text) {
     m_dirty = true;
 }
 
-void Label::SetColor(u32 color)          { m_color = color; }
-void Label::SetAlignment(Alignment align){ m_align = align; }
-void Label::SetDropShadow(bool enabled)  { m_drop_shadow = enabled; }
-void Label::SetScale(float scale)        { m_scale = scale; m_dirty = true; }
-void Label::SetXScale(float xscale)      { m_xscale = xscale; m_dirty = true; }
-void Label::SetWeight(FontWeight weight) { m_weight = weight; m_dirty = true; }
-void Label::SetOffset(int dx, int dy)    { m_dx = dx; m_dy = dy; }
+void Label::SetColor(u32 color)           { m_color = color; }
+void Label::SetAlignment(Alignment align) { m_align = align; }
+void Label::SetDropShadow(bool enabled)   { m_drop_shadow = enabled; }
+void Label::SetScale(float scale)         { m_scale = scale; m_dirty = true; }
+void Label::SetXScale(float xscale)       { m_xscale = xscale; m_dirty = true; }
+void Label::SetWeight(FontWeight weight)  { m_weight = weight; m_dirty = true; }
+void Label::SetOffset(int dx, int dy)     { m_dx = dx; m_dy = dy; }
 
 void Label::SetStyle(const TextStyle& style) {
     m_color       = style.color;
@@ -961,6 +1052,68 @@ void Label::DrawCenteredInRect(int x, int y, int width, int height, int alpha) {
     m_align = prev;
 }
 
+void Label::DrawAnchored(const Rect& parent, Anchor anchor, int offset_x, int offset_y, int alpha) {
+    Alignment prev_align = m_align;
+    int       px         = parent.x;
+    int       py         = parent.y;
+
+    switch (anchor) {
+        case Anchor::TopLeft:
+        case Anchor::TopWide:
+        case Anchor::LeftWide:
+        case Anchor::FullRect:
+            m_align = Alignment::Left;
+            px      = parent.Left();
+            py      = parent.Top();
+            break;
+        case Anchor::TopCenter:
+            m_align = Alignment::Center;
+            px      = parent.CenterX();
+            py      = parent.Top();
+            break;
+        case Anchor::TopRight:
+        case Anchor::RightWide:
+            m_align = Alignment::Right;
+            px      = parent.Right();
+            py      = parent.Top();
+            break;
+        case Anchor::CenterLeft:
+            m_align = Alignment::Left;
+            px      = parent.Left();
+            py      = parent.CenterY() - 10;
+            break;
+        case Anchor::Center:
+            m_align = Alignment::Center;
+            px      = parent.CenterX();
+            py      = parent.CenterY() - 10;
+            break;
+        case Anchor::CenterRight:
+            m_align = Alignment::Right;
+            px      = parent.Right();
+            py      = parent.CenterY() - 10;
+            break;
+        case Anchor::BottomLeft:
+        case Anchor::BottomWide:
+            m_align = Alignment::Left;
+            px      = parent.Left();
+            py      = parent.Bottom() - 20;
+            break;
+        case Anchor::BottomCenter:
+            m_align = Alignment::Center;
+            px      = parent.CenterX();
+            py      = parent.Bottom() - 20;
+            break;
+        case Anchor::BottomRight:
+            m_align = Alignment::Right;
+            px      = parent.Right();
+            py      = parent.Bottom() - 20;
+            break;
+    }
+
+    Draw(px + offset_x, py + offset_y, alpha);
+    m_align = prev_align;
+}
+
 void Label::DrawWithStroke(int x, int y, u32 fill_color, u32 stroke_color, int stroke_px, int alpha) {
     int draw_x = x + m_dx;
     int draw_y = y + m_dy;
@@ -987,7 +1140,7 @@ void Label::DrawWithStroke(int x, int y, u32 fill_color, u32 stroke_color, int s
 }
 
 void Label::DrawWrapped(int x, int y, int max_width, int line_height, int alpha) {
-    std::vector<std::string> lines = WrapText(m_raw_text, max_width);
+    std::vector<std::string> lines = WrapText(m_raw_text, max_width, m_scale);
     for (size_t i = 0; i < lines.size(); ++i) {
         Label line_lbl(lines[i], m_color, m_align, m_drop_shadow, m_scale, m_weight, m_xscale);
         line_lbl.SetOffset(m_dx, m_dy);
@@ -1011,7 +1164,7 @@ void DrawCounter(int x, int y, int current_val, int max_val,
 }
 
 // -----------------------------------------------------------------------------
-// ItemIcon: Draws recessed "wepstatus" stone socket + item icon
+// ItemIcon
 // -----------------------------------------------------------------------------
 void ItemIcon::DrawSocket(int x, int y, int size, bool filled, int alpha) {
     CTexture* wep_tex = GetWepStatusTex();
@@ -1098,7 +1251,6 @@ void Cursor::Draw(int alpha) {
         hand_x = m_pointer_x - 26.0f;
         hand_y = m_pointer_y - 14.0f;
     } else if (MenuPointerHand(ptr_x, ptr_y)) {
-        // Follow the active menu mouse pointer seamlessly
         hand_x = m_cur_x = ptr_x;
         hand_y = m_cur_y = ptr_y;
     } else {
@@ -1117,6 +1269,12 @@ void Cursor::Draw(int alpha) {
     DrawMenu2DSprite(m_texture, shadow_rect, uv, 0, 0, 0, (alpha * 100) >> 7);
     DrawMenu2DSprite(m_texture, screen_rect, uv, alpha);
     setbilinear(1);
+}
+
+void Cursor::DeferDraw(int alpha) {
+    LayerQueue::Submit(ZLayer::Cursor, [this, alpha]() {
+        this->Draw(alpha);
+    });
 }
 
 // -----------------------------------------------------------------------------
@@ -1156,6 +1314,12 @@ void Brackets::Draw(int left, int right, int top, int bottom, int alpha) {
         int box_h = std::max(16, bottom - top);
         DrawMenuWaku(left - 14, top - 6, box_w + 12, box_h - 4, 0, StayTex, alpha);
     }
+}
+
+void Brackets::DeferDraw(const Rect& box, int alpha) {
+    LayerQueue::Submit(ZLayer::Brackets, [this, box, alpha]() {
+        this->Draw(box, alpha);
+    });
 }
 
 // -----------------------------------------------------------------------------
@@ -1206,7 +1370,7 @@ void ScrollBar::Draw(int x, int top_y, int height, int total_rows, int visible_r
 }
 
 // -----------------------------------------------------------------------------
-// BevelButton & ConfirmModal
+// BevelButton, DialogBox & ConfirmModal
 // -----------------------------------------------------------------------------
 void BevelButton::Draw(const Rect& box, std::string_view text,
                        const ButtonStyle& style, int alpha) {
@@ -1258,9 +1422,172 @@ void BevelButton::Draw(int x, int y, int width, int height, std::string_view tex
     Draw(Rect(x, y, width, height), text, style, alpha);
 }
 
+void DialogBox::Configure(std::string_view title, std::string_view description,
+                          std::vector<DialogOption> options,
+                          std::function<void()> on_cancel,
+                          const DialogStyle& style) {
+    m_title       = std::string(title);
+    m_description = std::string(description);
+    m_options     = std::move(options);
+    m_on_cancel   = std::move(on_cancel);
+    m_style       = style;
+}
+
+void DialogBox::Open(int default_choice) {
+    m_active = true;
+    SetSelectedIndex(default_choice);
+    Rect btn = GetButtonRect(m_selected);
+    m_cursor.SnapTo(static_cast<float>(btn.x - 34), static_cast<float>(btn.y + 3));
+}
+
+void DialogBox::SetSelectedIndex(int index) {
+    if (m_options.empty()) {
+        m_selected = 0;
+        return;
+    }
+    const int count = static_cast<int>(m_options.size());
+    m_selected      = ((index % count) + count) % count;
+}
+
+Rect DialogBox::ComputeBoxRect(std::vector<std::string>& out_lines) const {
+    out_lines.clear();
+    const int wrap_w = m_style.max_width - 48;
+
+    if (!m_title.empty()) {
+        auto t_lines = WrapText(m_title, wrap_w);
+        out_lines.insert(out_lines.end(), t_lines.begin(), t_lines.end());
+    }
+    if (!m_description.empty()) {
+        auto d_lines = WrapText(m_description, wrap_w);
+        out_lines.insert(out_lines.end(), d_lines.begin(), d_lines.end());
+    }
+    if (out_lines.empty()) {
+        out_lines.emplace_back("");
+    }
+
+    int max_text_w = 0;
+    for (const std::string& line : out_lines) {
+        max_text_w = std::max(max_text_w, Label(line, ColorWhite).GetWidth());
+    }
+
+    constexpr int kLineSpacing = 20;
+    const int     box_w        = std::clamp(max_text_w + 48, m_style.min_width, m_style.max_width);
+    const int     box_h        = 38 + static_cast<int>(out_lines.size() - 1) * kLineSpacing;
+    const int     box_x        = (Metrics::kScreenWidth - box_w) / 2;
+    const int     box_y        = m_style.base_y - std::max(0, static_cast<int>(out_lines.size()) - 2) * 12;
+    return Rect(box_x, box_y, box_w, box_h);
+}
+
+Rect DialogBox::GetButtonRect(int index) const {
+    std::vector<std::string> lines;
+    const Rect               box   = ComputeBoxRect(lines);
+    const int                btn_x = (Metrics::kScreenWidth - m_style.button_width) / 2;
+    const int                btn_y = box.Bottom() + 10 + index * (m_style.button_height + m_style.button_gap);
+    return Rect(btn_x, btn_y, m_style.button_width, m_style.button_height);
+}
+
+int DialogBox::HitTest(float px, float py) const {
+    for (size_t i = 0; i < m_options.size(); ++i) {
+        Rect r = GetButtonRect(static_cast<int>(i)).Inset(-14, -3);
+        if (r.Contains(px, py)) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+bool DialogBox::HandleInput() {
+    if (!m_active) return false;
+
+    const int count = static_cast<int>(m_options.size());
+
+    // 1. Check mouse pointer hover & click
+    float ptr_x = 0.0f, ptr_y = 0.0f;
+    if (MenuPointerHand(ptr_x, ptr_y)) {
+        const float tip_x = ptr_x + 26.0f;
+        const float tip_y = ptr_y + 14.0f;
+        const int   hit   = HitTest(tip_x, tip_y);
+        if (hit >= 0 && hit != m_selected) {
+            m_selected = hit;
+            ComMenuSePlay(MENU_SOUND_CURSOR);
+        }
+    }
+
+    // 2. Gamepad / Keyboard navigation
+    if (count > 1) {
+        if (GamePad.Down(PAD_UP)) {
+            SetSelectedIndex(m_selected - 1);
+            ComMenuSePlay(MENU_SOUND_CURSOR);
+        } else if (GamePad.Down(PAD_DOWN)) {
+            SetSelectedIndex(m_selected + 1);
+            ComMenuSePlay(MENU_SOUND_CURSOR);
+        }
+    }
+
+    if (GamePad.Down(PAD_CROSS)) {
+        if (m_selected >= 0 && m_selected < count) {
+            if (!m_options[m_selected].enabled) {
+                ComMenuSePlay(MENU_SOUND_REFUSE);
+                return true;
+            }
+            ComMenuSePlay(MENU_SOUND_CONFIRM);
+            m_active = false;
+            if (m_options[m_selected].on_select) {
+                m_options[m_selected].on_select();
+            }
+            return false;
+        }
+    } else if (GamePad.Down(PAD_CIRCLE)) {
+        ComMenuSePlay(MENU_SOUND_REFUSE);
+        m_active = false;
+        if (m_on_cancel) {
+            m_on_cancel();
+        }
+        return false;
+    }
+
+    return true;
+}
+
+void DialogBox::Draw(int alpha) {
+    if (alpha <= 0) return;
+
+    MenuTextureReload(0x1A);
+    std::vector<std::string> lines;
+    const Rect               box = ComputeBoxRect(lines);
+
+    TrackerWindow::Draw(box, alpha, m_style.window_preset);
+
+    MenuTextureReload(0x1A);
+    constexpr int kLineSpacing = 20;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        Label(lines[i], ColorWhite).Draw(box.x + 22, box.y + 12 + static_cast<int>(i) * kLineSpacing, alpha);
+    }
+
+    for (size_t i = 0; i < m_options.size(); ++i) {
+        const Rect btn_rect = GetButtonRect(static_cast<int>(i));
+        const int  btn_a    = m_options[i].enabled ? alpha : (alpha >> 1);
+        BevelButton::Draw(btn_rect, m_options[i].label, m_options[i].style, btn_a);
+    }
+
+    if (!m_options.empty()) {
+        const int  clamped = std::clamp(m_selected, 0, static_cast<int>(m_options.size()) - 1);
+        const Rect sel_box = GetButtonRect(clamped);
+
+        StayTex = FindMenuTexture("stayframe", StayTex);
+        if (StayTex != nullptr) {
+            DrawMenuWaku(sel_box.x - 14, sel_box.y - 6, sel_box.w + 12, sel_box.h - 4, 0, StayTex, alpha);
+        }
+
+        m_cursor.SetTarget(static_cast<float>(sel_box.x - 34), static_cast<float>(sel_box.y + 3));
+        m_cursor.Draw(alpha);
+    }
+}
+
 void ConfirmModal::Draw(std::string_view title, std::string_view description,
                         std::string_view yes_label, std::string_view no_label,
-                        int selected_choice, Cursor& cursor, int alpha) {
+                        int selected_choice, Cursor& cursor, int alpha,
+                        WindowPreset preset) {
     if (alpha <= 0) return;
 
     MenuTextureReload(0x1A);
@@ -1284,23 +1611,23 @@ void ConfirmModal::Draw(std::string_view title, std::string_view description,
     }
 
     constexpr int line_spacing = 20;
-    const int     box_w        = std::clamp(max_text_w + 48, 260, 360);
+    const int     box_w        = std::clamp(max_text_w + 48, Metrics::kModalMinWidth, Metrics::kModalMaxWidth);
     const int     box_h        = 38 + static_cast<int>(lines.size() - 1) * line_spacing;
-    const int     box_x        = (640 - box_w) / 2;
+    const int     box_x        = (Metrics::kScreenWidth - box_w) / 2;
     const int     box_y        = 164 - std::max(0, static_cast<int>(lines.size()) - 2) * 12;
 
-    HelpBox::Draw(box_x, box_y, box_w, box_h, alpha);
+    TrackerWindow::Draw(box_x, box_y, box_w, box_h, alpha, preset);
 
     MenuTextureReload(0x1A);
     for (size_t i = 0; i < lines.size(); ++i) {
         Label(lines[i], ColorWhite).Draw(box_x + 22, box_y + 12 + static_cast<int>(i) * line_spacing, alpha);
     }
 
-    constexpr int btn_w  = 100;
-    constexpr int btn_h  = 26;
-    constexpr int btn_x  = (640 - btn_w) / 2;
+    constexpr int btn_w  = Metrics::kButtonWidth;
+    constexpr int btn_h  = Metrics::kButtonHeight;
+    constexpr int btn_x  = (Metrics::kScreenWidth - btn_w) / 2;
     const int     btn_y0 = box_y + box_h + 10;
-    const int     btn_y1 = btn_y0 + btn_h + 6;
+    const int     btn_y1 = btn_y0 + btn_h + Metrics::kButtonGap;
 
     ButtonStyle btn_style{};
     BevelButton::Draw(Rect(btn_x, btn_y0, btn_w, btn_h), yes_label, btn_style, alpha);
@@ -1314,6 +1641,133 @@ void ConfirmModal::Draw(std::string_view title, std::string_view description,
 
     cursor.SetTarget(static_cast<float>(btn_x - 34), static_cast<float>(sel_y + 3));
     cursor.Draw(alpha);
+}
+
+// -----------------------------------------------------------------------------
+// ListView Implementation
+// -----------------------------------------------------------------------------
+void ListView::Reset(int initial_index) {
+    m_selected  = std::max(0, initial_index);
+    m_first_row = 0;
+    if (m_cfg.visible_rows > 0 && m_selected >= m_cfg.visible_rows) {
+        m_first_row = m_selected - m_cfg.visible_rows + 1;
+    }
+    const Rect row_box = GetVisibleRowRect(m_selected - m_first_row);
+    m_cursor.SnapTo(static_cast<float>(row_box.x) + m_cfg.cursor_offset_x,
+                    static_cast<float>(row_box.y) + m_cfg.cursor_offset_y);
+}
+
+void ListView::SetSelectedIndex(int index, int total_items) {
+    if (total_items <= 0) {
+        m_selected  = 0;
+        m_first_row = 0;
+        return;
+    }
+    if (m_cfg.wrap_navigation) {
+        m_selected = ((index % total_items) + total_items) % total_items;
+    } else {
+        m_selected = std::clamp(index, 0, total_items - 1);
+    }
+    EnsureVisible(total_items);
+}
+
+void ListView::EnsureVisible(int total_items) {
+    const int vis = std::max(1, m_cfg.visible_rows);
+    if (m_selected < m_first_row) {
+        m_first_row = m_selected;
+    } else if (m_selected >= m_first_row + vis) {
+        m_first_row = m_selected - vis + 1;
+    }
+    const int max_first = std::max(0, total_items - vis);
+    m_first_row         = std::clamp(m_first_row, 0, max_first);
+}
+
+Rect ListView::GetVisibleRowRect(int visible_slot) const {
+    return m_cfg.bounds.Row(visible_slot, m_cfg.row_height, m_cfg.row_stride);
+}
+
+int ListView::HitTest(float px, float py, int total_items) const {
+    if (total_items <= 0) return -1;
+    const int vis = std::min(m_cfg.visible_rows, total_items - m_first_row);
+    for (int s = 0; s < vis; ++s) {
+        if (GetVisibleRowRect(s).Contains(px, py)) {
+            return m_first_row + s;
+        }
+    }
+    return -1;
+}
+
+bool ListView::HandleInput(int total_items,
+                           const std::function<void(int)>& on_confirm,
+                           const std::function<void()>& on_cancel) {
+    if (total_items <= 0) return false;
+
+    const int prev_sel   = m_selected;
+    const int prev_first = m_first_row;
+
+    float ptr_x = 0.0f, ptr_y = 0.0f;
+    if (MenuPointerHand(ptr_x, ptr_y)) {
+        const int hit = HitTest(ptr_x + 26.0f, ptr_y + 14.0f, total_items);
+        if (hit >= 0 && hit != m_selected) {
+            m_selected = hit;
+            ComMenuSePlay(MENU_SOUND_CURSOR);
+        }
+    }
+
+    if (GamePad.Down(PAD_UP)) {
+        SetSelectedIndex(m_selected - 1, total_items);
+        ComMenuSePlay(MENU_SOUND_CURSOR);
+    } else if (GamePad.Down(PAD_DOWN)) {
+        SetSelectedIndex(m_selected + 1, total_items);
+        ComMenuSePlay(MENU_SOUND_CURSOR);
+    }
+
+    m_scrollbar.Update(m_selected != prev_sel || m_first_row != prev_first);
+
+    if (GamePad.Down(PAD_CROSS)) {
+        if (on_confirm) {
+            on_confirm(m_selected);
+        }
+    } else if (GamePad.Down(PAD_CIRCLE)) {
+        if (on_cancel) {
+            on_cancel();
+        }
+    }
+
+    return m_selected != prev_sel;
+}
+
+void ListView::Draw(int total_items, const RowDrawFn& draw_row, int alpha) {
+    if (total_items <= 0 || alpha <= 0) return;
+
+    EnsureVisible(total_items);
+    const int vis = std::min(m_cfg.visible_rows, total_items - m_first_row);
+
+    for (int s = 0; s < vis; ++s) {
+        const int  item_idx = m_first_row + s;
+        const bool selected = (item_idx == m_selected);
+        if (draw_row) {
+            draw_row(item_idx, GetVisibleRowRect(s), selected, alpha);
+        }
+    }
+
+    if (m_cfg.draw_scrollbar && total_items > m_cfg.visible_rows) {
+        m_scrollbar.Draw(m_cfg.bounds.Right() + 6, m_cfg.bounds.Top(),
+                         m_cfg.bounds.h, total_items, m_cfg.visible_rows, m_first_row, alpha);
+    }
+
+    const int sel_slot = m_selected - m_first_row;
+    if (sel_slot >= 0 && sel_slot < vis) {
+        const Rect sel_rect = GetVisibleRowRect(sel_slot);
+        if (m_cfg.draw_brackets) {
+            m_brackets.Draw(sel_rect.Inset(-m_cfg.bracket_pad_x, -m_cfg.bracket_pad_y), alpha);
+        }
+        if (m_cfg.draw_cursor) {
+            m_cursor.SetTarget(static_cast<float>(sel_rect.x) + m_cfg.cursor_offset_x,
+                               static_cast<float>(sel_rect.y) + m_cfg.cursor_offset_y);
+            m_cursor.Draw(alpha);
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -1345,17 +1799,14 @@ void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
     const float clamped  = std::clamp(progress, 0.0f, 1.0f);
     const bool  complete = (clamped >= 1.0f);
 
-    // 1. Draw the shade-mask recessed trough (inherits the underlying panel's color)
     TrackerWindow::DrawIndentation(box, true, alpha);
 
-    // 2. Fill the interior using a subdued, recessed gradation + top inner shadow
     const int max_fill_w = std::max(0, box.w - 6);
     const int fill_w     = static_cast<int>(std::round(clamped * static_cast<float>(max_fill_w)));
 
     if (fill_w > 0 && box.h > 6) {
         if (GRADATION_COLOR_INFO2* grad_src = GetGradationColorInfo2(complete ? 4 : 3)) {
             GRADATION_COLOR_INFO2 grad = *grad_src;
-            // Slightly darker top corners and translucent alpha so the underlying paper/stone grain shows through
             for (int c = 0; c < 4; ++c) {
                 grad.colors[c].r = static_cast<u8>((grad.colors[c].r * 3) / 4);
                 grad.colors[c].g = static_cast<u8>((grad.colors[c].g * 3) / 4);
@@ -1366,7 +1817,6 @@ void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
             DrawMenuColorGradation(fill_rect, &grad.colors[0], &grad.colors[1], &grad.colors[2], &grad.colors[3]);
         }
 
-        // Subtle 2px top inner shadow over the fill so the bar looks sunken beneath the paper lip
         if (CTexture* tex = GetWhitePixelTex()) {
             CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
             DrawMenu2DSprite(tex, CRect_i_(box.x + 3, box.y + 3, fill_w, 1), uv_white, 0, 0, 0, (alpha * 55) >> 7);
