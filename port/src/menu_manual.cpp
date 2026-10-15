@@ -1,6 +1,5 @@
 #include "menu_manual.hpp"
 
-// Port-specific headers
 #include <SDL3/SDL.h>
 
 #include <algorithm>
@@ -9,9 +8,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
-// Retail and engine headers
 #include "clsmes.hpp"
 #include "dataread.hpp"
 #include "dngstatusdata.hpp"
@@ -20,27 +19,18 @@
 #include "gamepad.hpp"
 #include "gametext.hpp"
 #include "gameutil.hpp"
-#include "itemdata.hpp"
 #include "localize.hpp"
 #include "memcard.hpp"
 #include "menu_draw.hpp"
+#include "menu_journal_chest.hpp"
 #include "menuetc.hpp"
 #include "mglib.hpp"
 #include "rect.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
-#include "userstatus.hpp"
-
-// Chest database & UI framework
-#include "chests_data.hpp"
 #include "ui_framework.hpp"
-
-#define PAD_GLYPH_UP      "{up}"
-#define PAD_GLYPH_DOWN    "{down}"
-#define PAD_GLYPH_CROSS   "{cross}"
-#define PAD_GLYPH_SQUARE  "{square}"
-#define PAD_GLYPH_CIRCLE  "{circle}"
+#include "userstatus.hpp"
 
 #define MANUAL_MODE_TRACKER 100
 
@@ -54,101 +44,7 @@ extern ClsMes   *ManualMsg;
 
 namespace {
 
-int          s_tracker_selected_town       = 0;
-bool         s_tracker_filter_miracle_only = true;
-UI::Cursor   s_menu_cursor;
-UI::Brackets s_menu_brackets;
-
-constexpr bool IsItemEden(uint16_t id)    { return id == 180; }
-constexpr bool IsItemGourd(uint16_t id)   { return id == 182; }
-constexpr bool IsItemPocket(uint16_t id)  { return id == 199; }
-constexpr bool IsItemDefense(uint16_t id) {
-    return (id >= 177 && id <= 179) || (id >= 181 && id <= 184);
-}
-constexpr bool IsItemMiracle(uint16_t id) {
-    return IsItemEden(id) || IsItemGourd(id) || IsItemDefense(id) || IsItemPocket(id);
-}
-
-struct TownStats {
-    int collected_total   = 0;
-    int max_total         = 0;
-    int collected_miracle = 0;
-    int max_miracle       = 0;
-    int collected_eden    = 0;
-    int max_eden          = 0;
-    int collected_gourd   = 0;
-    int max_gourd         = 0;
-    int collected_def     = 0;
-    int max_def           = 0;
-    int collected_pocket  = 0;
-    int max_pocket        = 0;
-    int collected_std     = 0;
-    int max_std           = 0;
-
-    void Accumulate(const TownStats& other) {
-        collected_total   += other.collected_total;
-        max_total         += other.max_total;
-        collected_miracle += other.collected_miracle;
-        max_miracle       += other.max_miracle;
-        collected_eden    += other.collected_eden;
-        max_eden          += other.max_eden;
-        collected_gourd   += other.collected_gourd;
-        max_gourd         += other.max_gourd;
-        collected_def     += other.collected_def;
-        max_def           += other.max_def;
-        collected_pocket  += other.collected_pocket;
-        max_pocket        += other.max_pocket;
-        collected_std     += other.collected_std;
-        max_std           += other.max_std;
-    }
-};
-
-TownStats GetTownStats(int town_index) {
-    TownStats stats{};
-    if (SaveData == nullptr || town_index < 0 || town_index >= TRACKER_TOWN_COUNT) {
-        return stats;
-    }
-
-    const auto& town = TRACKER_TOWNS[town_index];
-    for (int i = 0; i < town.total_chests; ++i) {
-        const auto& chest  = town.chests[i];
-        const bool  opened = (SaveData->GetMapFlag(town.town_id, chest.flag_no) != 0);
-
-        stats.max_total++;
-        if (opened) stats.collected_total++;
-
-        if (IsItemEden(chest.item_id)) {
-            stats.max_eden++;
-            if (opened) stats.collected_eden++;
-        } else if (IsItemGourd(chest.item_id)) {
-            stats.max_gourd++;
-            if (opened) stats.collected_gourd++;
-        } else if (IsItemDefense(chest.item_id)) {
-            stats.max_def++;
-            if (opened) stats.collected_def++;
-        } else if (IsItemPocket(chest.item_id)) {
-            stats.max_pocket++;
-            if (opened) stats.collected_pocket++;
-        } else {
-            stats.max_std++;
-            if (opened) stats.collected_std++;
-        }
-
-        if (IsItemMiracle(chest.item_id)) {
-            stats.max_miracle++;
-            if (opened) stats.collected_miracle++;
-        }
-    }
-    return stats;
-}
-
-TownStats GetGlobalStats() {
-    TownStats global{};
-    for (int i = 0; i < TRACKER_TOWN_COUNT; ++i) {
-        global.Accumulate(GetTownStats(i));
-    }
-    return global;
-}
+UI::Cursor s_menu_cursor;
 
 s16 Port_ManualImgLoad() {
     char path[76];
@@ -218,7 +114,7 @@ void Port_DrawManualMsg() {
 }
 
 void DrawCategoryMenu() {
-    const int alpha       = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
+    const int     alpha   = (ManualMenu.selection_level == -1) ? 0x40 : 0x80;
     constexpr int spacing = 28;
 
     UI::TrackerWindow::Draw(135, 85, 220, 170, alpha, UI::BLUE_STONE_MENU);
@@ -243,151 +139,6 @@ void DrawCategoryMenu() {
         s_menu_cursor.SetTarget(126.0f, static_cast<float>(100 + (ManualMenu.category * spacing) - 2));
         s_menu_cursor.Draw(0x80);
     }
-}
-
-void DrawChestTracker() {
-    constexpr float kHeaderScale = 0.92f;
-    constexpr float kBodyScale   = 0.84f;
-
-    constexpr int kLeftPaneX  = 92;
-    constexpr int kDividerX   = 258;
-    constexpr int kRightPaneX = 272;
-    constexpr int kLabelX     = kRightPaneX + 30;
-    constexpr int kCountX     = 460;
-
-    // 1. Paper Menu Window lowered 15px (Y = 76 -> 91, height = 262, bottom = 353)
-    //    (BlueStone remains available via UI::BLUE_STONE_MENU for other UI elements)
-    UI::TrackerWindow::DrawPaper(64, 91, 512, 262, 0x80);
-
-    // 2. Parchment Scroll Title Banner crowning the top edge
-    UI::TrackerWindow::DrawStoneBanner(
-        UI::Rect(150, 74, 340, 28),
-        0x80,
-        0x80,
-        LocalizeText("tracker.title", "JOURNAL: CHEST TRACKER")
-    );
-
-    // 3. Chiseled Divider Lines (lowered 15px with the background)
-    UI::Divider::DrawVertical(kDividerX, 133, 337, 0x80);
-    UI::Divider::DrawHorizontal(84, kDividerX - 10, 283, 0x80);
-    UI::Divider::DrawHorizontal(kRightPaneX, 542, 283, 0x80);
-
-    MenuTextureReload(0x1A);
-
-    // 4. Filter Mode Indicator
-    const std::string mode_label = s_tracker_filter_miracle_only
-        ? LocalizeText("tracker.filter.stat_boosts_only", "< STAT BOOSTS ONLY >")
-        : LocalizeText("tracker.filter.all_chests",       "< ALL TOWN CHESTS >");
-    const u32 mode_color = s_tracker_filter_miracle_only ? UI::ColorYellow : UI::ColorWhite;
-    UI::Label(mode_label, mode_color, UI::Alignment::Center, true, kBodyScale).Draw(320, 109, 0x80);
-
-    // 5. Left Pane: Settlements List
-    UI::Label(LocalizeText("tracker.settlements", "SETTLEMENTS"),
-              UI::ColorYellow, UI::Alignment::Left, true, kHeaderScale).Draw(kLeftPaneX, 135, 0x80);
-
-    constexpr int left_start_y = 159;
-    constexpr int row_spacing  = 24;
-
-    for (int i = 0; i < TRACKER_TOWN_COUNT; i++) {
-        const int  row_y     = left_start_y + (i * row_spacing);
-        const bool selected  = (i == s_tracker_selected_town);
-        const u32  color     = selected ? UI::ColorYellow : UI::ColorWhite;
-        const int  row_alpha = selected ? 0x80 : 0x58;
-
-        std::string town_name = LocalizeText("tracker.town." + std::to_string(i), TRACKER_TOWNS[i].name);
-        UI::Label(town_name, color, UI::Alignment::Left, true, kBodyScale).Draw(kLeftPaneX, row_y, row_alpha);
-    }
-
-    // 6. Left Pane: World Total
-    const TownStats g_stats     = GetGlobalStats();
-    const int       g_collected = s_tracker_filter_miracle_only ? g_stats.collected_miracle : g_stats.collected_total;
-    const int       g_max       = s_tracker_filter_miracle_only ? g_stats.max_miracle       : g_stats.max_total;
-
-    UI::Label(LocalizeText("tracker.world_total", "World Total"),
-              UI::ColorGold, UI::Alignment::Left, true, kHeaderScale).Draw(kLeftPaneX, 291, 0x80);
-    UI::DrawCounter(kLeftPaneX, 316, g_collected, g_max, kBodyScale);
-
-    // 7. Right Pane: Selected Settlement Breakdown
-    std::string cur_town_name = LocalizeText("tracker.town." + std::to_string(s_tracker_selected_town),
-                                             TRACKER_TOWNS[s_tracker_selected_town].name);
-    std::string right_title   = LocalizeFormat(LocalizeText("tracker.breakdown", "%1 Breakdown"), {cur_town_name});
-    UI::Label(right_title, UI::ColorYellow, UI::Alignment::Left, true, kHeaderScale).Draw(kRightPaneX, 135, 0x80);
-
-    const TownStats cur_stats = GetTownStats(s_tracker_selected_town);
-
-    static int s_item_anim_tick = 0;
-    constexpr int kDefenseTreatItems[6] = {
-        ITEM_FLUFFY_DOUGHNUT, ITEM_FISH_CANDY,      ITEM_GRASS_CAKE,
-        ITEM_WITCH_PARFAIT,   ITEM_SCORPION_JERKY,  ITEM_CARROT_COOKIE
-    };
-    const int cur_defense_item = kDefenseTreatItems[(s_item_anim_tick / 60) % 6];
-    s_item_anim_tick           = (s_item_anim_tick + 1) % 36000;
-
-    struct MetricRow {
-        std::string label;
-        int         item_no;
-        int         collected;
-        int         max_val;
-    };
-
-    std::vector<MetricRow> breakdown = {
-        {LocalizeText("tracker.item.eden",    "Fruit of Eden"),  ITEM_FRUIT_OF_EDEN, cur_stats.collected_eden,   cur_stats.max_eden},
-        {LocalizeText("tracker.item.gourd",   "Gourds"),         ITEM_GOURD,         cur_stats.collected_gourd,  cur_stats.max_gourd},
-        {LocalizeText("tracker.item.defense", "Defense Treats"), cur_defense_item,   cur_stats.collected_def,    cur_stats.max_def},
-        {LocalizeText("tracker.item.pocket",  "Pockets"),        ITEM_POCKET,        cur_stats.collected_pocket, cur_stats.max_pocket}
-    };
-
-    if (!s_tracker_filter_miracle_only) {
-        breakdown.push_back({LocalizeText("tracker.item.standard", "Standard Items"), ITEM_TREASURE_KEY, cur_stats.collected_std, cur_stats.max_std});
-    }
-
-    constexpr int right_start_y = 159;
-    constexpr int right_spacing = 24;
-
-    for (size_t r = 0; r < breakdown.size(); ++r) {
-        const int  y          = right_start_y + (static_cast<int>(r) * right_spacing);
-        const bool icon_drawn = UI::ItemIcon::Draw(breakdown[r].item_no, kRightPaneX, y - 3, 24, 0x80);
-
-        MenuTextureReload(0x1A);
-        const int text_x = icon_drawn ? kLabelX : kRightPaneX;
-        UI::Label(breakdown[r].label, UI::ColorWhite, UI::Alignment::Left, true, kBodyScale).Draw(text_x, y, 0x80);
-        UI::DrawCounter(kCountX, y, breakdown[r].collected, breakdown[r].max_val, kBodyScale);
-    }
-
-    // 8. Right Pane: Area Total & Progress Bar (centered text)
-    const int town_cur_collected = s_tracker_filter_miracle_only ? cur_stats.collected_miracle : cur_stats.collected_total;
-    const int town_cur_max       = s_tracker_filter_miracle_only ? cur_stats.max_miracle       : cur_stats.max_total;
-
-    constexpr int total_row_y = 291;
-    UI::Label(LocalizeText("tracker.area_total", "Area Total"),
-              UI::ColorYellow, UI::Alignment::Left, true, kHeaderScale).Draw(kRightPaneX, total_row_y, 0x80);
-    UI::DrawCounter(kCountX, total_row_y, town_cur_collected, town_cur_max, kBodyScale);
-
-    const float progress_ratio = (town_cur_max > 0)
-                                 ? static_cast<float>(town_cur_collected) / static_cast<float>(town_cur_max)
-                                 : 0.0f;
-    const int   pct            = (town_cur_max > 0) ? (town_cur_collected * 100) / town_cur_max : 0;
-    std::string pct_buf        = LocalizeFormat(LocalizeText("tracker.progress", "Progress: %1%"), {std::to_string(pct)});
-
-    UI::ProgressBarStyle bar_style{};
-    bar_style.text_scale = 0.76f;
-    UI::ProgressBar::Draw(UI::Rect(kRightPaneX, 314, 270, 22), progress_ratio, pct_buf, bar_style, 0x80);
-
-    // 9. Bottom Controls Bar & Selection Cursor
-    MenuTextureReload(0x1A);
-    std::string controls_str = LocalizeText(
-        "tracker.controls",
-        PAD_GLYPH_UP " / " PAD_GLYPH_DOWN " Select   "
-        PAD_GLYPH_CROSS " / " PAD_GLYPH_SQUARE " Filter   "
-        PAD_GLYPH_CIRCLE " Return"
-    );
-    UI::Label(controls_str, UI::ColorWhite, UI::Alignment::Center).Draw(320, 418, 0x80);
-
-    const int sel_y = left_start_y + (s_tracker_selected_town * row_spacing);
-    s_menu_brackets.Draw(UI::Rect(kLeftPaneX - 4, sel_y - 1, 152, 22), 0x80);
-
-    s_menu_cursor.SetTarget(48.0f, static_cast<float>(sel_y - 2));
-    s_menu_cursor.Draw(0x80);
 }
 
 bool IsMultiPageManualEntry() {
@@ -466,9 +217,8 @@ PORT_OVERRIDE int MenuManualKey() {
                     }
                 } else if (ManualMenu.selection_level == -2) {
                     if (ManualMenu.category == 4) {
-                        ManualMenu.mode         = MANUAL_MODE_TRACKER;
-                        s_tracker_selected_town = 0;
-                        s_menu_cursor.SnapTo(48.0f, 159.0f - 2.0f);
+                        ManualMenu.mode = MANUAL_MODE_TRACKER;
+                        JournalChest::Open();
                     } else {
                         ManualMenu.selection_level++;
                         CommonMenuMes3.cursor_row = 0;
@@ -497,21 +247,8 @@ PORT_OVERRIDE int MenuManualKey() {
         }
 
         case MANUAL_MODE_TRACKER:
-            if (GamePad.Down(PAD_CIRCLE)) {
+            if (JournalChest::HandleKey()) {
                 ManualMenu.mode = MANUAL_MODE_SELECT;
-                ComMenuSePlay(MENU_SOUND_REFUSE);
-            }
-            if (GamePad.Down(PAD_UP)) {
-                if (--s_tracker_selected_town < 0) s_tracker_selected_town = TRACKER_TOWN_COUNT - 1;
-                ComMenuSePlay(MENU_SOUND_CURSOR);
-            }
-            if (GamePad.Down(PAD_DOWN)) {
-                if (++s_tracker_selected_town >= TRACKER_TOWN_COUNT) s_tracker_selected_town = 0;
-                ComMenuSePlay(MENU_SOUND_CURSOR);
-            }
-            if (GamePad.Down(PAD_CROSS | PAD_SQUARE)) {
-                s_tracker_filter_miracle_only = !s_tracker_filter_miracle_only;
-                ComMenuSePlay(MENU_SOUND_CONFIRM);
             }
             break;
 
@@ -580,7 +317,7 @@ PORT_OVERRIDE void MenuManualDraw() {
     }
 
     if (ManualMenu.mode == MANUAL_MODE_TRACKER) {
-        DrawChestTracker();
+        JournalChest::Draw();
         return;
     }
 
@@ -631,29 +368,12 @@ PORT_OVERRIDE void MenuManualDraw() {
 
 std::vector<std::pair<std::string, std::string>> UI::JournalStrings() {
     std::vector<std::pair<std::string, std::string>> out = {
-        {"manual.category.georama",         "Georama"                                                        },
-        {"manual.category.dungeon",         "Dungeon"                                                        },
-        {"manual.category.weapon",          "Weapon"                                                         },
-        {"manual.category.savings",         "Savings/Other"                                                  },
-        {"manual.category.miracle_chests",  "Miracle Chests"                                                 },
-        {"tracker.title",                   "JOURNAL: CHEST TRACKER"                                         },
-        {"tracker.filter.stat_boosts_only", "< STAT BOOSTS ONLY >"                                           },
-        {"tracker.filter.all_chests",       "< ALL TOWN CHESTS >"                                            },
-        {"tracker.settlements",             "SETTLEMENTS"                                                    },
-        {"tracker.world_total",             "World Total"                                                    },
-        {"tracker.breakdown",               "%1 Breakdown"                                                   },
-        {"tracker.item.eden",               "Fruit of Eden"                                                  },
-        {"tracker.item.gourd",              "Gourds"                                                         },
-        {"tracker.item.defense",            "Defense Treats"                                                 },
-        {"tracker.item.pocket",             "Pockets"                                                        },
-        {"tracker.item.standard",           "Standard Items"                                                 },
-        {"tracker.progress",                "Progress: %1%"                                                  },
-        {"tracker.area_total",              "Area Total"                                                     },
-        {"tracker.controls",                PAD_GLYPH_UP " / " PAD_GLYPH_DOWN " Select   " PAD_GLYPH_CROSS " / " PAD_GLYPH_SQUARE
-                                          " Filter   " PAD_GLYPH_CIRCLE " Return"},
+        {"manual.category.georama",        "Georama"       },
+        {"manual.category.dungeon",        "Dungeon"       },
+        {"manual.category.weapon",         "Weapon"        },
+        {"manual.category.savings",        "Savings/Other" },
+        {"manual.category.miracle_chests", "Miracle Chests"},
     };
-    for (size_t i = 0; i < std::size(TRACKER_TOWNS); i++) {
-        out.emplace_back("tracker.town." + std::to_string(i), TRACKER_TOWNS[i].name);
-    }
+    JournalChest::AppendStrings(out);
     return out;
 }

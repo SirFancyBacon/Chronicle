@@ -696,37 +696,32 @@ void TrackerWindow::Draw(int x, int y, int width_px, int height_px, int alpha, W
 void TrackerWindow::DrawIndentation(const Rect& box, bool dark_variant, int alpha) {
     if (box.Empty() || alpha <= 0) return;
 
-    CTexture* perbrd = GetPerBoardTex();
-    if (perbrd == nullptr) return;
+    CTexture* tex = GetWhitePixelTex();
+    if (tex == nullptr) return;
 
-    setbilinear(0);
-    constexpr int src_y   = 0x80;
-    const int     left_w  = std::min(3, box.w / 3);
-    const int     right_w = std::min(8, box.w - left_w);
-    const int     mid_w   = std::max(0, box.w - left_w - right_w);
+    // Shade-mask recessed trough: uses pure black/white translucent layers so it
+    // automatically inherits the hue of the underlying Paper or BlueStone panel
+    // and looks carved into the surface rather than raised.
+    const int rim_light_a  = (alpha * (dark_variant ? 42 : 55)) >> 7;
+    const int rim_shadow_a = (alpha * (dark_variant ? 95 : 70)) >> 7;
+    const int mid_shadow_a = (alpha * (dark_variant ? 75 : 52)) >> 7;
+    const int floor_a      = (alpha * (dark_variant ? 56 : 36)) >> 7;
 
-    const u8 r = dark_variant ? 0x46 : 0x80;
-    const u8 g = dark_variant ? 0x50 : 0x80;
-    const u8 b = dark_variant ? 0x64 : 0x80;
+    // 1. Bottom-right catch-light rim (1px offset down/right where light hits the lower lip)
+    DrawRoundedRect(tex, box.x + 1, box.y + 1, box.w, box.h, 255, 248, 230, rim_light_a, true);
 
-    DrawMenu2DSprite(perbrd, CRect_i_(box.x, box.y, left_w, box.h),
-                     CRect_i_(0x20, src_y, 3, 0x18), r, g, b, alpha);
+    // 2. Outer top-left cast shadow lip
+    DrawRoundedRect(tex, box.x, box.y, box.w - 1, box.h - 1, 0, 0, 0, rim_shadow_a, true);
 
-    int cur_x = box.x + left_w;
-    int rem_w = mid_w;
-    while (rem_w > 0) {
-        int seg_w = std::min(32, rem_w);
-        DrawMenu2DSprite(perbrd, CRect_i_(cur_x, box.y, seg_w, box.h),
-                         CRect_i_(0x40, src_y, seg_w, 0x18), r, g, b, alpha);
-        cur_x += seg_w;
-        rem_w -= seg_w;
+    // 3. Inner bevel shadow step
+    if (box.w > 4 && box.h > 4) {
+        DrawRoundedRect(tex, box.x + 1, box.y + 1, box.w - 2, box.h - 2, 0, 0, 0, mid_shadow_a, true);
     }
 
-    if (right_w > 0) {
-        DrawMenu2DSprite(perbrd, CRect_i_(box.x + left_w + mid_w, box.y, right_w, box.h),
-                         CRect_i_(0x78, src_y, 0x08, 0x18), r, g, b, alpha);
+    // 4. Recessed interior floor (slightly lighter than the top-left shadow lip so the lip reads as a cliff)
+    if (box.w > 6 && box.h > 6) {
+        DrawRoundedRect(tex, box.x + 2, box.y + 2, box.w - 3, box.h - 3, 0, 0, 0, floor_a, false);
     }
-    setbilinear(1);
 }
 
 void TrackerWindow::DrawStoneBanner(const Rect& box, int alpha, int brightness,
@@ -807,19 +802,27 @@ void TabPlate::Draw(int left, int right, int y, int alpha) {
 void Divider::DrawVertical(int x, int top_y, int bottom_y, int alpha) {
     CTexture* tex = GetWhitePixelTex();
     if (tex == nullptr || bottom_y <= top_y) return;
-    CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
-    int      h = bottom_y - top_y;
-    DrawMenu2DSprite(tex, CRect_i_(x, top_y, 1, h), uv_white, 34, 42, 56, (alpha * 105) >> 7);
-    DrawMenu2DSprite(tex, CRect_i_(x + 1, top_y, 1, h), uv_white, 134, 150, 174, (alpha * 85) >> 7);
+    CRect_i_  uv_white(0x6A, 0x6E, 1, 1);
+    const int h = bottom_y - top_y;
+
+    // 4px-wide recessed vertical groove (shade-masked so it matches Paper or BlueStone)
+    DrawMenu2DSprite(tex, CRect_i_(x - 1, top_y,     1, h),     uv_white, 0,   0,   0,   (alpha * 50) >> 7);
+    DrawMenu2DSprite(tex, CRect_i_(x,     top_y,     1, h),     uv_white, 0,   0,   0,   (alpha * 95) >> 7);
+    DrawMenu2DSprite(tex, CRect_i_(x + 1, top_y,     1, h),     uv_white, 0,   0,   0,   (alpha * 65) >> 7);
+    DrawMenu2DSprite(tex, CRect_i_(x + 2, top_y + 1, 1, h - 1), uv_white, 255, 248, 230, (alpha * 48) >> 7);
 }
 
 void Divider::DrawHorizontal(int left_x, int right_x, int y, int alpha) {
     CTexture* tex = GetWhitePixelTex();
     if (tex == nullptr || right_x <= left_x) return;
-    CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
-    int      w = right_x - left_x;
-    DrawMenu2DSprite(tex, CRect_i_(left_x, y, w, 1), uv_white, 34, 42, 56, (alpha * 105) >> 7);
-    DrawMenu2DSprite(tex, CRect_i_(left_x, y + 1, w, 1), uv_white, 134, 150, 174, (alpha * 85) >> 7);
+    CRect_i_  uv_white(0x6A, 0x6E, 1, 1);
+    const int w = right_x - left_x;
+
+    // 4px-tall recessed horizontal groove (shade-masked so it matches Paper or BlueStone)
+    DrawMenu2DSprite(tex, CRect_i_(left_x,     y - 1, w,     1), uv_white, 0,   0,   0,   (alpha * 50) >> 7);
+    DrawMenu2DSprite(tex, CRect_i_(left_x,     y,     w,     1), uv_white, 0,   0,   0,   (alpha * 95) >> 7);
+    DrawMenu2DSprite(tex, CRect_i_(left_x,     y + 1, w,     1), uv_white, 0,   0,   0,   (alpha * 65) >> 7);
+    DrawMenu2DSprite(tex, CRect_i_(left_x + 1, y + 2, w - 1, 1), uv_white, 255, 248, 230, (alpha * 48) >> 7);
 }
 
 // -----------------------------------------------------------------------------
@@ -1251,22 +1254,46 @@ void BevelButton::Draw(int x, int y, int width, int height, std::string_view tex
 void ConfirmModal::Draw(std::string_view title, std::string_view description,
                         std::string_view yes_label, std::string_view no_label,
                         int selected_choice, Cursor& cursor, int alpha) {
-    constexpr int box_w = 260;
-    constexpr int box_h = 58;
-    constexpr int box_x = (640 - box_w) / 2;
-    constexpr int box_y = 164;
+    if (alpha <= 0) return;
+
+    MenuTextureReload(0x1A);
+
+    std::vector<std::string> lines;
+    if (!title.empty()) {
+        std::vector<std::string> title_lines = WrapText(title, 280);
+        lines.insert(lines.end(), title_lines.begin(), title_lines.end());
+    }
+    if (!description.empty()) {
+        std::vector<std::string> desc_lines = WrapText(description, 280);
+        lines.insert(lines.end(), desc_lines.begin(), desc_lines.end());
+    }
+    if (lines.empty()) {
+        lines.emplace_back("");
+    }
+
+    int max_text_w = 0;
+    for (const std::string& line : lines) {
+        max_text_w = std::max(max_text_w, Label(line, ColorWhite).GetWidth());
+    }
+
+    constexpr int line_spacing = 20;
+    const int     box_w        = std::clamp(max_text_w + 48, 260, 360);
+    const int     box_h        = 38 + static_cast<int>(lines.size() - 1) * line_spacing;
+    const int     box_x        = (640 - box_w) / 2;
+    const int     box_y        = 164 - std::max(0, static_cast<int>(lines.size()) - 2) * 12;
 
     HelpBox::Draw(box_x, box_y, box_w, box_h, alpha);
 
     MenuTextureReload(0x1A);
-    Label(title, ColorWhite).Draw(box_x + 22, box_y + 12, alpha);
-    Label(description, ColorWhite).Draw(box_x + 22, box_y + 32, alpha);
+    for (size_t i = 0; i < lines.size(); ++i) {
+        Label(lines[i], ColorWhite).Draw(box_x + 22, box_y + 12 + static_cast<int>(i) * line_spacing, alpha);
+    }
 
     constexpr int btn_w  = 100;
     constexpr int btn_h  = 26;
     constexpr int btn_x  = (640 - btn_w) / 2;
-    constexpr int btn_y0 = box_y + box_h + 10;
-    constexpr int btn_y1 = btn_y0 + btn_h + 6;
+    const int     btn_y0 = box_y + box_h + 10;
+    const int     btn_y1 = btn_y0 + btn_h + 6;
 
     ButtonStyle btn_style{};
     BevelButton::Draw(Rect(btn_x, btn_y0, btn_w, btn_h), yes_label, btn_style, alpha);
@@ -1311,19 +1338,32 @@ void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
     const float clamped  = std::clamp(progress, 0.0f, 1.0f);
     const bool  complete = (clamped >= 1.0f);
 
+    // 1. Draw the shade-mask recessed trough (inherits the underlying panel's color)
     TrackerWindow::DrawIndentation(box, true, alpha);
 
-    const int max_fill_w = std::max(0, box.w - 8);
+    // 2. Fill the interior using a subdued, recessed gradation + top inner shadow
+    const int max_fill_w = std::max(0, box.w - 6);
     const int fill_w     = static_cast<int>(std::round(clamped * static_cast<float>(max_fill_w)));
 
     if (fill_w > 0 && box.h > 6) {
         if (GRADATION_COLOR_INFO2* grad_src = GetGradationColorInfo2(complete ? 4 : 3)) {
             GRADATION_COLOR_INFO2 grad = *grad_src;
+            // Slightly darker top corners and translucent alpha so the underlying paper/stone grain shows through
             for (int c = 0; c < 4; ++c) {
-                grad.colors[c].a = static_cast<u8>((alpha * 115) >> 7);
+                grad.colors[c].r = static_cast<u8>((grad.colors[c].r * 3) / 4);
+                grad.colors[c].g = static_cast<u8>((grad.colors[c].g * 3) / 4);
+                grad.colors[c].b = static_cast<u8>((grad.colors[c].b * 3) / 4);
+                grad.colors[c].a = static_cast<u8>((alpha * 96) >> 7);
             }
-            CRect_i_ fill_rect(box.x + 4, box.y + 3, fill_w, box.h - 7);
+            CRect_i_ fill_rect(box.x + 3, box.y + 3, fill_w, box.h - 6);
             DrawMenuColorGradation(fill_rect, &grad.colors[0], &grad.colors[1], &grad.colors[2], &grad.colors[3]);
+        }
+
+        // Subtle 2px top inner shadow over the fill so the bar looks sunken beneath the paper lip
+        if (CTexture* tex = GetWhitePixelTex()) {
+            CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
+            DrawMenu2DSprite(tex, CRect_i_(box.x + 3, box.y + 3, fill_w, 1), uv_white, 0, 0, 0, (alpha * 55) >> 7);
+            DrawMenu2DSprite(tex, CRect_i_(box.x + 3, box.y + 4, fill_w, 1), uv_white, 0, 0, 0, (alpha * 25) >> 7);
         }
     }
 
@@ -1336,8 +1376,6 @@ void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
             .scale       = style.text_scale,
             .weight      = style.text_weight
         };
-        // Direct Label::Draw at (CenterX, box.y - 2) centers the glyphs inside the 22px bar
-        // without double-applying DrawInRect's -4.0f baseline offset
         Label lbl(text, txt_style);
         lbl.Draw(box.CenterX(), box.y - 2, alpha);
     }
