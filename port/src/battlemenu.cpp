@@ -779,6 +779,14 @@ PORT_OVERRIDE void DrawMenuMove() {
     }
 }
 
+bool BattleMenuQuitConfirmActive() {
+    return s_quit_confirm_active;
+}
+
+int* BattleMenuQuitConfirmChoicePtr() {
+    return &s_quit_confirm_choice;
+}
+
 std::vector<std::pair<std::string, std::string>> UI::BattleMenuStrings() {
     return {
         {"battlemenu.item.title",         "\"Item\""                              },

@@ -20,6 +20,7 @@
 #include "memcard.hpp"
 #include "menu_draw.hpp"
 #include "menu_inventory.hpp"
+#include "menu_pointer.hpp"
 #include "menuetc.hpp"
 #include "mglib.hpp"
 #include "platform/config.hpp"
@@ -1090,10 +1091,16 @@ void Cursor::Draw(int alpha) {
 
     float hand_x = 0.0f;
     float hand_y = 0.0f;
+    float ptr_x  = 0.0f;
+    float ptr_y  = 0.0f;
 
     if (m_pointing) {
         hand_x = m_pointer_x - 26.0f;
         hand_y = m_pointer_y - 14.0f;
+    } else if (MenuPointerHand(ptr_x, ptr_y)) {
+        // Follow the active menu mouse pointer seamlessly
+        hand_x = m_cur_x = ptr_x;
+        hand_y = m_cur_y = ptr_y;
     } else {
         m_cur_x += (m_target_x - m_cur_x) / 4.0f;
         m_cur_y += (m_target_y - m_cur_y) / 4.0f;
