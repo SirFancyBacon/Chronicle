@@ -49,12 +49,11 @@ const char *s_next_caption_key = nullptr;
 const char *s_next_caption_english = nullptr;
 std::string s_next_caption_text;
 
+// Painted capitals occupy about 21 logical pixels of each 30-pixel label cell.
 constexpr float kEm = 25.0f;
+
 constexpr float kOutlineWidth = 1.6f;
 constexpr float kLeastShrink = 0.62f;
-
-constexpr unsigned char kFill[3]    = {255, 250, 220};
-constexpr unsigned char kOutline[3] = {0, 0, 160};
 
 std::array<std::optional<CaptionBounds>, kIcons> g_bounds;
 
@@ -141,7 +140,7 @@ std::u32string Decode(std::string_view in) {
 struct Layout {
     std::u32string text;
     float          em = kEm * textwipe::Get(textwipe::Kind::Caption).size;
-    float          squeeze = 1.0f;
+    float          squeeze = 1.0f; // the share of its width a condensed caption keeps
     float          width = 0.0f;
 };
 
@@ -186,6 +185,7 @@ Layout Lay(std::string_view utf8, float box_width) {
 
 void Quad(std::vector<gfx::Vertex2D> &out, const capfont::Glyph &glyph, float x, float y, float width, float height,
           const unsigned char (&rgb)[3], int alpha) {
+    // GS modulation doubles vertex RGB; halve font colors before drawing.
     const u_char r = static_cast<u_char>(rgb[0] / 2), g = static_cast<u_char>(rgb[1] / 2), b = static_cast<u_char>(rgb[2] / 2);
     const u_char a = static_cast<u_char>(std::clamp(alpha, 0, 0x80));
     out.push_back(draw2d::Vertex(x, y, 0.0f, glyph.u0, glyph.v0, r, g, b, a));
@@ -292,6 +292,7 @@ bool Draw(int icon, int x, int y, int box_width, int alpha, int bright) {
         s_next_caption_key = nullptr;
         s_next_caption_english = nullptr;
     } else {
+        // English help titles differ from the painted labels, including OPTION and GEORAMA PARTS.
         text = LocalizeText(kEntries[icon].key, "");
         if (text.empty()) {
             text = LanguageCode == LANG_ENGLISH_US || LanguageCode == LANG_ENGLISH_UK ? kEntries[icon].english : HelpTitle(icon);
@@ -433,6 +434,7 @@ bool DrawLine(std::string_view utf8, float center_x, float cap_top, float cap_he
     float                     ink_top = 0.0f;
     float                     ink_height = 0.0f;
     if (style.ink_fit) {
+        // Re-measure after integer rasterization, then fit the ink exactly to the requested height.
         for (int pass = 0; pass < 2; pass++) {
             float top = 1e9f, bottom = -1e9f;
             for (char32_t ch : text) {
@@ -506,7 +508,7 @@ bool DrawLine(std::string_view utf8, float center_x, float cap_top, float cap_he
         x = snap(x, mapping.scale_x, mapping.offset_x);
         y = snap(y, mapping.scale_y, mapping.offset_y);
     };
-
+    // Colored glyphs depend on their position in the painted fill field and on atlas generation.
     static std::map<std::array<int, 9>, capfont::Glyph> textured;
     static unsigned                                     textured_generation = 0;
     auto                                                textured_letter = [&](const Letter &letter, size_t index, float pen, capfont::Glyph &out) {

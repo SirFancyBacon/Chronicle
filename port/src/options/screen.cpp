@@ -21,6 +21,7 @@
 #include "snd.hpp"
 #include "sound.hpp"
 #include "texture.hpp"
+#include "ui_framework.hpp"
 
 #define PAD_GLYPH_L1 "{L1}"
 #define PAD_GLYPH_R1 "{R1}"
@@ -700,6 +701,12 @@ std::vector<std::pair<std::string, std::string>> OptionStrings() {
         out.push_back(std::move(entry));
     }
     for (auto &entry : areacard::Strings()) {
+        out.push_back(std::move(entry));
+    }
+    for (auto &entry : UI::BattleMenuStrings()) {
+        out.push_back(std::move(entry));
+    }
+    for (auto &entry : UI::JournalStrings()) {
         out.push_back(std::move(entry));
     }
     return out;

@@ -2,6 +2,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "clsmes.hpp"
@@ -366,5 +367,15 @@ public:
     static void Draw(const Rect& box, float progress, std::string_view text = {},
                      const ProgressBarStyle& style = {}, int alpha = 0x80);
 };
+
+/**
+ * Battle menu translation keys and English defaults.
+ */
+std::vector<std::pair<std::string, std::string>> BattleMenuStrings();
+
+/**
+ * Journal translation keys and English defaults.
+ */
+std::vector<std::pair<std::string, std::string>> JournalStrings();
 
 } // namespace UI

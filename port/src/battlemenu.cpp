@@ -536,3 +536,36 @@ PORT_OVERRIDE int BattleMenuSelect() {
 
     return 1;
 }
+
+std::vector<std::pair<std::string, std::string>> UI::BattleMenuStrings() {
+    return {
+        {"battlemenu.item.title",         "\"Item\""                              },
+        {"battlemenu.item.help",          "Use current item or\nSet active items."},
+        {"battlemenu.weapon.title",       "\"Weapon\""                            },
+        {"battlemenu.weapon.help",        "Change and customise\nweapons."        },
+        {"battlemenu.allies.title",       "\"Allies\""                            },
+        {"battlemenu.allies.help",        "Change controllable\ncharacter."       },
+        {"battlemenu.georama.title",      "\"Georama Parts\""                     },
+        {"battlemenu.georama.help",       "Check acquired\ngeorama parts."        },
+        {"battlemenu.dungeon.title",      "\"Go to Dungeon\""                     },
+        {"battlemenu.dungeon.help",       "Go to Divine\nBeast Cave."             },
+        {"battlemenu.world_map.title",    "\"World Map\""                         },
+        {"battlemenu.world_map.help",     "Move to another\narea on world map."   },
+        {"battlemenu.go_outside.title",   "\"Go Outside\""                        },
+        {"battlemenu.go_outside.help",    "Go outside of\nthe building."          },
+        {"battlemenu.escape.title",       "\"Escape\""                            },
+        {"battlemenu.escape.help",        "Escape from the\ncurrent dungeon."     },
+        {"battlemenu.save.title",         "\"Save\""                              },
+        {"battlemenu.save.help",          "Record current\ngame progress."        },
+        {"battlemenu.option.title",       "\"Options\""                           },
+        {"battlemenu.option.help",        "Change game\nconfigurations."          },
+        {"battlemenu.journal.title",      "\"Journal\""                           },
+        {"battlemenu.journal.help",       "Check manuals and\nchest tracker."     },
+        {"battlemenu.quit.title",         "\"Quit Game\""                         },
+        {"battlemenu.quit.help",          "Exit the game and\nreturn to desktop." },
+        {"battlemenu.quit.confirm_title", "\"Quit Game\""                         },
+        {"battlemenu.quit.confirm_desc",  "Return to desktop?"                    },
+        {"battlemenu.quit.yes",           "YES"                                   },
+        {"battlemenu.quit.no",            "NO"                                    },
+    };
+}

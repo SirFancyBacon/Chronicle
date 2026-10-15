@@ -594,6 +594,7 @@ void DrawScaledText(std::string_view text, float center_x, float cap_top, float 
     style.xscale  = xscale;
     style.word    = 3.0f * scale;
     style.ink_fit = false;
+    style.edge_width = 0.0f;
 
     if (drop_shadow && ConfigGet().text_shadow > 0) {
         caption::LineStyle shadow_style = style;
@@ -608,12 +609,12 @@ void DrawScaledText(std::string_view text, float center_x, float cap_top, float 
 
         const float s_dx = 2.0f * scale;
         const float s_dy = 2.0f * scale;
-        caption::DrawLine(text, center_x + s_dx, cap_top + s_dy, cap_height, 1.0f, 0.0f, shadow_style, fade, rows);
+        caption::DrawLine(text, center_x + s_dx, cap_top + s_dy, cap_height, 1.0f, 0.0f, shadow_style, fade, rows, nullptr);
     }
 
     ColorToRgb(color, style.fill);
     style.opacity = 1.0f;
-    caption::DrawLine(text, center_x, cap_top, cap_height, 1.0f, 0.0f, style, fade, rows);
+    caption::DrawLine(text, center_x, cap_top, cap_height, 1.0f, 0.0f, style, fade, rows, nullptr);
 }
 
 } // namespace

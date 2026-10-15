@@ -2,6 +2,8 @@
 
 // Port-specific headers
 #include <SDL3/SDL.h>
+
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -150,15 +152,16 @@ TownStats GetGlobalStats() {
 
 s16 Port_ManualImgLoad() {
     char path[76];
+    char format[76];
     int  size = 0;
     if (ReadBGSync() != 0 || ManualMenu.images_ready != 0) {
         BreakReadBG();
     }
 
-    GetPathReadDifferntLang(path);
-    std::strcat(path, "manual/m%d.pac");
+    GetPathReadDifferntLang(format);
+    std::strcat(format, "manual/m%d.pac");
     const int image_no = ManualMenu.entry + (ManualMenu.category + 1) * 10;
-    std::sprintf(path, path, image_no);
+    std::snprintf(path, sizeof(path), format, image_no);
 
     u_long128 *buffer = MenuCalcBufAlignment(ManualMenu.load_buffer);
     StartReadBG();
@@ -166,9 +169,9 @@ s16 Port_ManualImgLoad() {
     buffer = MenuCalcBufAlignment(buffer + size / 16 + 1);
 
     if ((u32)(image_no - 11) <= 1 || (u32)(image_no - 21) <= 1 || image_no == 31 || image_no == 42) {
-        GetPathReadDifferntLang(path);
-        std::strcat(path, "manual/m%db.pac");
-        std::sprintf(path, path, image_no);
+        GetPathReadDifferntLang(format);
+        std::strcat(format, "manual/m%db.pac");
+        std::snprintf(path, sizeof(path), format, image_no);
         LoadFileBG(path, buffer, &size);
     }
     ReadBG();
@@ -624,4 +627,33 @@ PORT_OVERRIDE void MenuManualDraw() {
     if (ManualMenu.messages_ready != 0 && ManualMenu.mode != MANUAL_MODE_CLOSING) {
         Port_DrawManualMsg();
     }
+}
+
+std::vector<std::pair<std::string, std::string>> UI::JournalStrings() {
+    std::vector<std::pair<std::string, std::string>> out = {
+        {"manual.category.georama",         "Georama"                                                        },
+        {"manual.category.dungeon",         "Dungeon"                                                        },
+        {"manual.category.weapon",          "Weapon"                                                         },
+        {"manual.category.savings",         "Savings/Other"                                                  },
+        {"manual.category.miracle_chests",  "Miracle Chests"                                                 },
+        {"tracker.title",                   "JOURNAL: CHEST TRACKER"                                         },
+        {"tracker.filter.stat_boosts_only", "< STAT BOOSTS ONLY >"                                           },
+        {"tracker.filter.all_chests",       "< ALL TOWN CHESTS >"                                            },
+        {"tracker.settlements",             "SETTLEMENTS"                                                    },
+        {"tracker.world_total",             "World Total"                                                    },
+        {"tracker.breakdown",               "%1 Breakdown"                                                   },
+        {"tracker.item.eden",               "Fruit of Eden"                                                  },
+        {"tracker.item.gourd",              "Gourds"                                                         },
+        {"tracker.item.defense",            "Defense Treats"                                                 },
+        {"tracker.item.pocket",             "Pockets"                                                        },
+        {"tracker.item.standard",           "Standard Items"                                                 },
+        {"tracker.progress",                "Progress: %1%"                                                  },
+        {"tracker.area_total",              "Area Total"                                                     },
+        {"tracker.controls",                PAD_GLYPH_UP " / " PAD_GLYPH_DOWN " Select   " PAD_GLYPH_CROSS " / " PAD_GLYPH_SQUARE
+                                          " Filter   " PAD_GLYPH_CIRCLE " Return"},
+    };
+    for (size_t i = 0; i < std::size(TRACKER_TOWNS); i++) {
+        out.emplace_back("tracker.town." + std::to_string(i), TRACKER_TOWNS[i].name);
+    }
+    return out;
 }
