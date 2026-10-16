@@ -495,6 +495,7 @@ void Label::Draw(int x, int y, int alpha) {
         draw_x -= width;
     }
 
+    MenuTextureReload(0x1A);
     detail::ScopedShadow shadow_guard(m_drop_shadow);
     m_text.SetColour(m_color);
     m_text.Draw(draw_x, draw_y, alpha);
@@ -554,6 +555,7 @@ void Label::DrawInRect(const Rect& box, int alpha) {
 
     int draw_y = box.y + (box.h - 22) / 2;
 
+    MenuTextureReload(0x1A);
     detail::ScopedShadow shadow_guard(m_drop_shadow);
     m_text.SetColour(m_color);
     m_text.Draw(draw_x + m_dx, draw_y + m_dy, alpha);
@@ -612,6 +614,7 @@ void Label::DrawWithStroke(int x, int y, u32 fill_color, u32 stroke_color, int s
         draw_x -= width;
     }
 
+    MenuTextureReload(0x1A);
     detail::ScopedShadow shadow_guard(m_drop_shadow);
     m_text.SetColour(stroke_color);
     for (int dy = -stroke_px; dy <= stroke_px; ++dy) {
@@ -654,7 +657,6 @@ void DrawStatusText(std::string_view text, int x, int y, Alignment align,
                     u8 fill_r, u8 fill_g, u8 fill_b,
                     float scale, int alpha,
                     u8 out_r, u8 out_g, u8 out_b) {
-    MenuTextureReload(0x1A);
     TextStyle style{
         .drop_shadow    = false,
         .align          = align,
@@ -677,7 +679,6 @@ void DrawStatusText(std::string_view text, int x, int y, Alignment align,
 
 void DrawStatusNumber(int value, int right_x, int y,
                       float scale, int alpha, bool highlight_red) {
-    MenuTextureReload(0x1A);
     TextStyle style{
         .drop_shadow    = false,
         .align          = Alignment::Right,
@@ -705,7 +706,6 @@ void DrawStatusSlashPair(int current_val, int max_val, int slash_x, int y,
                          float scale, int alpha) {
     DrawStatusNumber(current_val, slash_x - 2, y, scale, alpha, false);
 
-    MenuTextureReload(0x1A);
     TextStyle slash_style{
         .drop_shadow    = false,
         .align          = Alignment::Center,

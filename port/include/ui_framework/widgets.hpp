@@ -81,4 +81,44 @@ public:
                      const ProgressBarStyle& style = {}, int alpha = 0x80);
 };
 
+enum class MenuIconKind : int {
+    Item      = 0,
+    Weapon    = 1,
+    Allies    = 2,
+    Georama   = 3,
+    Dungeon   = 4,
+    WorldMap  = 5,
+    GoOutside = 6,
+    Escape    = 7,
+    Save      = 8,
+    Option    = 9,
+    Manual    = 10,
+    Load      = 11, // Reuses the Memory Card oval icon from Save
+    Quit      = 12
+};
+
+struct MenuHeaderStyle {
+    float scale         = 1.48f;
+    float xscale        = 1.06f;
+    float yscale        = 0.94f;
+    u8    fill_r        = 82;   // Classic royal-blue / periwinkle header fill
+    u8    fill_g        = 118;
+    u8    fill_b        = 235;
+    float outline_width = 1.85f;
+    u8    outline_r     = 235;  // Warm gold-cream outer rim
+    u8    outline_g     = 225;
+    u8    outline_b     = 170;
+    bool  raised_bevel  = true;
+    u8    bevel_r       = 24;   // Deep navy inner extrusion
+    u8    bevel_g       = 38;
+    u8    bevel_b       = 104;
+};
+
+class MenuHeader {
+public:
+    static void Draw(MenuIconKind icon, std::string_view title,
+                     int x = 16, int y = 26, int alpha = 0x80,
+                     const MenuHeaderStyle& style = {});
+};
+
 } // namespace UI

@@ -50,6 +50,7 @@ extern void Btl_InitWeaponSelect(int mode, int chara);
 extern void Btl_InitItemMode(int mode, int chara);
 extern void Btl_BattleManualInit(int*, u_long128*);
 
+#define BTLMENU_PAGE_LOAD 99
 #define BTLMENU_PAGE_QUIT 100
 
 namespace {
@@ -134,7 +135,6 @@ std::string DecodeItemNamePort(int item_no, std::string_view fallback = {}) {
     if (item_no > 0 && SystemMes != nullptr) {
         if (COM_ITEM_INFO* info = GetCommonItemInfo(item_no)) {
             if (info->msg > 0) {
-                // Item and weapon names in SystemMes are offset by +100 (+0x64)
                 std::string name = DecodeMesFromBuffer(SystemMes, info->msg + 0x64);
                 size_t nl = name.find('\n');
                 if (nl != std::string::npos) {
@@ -211,7 +211,6 @@ void DrawWeaponLeftConfirmDialog(int box_x, int box_y, int yes_x, int yes_y,
         prompt = std::string(fallback_prompt);
     }
 
-    MenuTextureReload(0x1A);
     std::vector<std::string> lines = UI::WrapText(prompt, 220, 0.92f);
     if (lines.empty()) {
         lines.emplace_back(prompt);
@@ -228,7 +227,6 @@ void DrawWeaponLeftConfirmDialog(int box_x, int box_y, int yes_x, int yes_y,
 
     UI::HelpBox::Draw(box_x, box_y, box_w, box_h, alpha);
 
-    MenuTextureReload(0x1A);
     for (size_t i = 0; i < lines.size(); ++i) {
         UI::Label(lines[i], UI::ColorWhite, UI::Alignment::Center, true, 0.92f)
             .Draw(box_x + box_w / 2, box_y + 10 + static_cast<int>(i) * kLineH, alpha);
@@ -254,7 +252,6 @@ void DrawWeaponCenteredWarningModal(int alpha) {
         return;
     }
 
-    MenuTextureReload(0x1A);
     std::vector<std::string> lines = UI::WrapText(msg, 320, 0.92f);
     int max_w = 0;
     for (const auto& line : lines) {
@@ -269,7 +266,6 @@ void DrawWeaponCenteredWarningModal(int alpha) {
 
     UI::HelpBox::Draw(box_x, box_y, box_w, box_h, alpha);
 
-    MenuTextureReload(0x1A);
     for (size_t i = 0; i < lines.size(); ++i) {
         UI::Label(lines[i], UI::ColorWhite, UI::Alignment::Center, true, 0.92f)
             .Draw(320, box_y + 12 + static_cast<int>(i) * kLineH, alpha);
@@ -277,13 +273,17 @@ void DrawWeaponCenteredWarningModal(int alpha) {
 }
 
 int GetMenuModeMax() {
-    return (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON) ? 8 : 9;
+    // Keep retail's exact indices for 0..6 (Dungeon) and 0..7 (Town), and append Load & Quit at the end
+    // so retail's BattleMenuStep / NorMenuIcon[0..7] state machine never desynchronizes!
+    return (BtlMenuMode == BATTLE_MENU_MODE_DUNGEON) ? 9 : 10;
 }
 
 void BtlMenuMekeIconInfo(int *icons, int /*menu_mode*/) {
-    constexpr s16 kCustomDrawTbl[2][9] = {
-        {0, 1, 2, 3, 7, 4, 6, 12, 0}, // Dungeon (6: Journal/Book, 12: Quit/House)
-        {0, 1, 2, 3, 8, 5, 4,  6, 12}  // Town    (6: Journal/Book, 12: Quit/House)
+    // Indices 0..6 (Dungeon) and 0..7 (Town) match retail PS2 1:1.
+    // Load (icon 5) and Quit (icon 12) sit at the bottom of the ring.
+    constexpr s16 kCustomDrawTbl[2][10] = {
+        {0, 1, 2, 3, 7, 4, 6, 5, 12,  0}, // Dungeon: Item, Weapon, Allies, Georama, Move, Options, Journal, Load, Quit
+        {0, 1, 2, 3, 8, 5, 4, 6,  5, 12}  // Town:    Item, Weapon, Allies, Georama, Move, Save, Options, Journal, Load, Quit
     };
 
     const int icon_count = GetMenuModeMax();
@@ -302,17 +302,54 @@ void BtlMenuMekeIconInfo(int *icons, int /*menu_mode*/) {
     }
 }
 
-void GetSafeIconPos(int index, float& out_x, float& out_y) {
+void GetMainRingIconTarget(int index, float& out_x, float& out_y) {
+    const int count    = GetMenuModeMax();
+    const int stride_y = (count >= 10) ? 37 : 40;
+    const int start_y  = (count >= 10) ? 46 : 54;
+
     const int next     = index + 1;
     int       target_x = next * 16 + 80;
-    const int target_y = index * 40 + 54;
+    const int target_y = index * stride_y + start_y;
     if (next > 4) {
         target_x -= ((index - 4) << 5) + 16;
     }
+    if (target_x < 32) {
+        target_x = 32;
+    }
 
-    const float slide_dx = NorMenuIcon[0].x - 96.0f;
-    out_x = static_cast<float>(target_x) + slide_dx;
+    out_x = static_cast<float>(target_x);
     out_y = static_cast<float>(target_y);
+}
+
+void GetSafeIconPos(int index, float& out_x, float& out_y) {
+    const int  menu_flag    = BattleMenuFlag;
+    const bool in_main_ring = (menu_flag == BTLMENU_STATE_MAIN ||
+                               menu_flag == BTLMENU_STATE_APPEAR ||
+                               menu_flag == BTLMENU_STATE_EXIT);
+
+    // 1. When inside a submenu (or opening/closing a submenu), retail PS2's BattleMenuStep
+    //    animates NorMenuIcon[index].x and .y directly:
+    //    - For Item (0), Georama (3), Save (5), and Manual (6/7), retail slides NorMenuIcon[index]
+    //      to the top-left header position (16, 36).
+    //    - For Weapon (1), Allies (2), Move/World Map (4), and Options, retail slides NorMenuIcon[index]
+    //      off-screen to the left (x < -100) so it does NOT cover the submenu UI!
+    if (!in_main_ring) {
+        if (index >= 0 && index < 8) {
+            out_x = NorMenuIcon[index].x;
+            out_y = NorMenuIcon[index].y;
+        } else {
+            out_x = -200.0f;
+            out_y = -200.0f;
+        }
+        return;
+    }
+
+    // 2. Main Battle Menu ring (with horizontal appear/exit slide from NorMenuIcon[0])
+    float base_x = 0.0f, base_y = 0.0f;
+    GetMainRingIconTarget(index, base_x, base_y);
+    const float slide_dx = NorMenuIcon[0].x - 96.0f;
+    out_x = base_x + slide_dx;
+    out_y = base_y;
 }
 
 struct HelpSpec {
@@ -321,6 +358,31 @@ struct HelpSpec {
     const char* desc_key;
     const char* desc_def;
 };
+
+void GetLocalizedLoadStrings(std::string& out_title, std::string& out_desc) {
+    switch (GetMenuLangFlag()) {
+        case LANG_FRENCH:
+            out_title = "\"Charger\"";
+            out_desc  = "Charger une partie\nenregistrée.";
+            break;
+        case LANG_GERMAN:
+            out_title = "\"Laden\"";
+            out_desc  = "Gespeicherten Spielstand\nladen.";
+            break;
+        case LANG_ITALIAN:
+            out_title = "\"Carica\"";
+            out_desc  = "Carica i dati di\ngioco salvati.";
+            break;
+        case LANG_SPANISH:
+            out_title = "\"Cargar\"";
+            out_desc  = "Carga los datos de\nla partida guardada.";
+            break;
+        default:
+            out_title = "\"Load\"";
+            out_desc  = "Load saved game\nprogress.";
+            break;
+    }
+}
 
 void GetBattleMenuHelpData(int index, int mode, std::string& out_title, std::string& out_desc) {
     out_title.clear();
@@ -370,12 +432,20 @@ void GetBattleMenuHelpData(int index, int mode, std::string& out_title, std::str
     } else if (mode == BATTLE_MENU_MODE_DUNGEON) {
         if (index == 5)      spec = &kOptionSpec;
         else if (index == 6) spec = &kJournalSpec;
-        else if (index == 7) spec = &kQuitSpec;
+        else if (index == 7) {
+            GetLocalizedLoadStrings(out_title, out_desc);
+            return;
+        }
+        else if (index == 8) spec = &kQuitSpec;
     } else {
         if (index == 5)      spec = &kSaveSpec;
         else if (index == 6) spec = &kOptionSpec;
         else if (index == 7) spec = &kJournalSpec;
-        else if (index == 8) spec = &kQuitSpec;
+        else if (index == 8) {
+            GetLocalizedLoadStrings(out_title, out_desc);
+            return;
+        }
+        else if (index == 9) spec = &kQuitSpec;
     }
 
     if (spec != nullptr) {
@@ -403,22 +473,39 @@ void DrawBtlMenuBar() {
 
     NowGetGameFlagForBtlMenu(BtlMenuMode);
     const int icon_count = GetMenuModeMax();
-    int       icons[9]   = {};
+    int       icons[10]  = {};
     BtlMenuMekeIconInfo(icons, BtlMenuMode);
+
+    setbilinear(0);
+    MenuTextureReload(BtlMenuReadBlock);
+
+    const int  menu_flag    = BattleMenuFlag;
+    const bool in_main_ring = (menu_flag == BTLMENU_STATE_MAIN ||
+                               menu_flag == BTLMENU_STATE_APPEAR ||
+                               menu_flag == BTLMENU_STATE_EXIT);
+
+    // In LOAD mode, retail's DrawMenuSave already renders the oval icon + "LOAD" at (16, 36).
+    if (!in_main_ring &&
+        (menu_flag == BTLMENU_STATE_SAVE || menu_flag == BTLMENU_STATE_SAVE_OPEN || menu_flag == BTLMENU_STATE_SAVE_CLOSE) &&
+        SaveMenu.access_kind == SAVE_ACCESS_LOAD) {
+        return;
+    }
 
     for (int i = 0; i < icon_count; i++) {
         int       icon_alpha = alpha;
         const int brightness = (MenuWarningMsgFlag != 0) ? 64 : 128;
-        const int menu_flag  = BattleMenuFlag;
 
-        if (menu_flag != BTLMENU_STATE_MAIN && menu_flag != BTLMENU_STATE_APPEAR && menu_flag != BTLMENU_STATE_EXIT) {
-            if (i != MenuSelect[1]) {
-                continue;
-            }
+        if (!in_main_ring && i != MenuSelect[1]) {
+            continue;
         }
 
         float icon_x = 0.0f, icon_y = 0.0f;
         GetSafeIconPos(i, icon_x, icon_y);
+
+        // Skip drawing if retail slid this icon off-screen (e.g. Weapon, Allies, Move, Options)
+        if (icon_x < -120.0f) {
+            continue;
+        }
 
         int selected = 0;
         int x        = static_cast<int>(icon_x);
@@ -432,6 +519,8 @@ void DrawBtlMenuBar() {
         }
 
         if (icons[i] >= 0) {
+            setbilinear(0);
+            MenuTextureReload(BtlMenuReadBlock);
             caption::SetNextCaptionText(GetBattleMenuCaption(i, BtlMenuMode));
             DrawMainMenuIcon(x, y, icons[i], selected, brightness, icon_alpha);
         }
@@ -443,7 +532,7 @@ void DrawBattleMainOverlay() {
         return;
     }
 
-    int icons[9] = {};
+    int icons[10] = {};
     BtlMenuMekeIconInfo(icons, BtlMenuMode);
     MENU_ICON_INFO *info = GetMenuIconInfo(icons[MenuSelect[1]]);
 
@@ -456,6 +545,8 @@ void DrawBattleMainOverlay() {
     float icon_x = 0.0f, icon_y = 0.0f;
     GetSafeIconPos(MenuSelect[1], icon_x, icon_y);
 
+    setbilinear(0);
+    MenuTextureReload(BtlMenuReadBlock);
     DrawMenuWaku(icon_x - 18.0f, icon_y - 8.0f, width, 0x22, 0, StayTex, 0x80);
     DrawMenuObjectVibe(static_cast<int>(SysCur[0]), static_cast<int>(SysCur[1]), 1, 0x40);
 }
@@ -602,7 +693,7 @@ PORT_OVERRIDE void DrawWepVolumeDisplay(int x, int y, WEAPON_HAVE *weapon, int a
                            240, 200, 55, 0.64f, alpha, 18, 34, 88);
     }
 
-    // 2. Stat Labels ("At", "Ed", "Sp", "Mp") & Outlined Status Numbers (At = Green, Sp = Blue)
+    // 2. Stat Labels ("At", "Ed", "Sp", "Mp") & Outlined Status Numbers
     int values[4] = {total.attack, total.endurance, total.speed, total.magic};
     const float rate = GetNowWeaponRate(&total);
     int limit[4] = {
@@ -658,7 +749,6 @@ PORT_OVERRIDE void DrawWeaponSelectDialog(int x, int y, int alpha) {
     constexpr int kBtnH      = 23;
     constexpr int kRowStride = 0x1A;
 
-    // Weapon Menu action buttons explicitly use the Thin, taller font (ButtonStyle::Thin)
     UI::BevelButton::Draw(
         UI::Rect(left, top + 1, kBtnW, kBtnH),
         LocalizeText("weaponmenu.action.equip", "EQUIP"),
@@ -769,7 +859,6 @@ PORT_OVERRIDE void RepairAndLevelUpDraw(int x, int y, int alpha) {
 
         UI::ItemIcon::Draw(item_no, x + 6, row_y, 26, alpha, true, false);
 
-        MenuTextureReload(0x1A);
         std::string item_name = DecodeItemNamePort(item_no, LocalizeText(kKeys[i], kDefs[i]));
         for (char& ch : item_name) {
             if (ch == '\n' || ch == '\r') ch = ' ';
@@ -805,7 +894,6 @@ PORT_OVERRIDE void DrawBuildUpWeaponSelect(int x, int y, int cursor) {
         header = LocalizeText("weaponmenu.buildup.prompt", "Select weapon to build up to:");
     }
 
-    MenuTextureReload(0x1A);
     std::vector<std::string> h_lines = UI::WrapText(header, 220, 0.86f);
     const int header_h = std::max(1, static_cast<int>(h_lines.size())) * 20 + 14;
     const int box_w    = 252;
@@ -813,7 +901,6 @@ PORT_OVERRIDE void DrawBuildUpWeaponSelect(int x, int y, int cursor) {
 
     UI::HelpBox::Draw(x - 14, y - 12, box_w, box_h, 0x80);
 
-    MenuTextureReload(0x1A);
     for (size_t i = 0; i < h_lines.size(); ++i) {
         UI::Label(h_lines[i], UI::ColorWhite, UI::Alignment::Left, true, 0.86f)
             .Draw(x + 4, y + static_cast<int>(i) * 20, 0x80);
@@ -1498,15 +1585,11 @@ PORT_OVERRIDE void WeaponMenuDraw() {
 // =============================================================================
 
 PORT_OVERRIDE void DrawBattleMain() {
-    int next  = MenuSelect[1] + 1;
-    int pos_x = next * 16 + 80;
-    int pos_y = MenuSelect[1] * 40 + 54;
-    if (next > 4) {
-        pos_x -= ((MenuSelect[1] - 4) << 5) + 16;
-    }
+    float pos_x = 0.0f, pos_y = 0.0f;
+    GetMainRingIconTarget(MenuSelect[1], pos_x, pos_y);
 
-    SysCur[0] += (static_cast<float>(pos_x - 0x2C) - SysCur[0]) / 4.0f;
-    SysCur[1] += (static_cast<float>(pos_y) - SysCur[1]) / 4.0f;
+    SysCur[0] += ((pos_x - 44.0f) - SysCur[0]) / 4.0f;
+    SysCur[1] += (pos_y - SysCur[1]) / 4.0f;
 
     BtlWakuMake2              = 1;
     CommonMenuMes2.mes_made   = -1;
@@ -1559,44 +1642,58 @@ PORT_OVERRIDE void BattleMenuDraw() {
         case BTLMENU_STATE_CHARA_OPEN:
         case BTLMENU_STATE_CHARA_CLOSE:
         case BTLMENU_STATE_UNK_1A:
+            setbilinear(0);
             DrawCharaSelect();
+            setbilinear(0);
             break;
         case BTLMENU_STATE_WEAPON:
         case BTLMENU_STATE_WEAPON_OPEN:
         case BTLMENU_STATE_WEAPON_CLOSE:
+            setbilinear(0);
             WeaponMenuDraw();
+            setbilinear(0);
             break;
         case BTLMENU_STATE_ITEM:
         case BTLMENU_STATE_ITEM_OPEN:
         case BTLMENU_STATE_ITEM_CLOSE:
+            setbilinear(0);
             ItemMenuModeDraw();
+            setbilinear(0);
             break;
         case BTLMENU_STATE_ATLA:
         case BTLMENU_STATE_ATLA_OPEN:
         case BTLMENU_STATE_ATLA_CLOSE:
+            setbilinear(0);
             DrawMenuAtoraSelect();
+            setbilinear(0);
             break;
         case BTLMENU_STATE_MOVE:
         case BTLMENU_STATE_MOVE_OPEN:
         case BTLMENU_STATE_MOVE_CLOSE:
+            setbilinear(0);
             DrawMenuMove();
+            setbilinear(0);
             break;
         case BTLMENU_STATE_OPTION:
         case BTLMENU_STATE_OPTION_OPEN:
         case BTLMENU_STATE_OPTION_CLOSE:
+            setbilinear(0);
             DrawMenuOption();
             setbilinear(0);
             break;
         case BTLMENU_STATE_SAVE:
         case BTLMENU_STATE_SAVE_OPEN:
         case BTLMENU_STATE_SAVE_CLOSE:
+            setbilinear(0);
             DrawMenuSave(g_frame_image_name);
             setbilinear(0);
             break;
         case BTLMENU_STATE_MANUAL:
         case BTLMENU_STATE_MANUAL_OPEN:
         case BTLMENU_STATE_MANUAL_CLOSE:
+            setbilinear(0);
             MenuManualDraw();
+            setbilinear(0);
             break;
     }
 
@@ -1614,7 +1711,7 @@ PORT_OVERRIDE void BattleMenuDraw() {
     int text_x = 0, text_y = 0;
     GetMainMenuRightHelpMsgLangOffset(text_x, text_y);
 
-    if (BtlMenuReadEndFlag != 0 && draw_help != 0 && BattleMenuFlag == BTLMENU_STATE_MAIN &&
+    if (BtlMenuReadEndFlag != 0 && draw_help != 0 &&
         BtlHelpWinAlpha > 0 && !s_quit_confirm_active) {
         std::string title, desc;
         GetBattleMenuHelpData(MenuSelect[1], BtlMenuMode, title, desc);
@@ -1622,17 +1719,6 @@ PORT_OVERRIDE void BattleMenuDraw() {
         constexpr int box_w = 276;
         const int     box_x = (HelpWinHead[0] > 0) ? static_cast<int>(HelpWinHead[0]) : (640 - box_w - 20);
         UI::HelpBox::DrawTitled(box_x, 452, box_w, text_x, title, desc, BtlHelpWinAlpha);
-    } else if (BtlMenuReadEndFlag != 0 && draw_help != 0 && BattleMenuFlag != BTLMENU_STATE_MAIN &&
-               BtlHelpWinAlpha > 0) {
-        MenuHelpWinDraw(static_cast<int>(HelpWinHead[0]), static_cast<int>(HelpWinHead[1]),
-                        BtlHelpWinW, BtlHelpWinH, BtlHelpWinAlpha);
-        MenuTextureReload(CommonMenuMes2.tex_block);
-        CommonMenuMes2.text_x     = static_cast<int>(HelpWinHead[0] + text_x);
-        CommonMenuMes2.text_y     = static_cast<int>(HelpWinHead[1] + text_y);
-        CommonMenuMes2.stay_frame = false;
-        CommonMenuMes2.edge_alpha = BtlHelpWinAlpha;
-        CommonMenuMes2.Step();
-        CommonMenuMes2.DrawMesWin();
     }
 
     setbilinear(0);
@@ -1657,7 +1743,7 @@ PORT_OVERRIDE void BattleMenuDraw() {
         AllFadeForMenu(std::min(0x80, static_cast<int>(3.0f * BtlEffectCt)));
     }
 
-    setbilinear(1);
+    setbilinear(0);
 }
 
 PORT_OVERRIDE int BattleMenuSelect() {
@@ -1703,9 +1789,13 @@ PORT_OVERRIDE int BattleMenuSelect() {
     }
 
     if (GamePad.Down(PAD_CROSS)) {
-        constexpr int kPages[2][9] = {
-            {BTLMENU_PAGE_ITEM, BTLMENU_PAGE_WEAPON, BTLMENU_PAGE_CHARA, BTLMENU_PAGE_ATLA, BTLMENU_PAGE_MOVE, BTLMENU_PAGE_OPTION, BTLMENU_PAGE_MANUAL, BTLMENU_PAGE_QUIT, BTLMENU_PAGE_NONE},
-            {BTLMENU_PAGE_ITEM, BTLMENU_PAGE_WEAPON, BTLMENU_PAGE_CHARA, BTLMENU_PAGE_ATLA, BTLMENU_PAGE_MOVE, BTLMENU_PAGE_SAVE,   BTLMENU_PAGE_OPTION, BTLMENU_PAGE_MANUAL, BTLMENU_PAGE_QUIT}
+        constexpr int kPages[2][10] = {
+            // Dungeon (9 items: 0..6 match retail, 7 = Load, 8 = Quit)
+            {BTLMENU_PAGE_ITEM, BTLMENU_PAGE_WEAPON, BTLMENU_PAGE_CHARA, BTLMENU_PAGE_ATLA, BTLMENU_PAGE_MOVE,
+             BTLMENU_PAGE_OPTION, BTLMENU_PAGE_MANUAL, BTLMENU_PAGE_LOAD, BTLMENU_PAGE_QUIT, BTLMENU_PAGE_NONE},
+            // Town (10 items: 0..7 match retail, 8 = Load, 9 = Quit)
+            {BTLMENU_PAGE_ITEM, BTLMENU_PAGE_WEAPON, BTLMENU_PAGE_CHARA, BTLMENU_PAGE_ATLA, BTLMENU_PAGE_MOVE,
+             BTLMENU_PAGE_SAVE, BTLMENU_PAGE_OPTION, BTLMENU_PAGE_MANUAL, BTLMENU_PAGE_LOAD, BTLMENU_PAGE_QUIT}
         };
         MenuSelect[0]             = kPages[BtlMenuMode][MenuSelect[1]];
         CommonMenuMes1.stay_frame = false;
@@ -1759,6 +1849,11 @@ PORT_OVERRIDE int BattleMenuSelect() {
             case BTLMENU_PAGE_SAVE:
                 BtlWakuMake2 = 0;
                 InitMenuSave(SAVE_MENU_MODE_SAVE, MenuExtendReadBlock, buffer);
+                break;
+            case BTLMENU_PAGE_LOAD:
+                BtlWakuMake2  = 0;
+                MenuSelect[0] = BTLMENU_PAGE_SAVE;
+                InitMenuSave(SAVE_MENU_MODE_LOAD, MenuExtendReadBlock, buffer);
                 break;
             case BTLMENU_PAGE_MANUAL: {
                 BtlWakuMake2  = 0;

@@ -495,7 +495,6 @@ void BevelButton::Draw(const Rect& box, std::string_view text,
 
     // 3. Recessed / Engraved Button Label
     if (!text.empty()) {
-        MenuTextureReload(0x1A);
         float fitted_xscale  = style.text_xscale;
         const int max_text_w = std::max(16, box.w - 16);
         Label measure_lbl(text, style.text_color, style.align, style.drop_shadow,
@@ -566,7 +565,6 @@ void TextureButton::Draw(const Rect& box, CTexture* texture, const Rect& uv,
     }
 
     if (!text.empty()) {
-        MenuTextureReload(0x1A);
         DrawTextBox(text, box, text_style, alpha);
     }
 }

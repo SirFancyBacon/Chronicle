@@ -414,23 +414,38 @@ bool Draw(int icon, int x, int y, int box_width, int alpha, int bright) {
         pen += (fill.width / mapping.scale_x * tune.xscale + layout.em * 0.1f + tune.letter) * layout.squeeze;
     }
     if (!fills.empty()) {
-        if (!custom_caption) {
-            if (const auto bounds = PaintedBounds(icon); bounds && !edges.empty() && tune.fit >= 0.5f) {
-                float left = edges.front().x, right = left;
-                float top = edges.front().y, bottom = top;
-                for (const gfx::Vertex2D &vertex : edges) {
-                    left = std::min(left, vertex.x);
-                    right = std::max(right, vertex.x);
-                    top = std::min(top, vertex.y);
-                    bottom = std::max(bottom, vertex.y);
-                }
+        if (const auto bounds = PaintedBounds(icon); bounds && !edges.empty() && tune.fit >= 0.5f) {
+            float left = edges.front().x, right = left;
+            float top = edges.front().y, bottom = top;
+            for (const gfx::Vertex2D &vertex : edges) {
+                left = std::min(left, vertex.x);
+                right = std::max(right, vertex.x);
+                top = std::min(top, vertex.y);
+                bottom = std::max(bottom, vertex.y);
+            }
+            const float height = bounds->height * tune.size * tune.yscale;
+            const float sy = height * rows / std::max(1.0f, bottom - top);
+            if (!custom_caption) {
                 const float width = bounds->width * tune.size * tune.xscale;
-                const float height = bounds->height * tune.size * tune.yscale;
-                const float sx = width / (right - left);
-                const float sy = height * rows / (bottom - top);
+                const float sx = width / std::max(1.0f, right - left);
                 for (auto *layer : {&edges, &fills}) {
                     for (gfx::Vertex2D &vertex : *layer) {
                         vertex.x = x + bounds->left + (bounds->width - width) / 2 + tune.dx + (vertex.x - left) * sx;
+                        vertex.y = (y + bounds->top + tune.dy) * rows + (vertex.y - top) * sy;
+                    }
+                }
+            } else {
+                // For custom captions (e.g. "LOAD", "JOURNAL", "QUIT GAME"), match the vanilla
+                // painted vertical height (bounds->height) and top offset (bounds->top), and scale
+                // width proportionally so the letters have the exact same size & weight as vanilla.
+                const float natural_h = std::max(1.0f, (bottom - top) / rows);
+                const float scale_match = (bounds->height / natural_h) * tune.size;
+                const float max_w = std::max(bounds->width, static_cast<float>(box_width));
+                const float target_w = std::min(max_w, (right - left) * scale_match * tune.xscale);
+                const float sx = target_w / std::max(1.0f, right - left);
+                for (auto *layer : {&edges, &fills}) {
+                    for (gfx::Vertex2D &vertex : *layer) {
+                        vertex.x = x + bounds->left + tune.dx + (vertex.x - left) * sx;
                         vertex.y = (y + bounds->top + tune.dy) * rows + (vertex.y - top) * sy;
                     }
                 }

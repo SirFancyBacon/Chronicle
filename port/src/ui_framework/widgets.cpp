@@ -244,4 +244,60 @@ void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
     }
 }
 
+void MenuHeader::Draw(MenuIconKind icon, std::string_view title,
+                      int x, int y, int alpha,
+                      const MenuHeaderStyle& style) {
+    if (alpha <= 0) return;
+
+    // 1. Draw the oval badge icon from btlmenu
+    setbilinear(0);
+    MenuTextureReload(BtlMenuReadBlock);
+    if (CTexture* btl_tex = detail::FindMenuTexture("btlmenu")) {
+        // In the btlmenu atlas, the 64x40 oval command icons are stacked in a 2-column grid
+        // (Save's memory card icon is slot 8; Load reuses slot 8).
+        int slot = static_cast<int>(icon);
+        if (icon == MenuIconKind::Load) {
+            slot = static_cast<int>(MenuIconKind::Save);
+        } else if (icon == MenuIconKind::Quit) {
+            slot = static_cast<int>(MenuIconKind::Option);
+        }
+
+        // Standard btlmenu oval icon UVs (64x40 cells starting at U=0, V=0, 5 rows per column)
+        const int col = slot / 5;
+        const int row = slot % 5;
+        const int u   = col * 64;
+        const int v   = row * 40;
+
+        CRect_i_ src(u, v, 64, 40);
+        CRect_i_ dst(x, y, 64, 40);
+        DrawMenu2DSprite(btl_tex, dst, src, alpha);
+    }
+
+    // 2. Draw the crisp TrueType header title to the right of the oval badge
+    if (!title.empty()) {
+        TextStyle txt_style{
+            .drop_shadow    = true,
+            .align          = Alignment::Left,
+            .scale          = style.scale,
+            .xscale         = style.xscale,
+            .yscale         = style.yscale,
+            .weight         = FontWeight::Bold,
+            .use_custom_rgb = true,
+            .fill_r         = style.fill_r,
+            .fill_g         = style.fill_g,
+            .fill_b         = style.fill_b,
+            .outline_width  = style.outline_width,
+            .outline_r      = style.outline_r,
+            .outline_g      = style.outline_g,
+            .outline_b      = style.outline_b,
+            .raised_bevel   = style.raised_bevel,
+            .bevel_r        = style.bevel_r,
+            .bevel_g        = style.bevel_g,
+            .bevel_b        = style.bevel_b
+        };
+        Label lbl(title, txt_style);
+        lbl.Draw(x + 76, y + 10, alpha);
+    }
+}
+
 } // namespace UI
