@@ -1,65 +1,194 @@
-# UI Framework (`port/src/ui_framework.{hpp,cpp}`)
+I have updated your **`chronicle-port-dev`** skill (both `SKILL.md` and a new `docs/UI_FRAMEWORK.md` reference inside the skill) with the modular Option B architecture, the 3-slot TrueType font pipeline (`SourceSansProSemibold.ttf`), the recessed/engraved button text rendering, and the raised-bevel/gradient Weapon Status typography.
 
-`UI` is Chronicle's native 2D menu and widget framework in `port/src/ui_framework.hpp` and
-`port/src/ui_framework.cpp`. It provides procedural and retail-backed window surfaces, Godot-style
-container anchoring, artifact-free scaled TrueType text, unified gamepad/mouse list views, callback-driven
-modal dialogs, and deterministic Z-layer ordering in the game's `640x480` logical coordinate space.
+  
 
----
+Below is the complete markdown documentation file (**`docs/UI_FRAMEWORK.md`**) that you can also save directly into your repository's `docs/` folder for your team and other agents:
 
-## 1. Core Principles & Coordinate Space
+  
 
-- **Logical Canvas**: All coordinates are in the game's `640x480` logical 2D space (`UI::Rect::Screen()`).
-  Aspect-ratio adjustments (`video.aspect`) and `video.ui_scale` are applied automatically by the underlying
-  `draw2d` / `gfx::GetUiMapping` pipeline.
-- **Alpha Convention**: Opacity follows the PS2 GS convention where `0x80` (`128`) is full opacity and `0`
-  is fully transparent.
-- **Deterministic Z-Order**: In immediate-mode 2D rendering, elements drawn later appear on top. Always
-  draw backgrounds first, then dividers/recessed troughs, then icons and text, and finally selection
-  brackets (`UI::Brackets`), modals (`UI::DialogBox`), and the pointing hand (`UI::Cursor`)—or use
-  `UI::LayerQueue` (`DeferDraw`) to guarantee ordering automatically.
+Markdown
+
+````
+# Modular UI Framework (`UI::` Namespace)
+
+The native UI framework replaces hard-coded PS2 2D sprite and bitmap draws with a declarative, resolution-independent widget toolkit in the `UI::` namespace.
 
 ---
 
-## 2. Standard Metrics (`UI::Metrics`)
+## 1. Directory & File Architecture
 
-Use `UI::Metrics` constants rather than magic numbers so menus share consistent proportions:
+The UI framework uses a modular Option B layout so each header and implementation unit remains small (~120–340 lines), isolated by responsibility, and fast to compile:
 
-| Constant | Value | Purpose |
+```text
+port/
+├── include/
+│   ├── ui_framework.hpp               # Public umbrella header (#includes all sub-headers below)
+│   └── ui_framework/
+│       ├── types.hpp                  # Palette constants, Metrics, Alignment, FontWeight, Anchor, Rect, ZLayer, LayerQueue
+│       ├── text.hpp                   # TextStyle, Label, WrapText, DrawTextBox, DrawCounter, DrawStatus*
+│       ├── surfaces.hpp               # WindowPreset, TrackerWindow, PaperWindow, HelpBox, Window, TabPlate, Divider, SubWindow
+│       ├── buttons.hpp                # ButtonPreset, ButtonStyle (Thick/Thin + recessed), BevelButton, TextureButton
+│       ├── widgets.hpp                # ItemIcon, Cursor, Brackets, ScrollBar, ProgressBar
+│       └── dialogs.hpp                # DialogOption, DialogStyle, DialogBox, ConfirmModal, ListViewConfig, ListView
+└── src/
+    └── ui_framework/
+        ├── internal.hpp               # Private shared helpers (kBaseCapHeight, ScopedShadow, texture lookups, DrawRoundedRect)
+        ├── surfaces.cpp               # Procedural BlueStone & Paper noise/SDF generator, VRAM cache, windows, banners, dividers
+        ├── text.cpp                   # Label, WrapText, DrawScaledText (recessed, raised bevel, vertical gradient), DrawStatus*
+        ├── buttons.cpp                # BevelButton (Terracotta, AmberGold, StoneGreen + recessed text) & TextureButton
+        ├── widgets.cpp                # ItemIcon, Cursor, Brackets, ScrollBar, ProgressBar
+        └── dialogs.cpp                # LayerQueue, DialogBox, ConfirmModal, ListView
+````
+
+### Build & Header Rules
+
+- **Header Placement**: Keep `ui_framework.hpp` in `port/include/` (never in `port/include/stubs/`, which is strictly reserved for PS2 SDK / Metrowerks shadow headers). Existing translation units can `#include "ui_framework.hpp"` for the full toolkit or include individual sub-headers (e.g. `#include "ui_framework/buttons.hpp"`).
+    
+      
+    
+- **CMake Globbing**: `port/CMakeLists.txt` globs `port/src/**/*.cpp` via `file(GLOB_RECURSE PORT_SOURCES CONFIGURE_DEPENDS ${PORT_DIR}/*.cpp)`. Any `.cpp` file added under `port/src/ui_framework/` is compiled and linked automatically. Private headers inside `port/src/ui_framework/` must use `.hpp` (`internal.hpp`).
+    
+      
+    
+
+## 2. Three-Slot TrueType Font Pipeline (`capfont` & `caption`)
+
+`port/src/captionfont.{hpp,cpp}` and `port/src/caption_text.{hpp,cpp}` manage three TrueType font slots (`g_fonts[3]`), switched via RAII guards calling `capfont::UseFontSlot(int slot)`:
+
+  
+
+|**Slot**|**Font Asset (tools/font/ -> lang/)**|**UI::FontWeight**|**Primary Usage**|
+|---|---|---|---|
+|**Slot 0**|`DarkCloudCompendium.ttf` (`lang/font.ttf`)|`FontWeight::Normal`, `FontWeight::Thin`, `FontWeight::Bold`|Standard game messages, window titles, `YES`/`NO` confirmation buttons, and Weapon Menu action buttons (`EQUIP`, `CUSTOMIZE`, etc.).|
+|**Slot 1**|`DarkCloudCompendiumThin.ttf` (`lang/font_thin.ttf`)|_(Optional thin variant)_|Loaded via `capfont::LoadVariant` when explicitly requested.|
+|**Slot 2**|`SourceSansProSemibold.ttf` (`lang/SourceSansProSemibold.ttf`)|`FontWeight::Status`|Weapon Status UI (`At`, `Ed`, `Sp`, `Mp`, element tags `Fl`/`Ch`/`Th`/`Wi`/`Ho`, and status/bar numbers `12/28`, `67/98`, `22`, `34`, `72`, `13`).|
+
+- **Flatpak & Sandbox Resilience**: `port/CMakeLists.txt` copies and installs `tools/font/SourceSansProSemibold.ttf` into `lang/SourceSansProSemibold.ttf`. In addition, `port/src/caption_text.cpp` embeds `SourceSansProSemibold.ttf` at compile time via C++26 `#embed` (`capfont::LoadStatusFontMemory`) as an automatic fallback.
+    
+      
+    
+
+## 3. Typography & Visual Effects (`ui_framework/text.hpp`)
+
+`UI::TextStyle` and `DrawScaledText` in `port/src/ui_framework/text.cpp` support four specialized visual treatments:
+
+  
+
+### A. Recessed / Engraved Button Text (`recessed = true`)
+
+Used on `BevelButton` (`ButtonStyle::Thick` and `ButtonStyle::Thin`) in place of a traditional drop shadow so text looks stamped/carved into the button surface:
+
+  
+
+1. **Bottom-Right Rim Catch-Light (`+1.0px, +1.0px`)**: Drawn with `recess_light_r/g/b` (`opacity = 0.70f`) where top-left light catches the lower carved edge.
+    
+      
+    
+2. **Top-Left Inner Cast Shadow (`-1.0px, -1.0px`)**: Drawn with `recess_dark_r/g/b` (`edge_width = 0.65f`, `opacity = 0.95f`) inside the upper carved lip.
+    
+      
+    
+3. **Main Stamped Face (`0, 0`)**: Off-white (`236, 230, 218`) with a `0.55f` material-colored inner rim.
+    
+      
+    
+
+|**ButtonPreset**|**recess_dark_r/g/b (Top-Left Shadow)**|**recess_light_r/g/b (Bottom-Right Catch-Light)**|
 |---|---|---|
-| `Metrics::kScreenWidth`, `kScreenHeight` | `640`, `480` | Full logical screen bounds |
-| `Metrics::kScaleButton` | `1.08f` | Standard beveled button label scale (with `xscale = 1.25f`) |
-| `Metrics::kScaleNormal` | `1.00f` | Default unscaled message/category font |
-| `Metrics::kScaleHeader` | `0.92f` | Section headers (`SETTLEMENTS`, `Area Total`, scroll banners) |
-| `Metrics::kScaleBody` | `0.84f` | Dense table rows, counters, and breakdown labels |
-| `Metrics::kScaleSmall` | `0.76f` | Progress bar overlay text and compact captions |
-| `Metrics::kWindowMarginX`, `kWindowMarginY` | `28`, `18` | Standard inner padding from a window's outer edge |
-| `Metrics::kPaneGap` | `16` | Default horizontal/vertical gap between split subwindows |
-| `Metrics::kRowHeight`, `kRowStride` | `22`, `25` | Standard interactive row height and vertical step |
-| `Metrics::kIconSizeSmall`, `kIconSizeStandard` | `20`, `24` | Item icon sizes for dense lists (`20px`) or standard rows (`24px`) |
-| `Metrics::kButtonWidth`, `kButtonHeight`, `kButtonGap` | `100`, `26`, `6` | Standard `BevelButton` dimensions and vertical spacing |
+|`Terracotta`|`82, 36, 18`|`252, 178, 132`|
+|`AmberGold`|`88, 58, 20`|`255, 222, 152`|
+|`StoneGreen`|`28, 76, 62`|`168, 238, 214`|
 
----
+### B. Raised 3D Bevel + Outer Stroke (`raised_bevel = true`)
 
-## 3. Window Surfaces & Presets (`UI::WindowPreset`)
+Used by `UI::DrawStatusNumber` and `UI::DrawStatusSlashPair` to replicate the stock PS2 Weapon Status numbers:
 
-`UI::TrackerWindow::Draw(rect, alpha, preset)` and `UI::Window::Draw(rect, alpha, preset)` render any of the
-four native Dark Cloud surface types:
+  
 
-| Preset | Alias | Appearance & Backing |
-|---|---|---|
-| `WindowPreset::BlueStone` | `UI::BLUE_STONE_MENU` | Georama-style slate-blue mottled stone with 12px 3D pillow bevel, cached per `(w, h)` in VRAM. Optional override PNG: `textures/plates/ui_stone.png`. |
-| `WindowPreset::Paper` | `UI::PAPER_MENU` | Weathered warm parchment (`R:160, G:128, B:90`) with fibrous relief and 12px bevel, cached per `(w, h)` in VRAM. Optional override PNG: `textures/plates/ui_paper.png`. |
-| `WindowPreset::DarkTranslucent` | `UI::DARK_TRANSLUCENT_MENU` | Retail dark translucent help/dialog frame (`MenuHelpWinDraw` / `UI::HelpBox`). |
-| `WindowPreset::Recessed` | — | Shade-masked sunken trough (`TrackerWindow::DrawIndentation`) that darkens the underlying panel and adds a bottom-right catch-light, inheriting the color of whatever stone or paper panel sits beneath it. |
+1. **Pass 1 (`+0.9px, +0.9px`)**: Extruded slate-blue bevel body (`RGB: 108, 134, 192`) + thick dark navy outer stroke (`RGB: 10, 18, 46`, `outline_width = 1.55f`).
+    
+      
+    
+2. **Pass 2 (`0, 0`)**: Cool-white top face (`RGB: 242, 248, 255`) + outer stroke, vertically squished (`yscale = 0.78f`, `xscale = 1.04f`) to match the compact stock bitmap digits.
+    
+      
+    
 
-### Scroll Banners & Recessed Dividers
+### C. Vertical Color Gradients (`vertical_grad = true` via `caption::FillField`)
 
-- **Scroll Title Banner**:
-  ```cpp
-  UI::TrackerWindow::DrawStoneBanner(
-      UI::Rect(150, 74, 340, 28),
-      0x80,
-      0x80,
-      LocalizeText("tracker.title", "JOURNAL: CHEST TRACKER")
-  );
+Used by `UI::DrawStatusText` for Weapon Status abbreviations (`At`, `Ed`, `Sp`, `Mp`) and element labels (`Fl`, `Ch`, `Th`, `Wi`, `Ho`):
+
+  
+
+- Generates a cached 2x16 `caption::FillField` that transitions from a pale cream-white highlight in the top ~35% of the glyph down into the saturated base color in the lower 65%:
+    
+      
+    - **`At` (Attack)**: Mint-Green (`65, 235, 145`) with dark teal stroke (`8, 38, 36`)
+        
+          
+        
+    - **`Ed` (Endurance)**: Warm Gold (`235, 190, 35`) with dark bronze stroke (`38, 32, 10`)
+        
+          
+        
+    - **`Sp` (Speed)**: Seafoam Cyan-Blue (`75, 210, 215`) with dark navy-teal stroke (`8, 36, 46`)
+        
+          
+        
+    - **`Mp` (Magic)**: Rose-Lavender (`225, 145, 215`) with dark plum stroke (`36, 18, 44`)
+        
+          
+        
+- **Note**: `style.weight` must remain `0.0f` whenever `style.field` is active so `caption::DrawLine`'s `textured_letter()` path is used.
+    
+      
+    
+
+### D. Thick vs. Thin Button Presets (`UI::ButtonStyle`)
+
+- **`UI::ButtonStyle::Thick(preset, brightness)`**: Uses `FontWeight::Normal`, `text_scale = 1.08f`, `text_xscale = 1.25f`, `recessed_text = true`. Default for `YES` / `NO` confirmation dialogs (`ConfirmModal`, `DrawWeaponLeftConfirmDialog`).
+    
+      
+    
+- **`UI::ButtonStyle::Thin(preset, brightness)`**: Uses `FontWeight::Thin`, `text_scale = 1.14f`, `text_xscale = 1.06f`, `recessed_text = true`. Used for Weapon Menu action buttons (`EQUIP`, `CUSTOMIZE`, `ATTRIBUTE`, `REPAIR`, `UPGRADE`, `SYNTHESIZE`, `BUILD-UP`, `DISCARD`).
+    
+      
+    
+
+## 4. Surfaces, Buttons & PS2 Texture State Discipline
+
+- **Procedural Surfaces (`surfaces.cpp`)**:
+    
+      
+    - `WindowPreset::BlueStone` and `WindowPreset::Paper` generate periodic 512x512 FBM + soft-ridged noise textures with rounded-box SDF bevels (`GetProceduralWindowTex`), cached in VRAM by `(width, height, preset)` and validated via `PortKeyLive(tbp)`.
+        
+          
+        
+    - Optional PNG overrides can be placed at `textures/plates/ui_stone.png` or `textures/plates/ui_paper.png`.
+        
+          
+        
+    - `TrackerWindow::DrawStoneBanner` renders the 3-slice stone scroll header from `wepstatus` and centers a `UI::ColorGold` title (`scale = 1.14f` in the Weapon Menu).
+        
+          
+        
+- **Custom Texture Button Dimensions (Photoshop Reference)**:
+    
+      
+    - **1x Native (640x480 Logical)**: `96 x 24` px visible button face (`96 x 32` px full UV cell with `4px` shadow margin; `26` px vertical row stride).
+        
+          
+        
+    - **4x 4K Scale (Recommended)**: `384 x 96` px visible button face (`384 x 128` px full UV cell; `104` px vertical row stride).
+        
+          
+        
+- **PS2 Texture State Discipline**:
+    
+      
+    - Always call `setbilinear(0)` and `MenuTextureReload(BtlMenuReadBlock)` (or `BtlMenuExtBlock` under `#ifdef PAL` for `wepstatus`) before drawing paletted PS2 menu sprites (`StayTex`, `DrawMenuWaku`, `WepStatus`, `MenuCharaFace`) so bilinear filtering never bleeds magenta color-key texels.
+        
+          
+        
+    - Call `MenuTextureReload(0x1A)` before drawing `GameText` / `UI::Label` text.
+        

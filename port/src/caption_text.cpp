@@ -23,6 +23,20 @@ namespace caption {
 
 namespace {
 
+#if defined(__has_embed)
+#  if __has_embed("../../tools/font/SourceSansProSemibold.ttf")
+#    define CHRONICLE_HAS_EMBEDDED_STATUS_FONT 1
+alignas(16) constexpr unsigned char kEmbeddedStatusFont[] = {
+#    embed "../../tools/font/SourceSansProSemibold.ttf"
+};
+#  elif __has_embed("../tools/font/SourceSansProSemibold.ttf")
+#    define CHRONICLE_HAS_EMBEDDED_STATUS_FONT 1
+alignas(16) constexpr unsigned char kEmbeddedStatusFont[] = {
+#    embed "../tools/font/SourceSansProSemibold.ttf"
+};
+#  endif
+#endif
+
 struct Entry {
     const char *key;
     const char *english;
@@ -57,6 +71,26 @@ constexpr float kLeastShrink = 0.62f;
 
 std::array<std::optional<CaptionBounds>, kIcons> g_bounds;
 
+std::filesystem::path FindStatusFontPath() {
+    std::filesystem::path p = LocalizeFindFile("SourceSansProSemibold.ttf");
+    if (!p.empty()) return p;
+
+    static const char* kCandidates[] = {
+        "tools/font/SourceSansProSemibold.ttf",
+        "../tools/font/SourceSansProSemibold.ttf",
+        "../../tools/font/SourceSansProSemibold.ttf",
+        "/run/build/chronicle/tools/font/SourceSansProSemibold.ttf",
+        "lang/SourceSansProSemibold.ttf"
+    };
+    for (const char* rel : kCandidates) {
+        std::error_code ec;
+        if (std::filesystem::exists(rel, ec)) {
+            return std::filesystem::path(rel);
+        }
+    }
+    return {};
+}
+
 bool FontReady() {
     if (!ConfigGet().font_sharp) {
         return false;
@@ -69,6 +103,24 @@ bool FontReady() {
             if (!file.empty()) {
                 capfont::Load(file);
             }
+        }
+    }
+    if (capfont::Loaded() && !capfont::StatusFontLoaded()) {
+        static bool tried_status = false;
+        if (!tried_status) {
+            tried_status = true;
+            const std::filesystem::path status_path = FindStatusFontPath();
+            if (!status_path.empty() && capfont::LoadStatusFont(status_path)) {
+                std::fprintf(stderr, "font: status font from %s\n", status_path.string().c_str());
+            }
+#if defined(CHRONICLE_HAS_EMBEDDED_STATUS_FONT)
+            if (!capfont::StatusFontLoaded()) {
+                if (capfont::LoadStatusFontMemory(kEmbeddedStatusFont, sizeof(kEmbeddedStatusFont))) {
+                    std::fprintf(stderr, "font: status font loaded from embedded SourceSansProSemibold.ttf (%zu bytes)\n",
+                                 sizeof(kEmbeddedStatusFont));
+                }
+            }
+#endif
         }
     }
     if (capfont::Loaded() && !capfont::VariantLoaded()) {
@@ -219,6 +271,10 @@ bool Ready() {
 
 bool ThinReady() {
     return FontReady() && capfont::VariantLoaded();
+}
+
+bool StatusReady() {
+    return FontReady() && capfont::StatusFontLoaded();
 }
 
 void PreparePainted(const char *name, const PortDecodedTexture &texture) {
@@ -421,10 +477,10 @@ bool DrawLine(std::string_view utf8, float center_x, float cap_top, float cap_he
     }
 
     struct Variant {
-        explicit Variant(bool on) { capfont::UseVariant(on); }
+        explicit Variant(int slot) { capfont::UseFontSlot(slot); }
 
-        ~Variant() { capfont::UseVariant(false); }
-    } variant(style.thin);
+        ~Variant() { capfont::UseFontSlot(0); }
+    } variant(style.status_font ? 2 : (style.thin ? 1 : 0));
 
     const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
     const capfont::Metrics    metrics = capfont::GetMetrics();
@@ -616,7 +672,7 @@ bool DrawLine(std::string_view utf8, float center_x, float cap_top, float cap_he
             const float half = style.weight / 2;
             quad(fills, letter.fill, letter.fill, pen, style.fill, 0x80, -half, 0.0f);
             quad(fills, letter.fill, letter.fill, pen, style.fill, 0x80, half, 0.0f);
-            quad(fills, letter.fill, letter.fill, pen, style.fill, 0x80, 0.0f, -half);
+            quad(fills, letter.fill, letter.fill, pen, style.fill, 0.0f, -half);
             quad(fills, letter.fill, letter.fill, pen, style.fill, 0x80, 0.0f, half);
         }
         {
