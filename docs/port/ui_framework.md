@@ -192,3 +192,21 @@ Used by `UI::DrawStatusText` for Weapon Status abbreviations (`At`, `Ed`, `Sp`, 
         
     - Call `MenuTextureReload(0x1A)` before drawing `GameText` / `UI::Label` text.
         
+
+
+
+## 5. Battle Menu Ring, In-Game Save/Load & 2D Sprite Clamping
+
+* **Custom Ring Captions & Selection Brackets (`port/src/caption_text.cpp`, `port/src/battlemenu/main_ring.cpp`)**:
+  * All Battle Menu ring captions preserve retail's baseline sizing (`kEm = 25.0f`, `kOutlineWidth = 1.6f`, `kLeastShrink = 0.62f`).
+  * Because icon `5` (`SAVE`) has a 4-letter painted `label_width` of `56px` in `MENU_ICON_INFO`, `caption::Draw` expands `effective_box_w` to `124.0f` (matching icon `12`, `QUIT GAME`) exclusively when `custom_caption && icon == 5` contains `'/'` (`"SAVE/LOAD"`).
+  * `DrawBattleMainOverlay()` in `port/src/battlemenu/main_ring.cpp` widens `DrawMenuWaku` on Town row `5` (`SAVE/LOAD`) using a `1.32f` caption-to-message width ratio and floors it to `GetMenuIconInfo(12)->label_width + 0x4A` so the animated yellow selection brackets frame `"SAVE/LOAD"` cleanly.
+* **In-Game Save/Load Modal & Town Reload (`port/src/battlemenu/main_ring.cpp`, `port/src/gameloop.cpp`)**:
+  * Selecting `SAVE/LOAD` in the Town Battle Menu opens a two-button `UI::ConfirmModal` (`SAVE` on top, `LOAD` on bottom).
+  * Choosing `LOAD` invokes `InitMenuSave(SAVE_MENU_MODE_LOAD, MenuExtendReadBlock, buffer)` and sets `s_ingame_load_active = true`.
+  * When `McAccess.LoadFromMc` finishes reading a slot into `SaveData`, `MenuSaveKey()` sets `SaveMenu.loaded = true` and `SaveMenu.key_no = SAVE_KEY_FADE_OUT`, causing `BattleMenuSaveKey()` to slide the icon back and transition directly to `BTLMENU_STATE_MAIN` (skipping `BTLMENU_STATE_SAVE_CLOSE`).
+  * `StepInGameLoadMonitor()` checks `SaveMenu.loaded != 0` *before* checking `BattleMenuFlag == BTLMENU_STATE_MAIN`. Once the close transition completes, it calls `ExitBattleMenu(1)` and sets `NextMapNo = 9999` and `BattleMenuFlag = 0`.
+  * In `port/src/gameloop.cpp`, `NextMapNo == 9999 && BattleMenuFlag == 0` extracts the loaded save's `map_no` (`SaveData + 0x1C8`), sets `MapNo = loaded_map`, `LocalMapNo = MapNo`, and `OldMapNo = -1`, and invokes `GameApplyLoopResult(GAME_MODE_TITLE, 2)` (`main_select_menu_no = 1`, `main_select_param = "e01"`) so `EditInit(nullptr)` performs a full Title-style town reload.
+* **1:1 Atlas Bleed Clamping (`port/src/menu_draw.cpp`)**:
+  * Retail PS2 2D menu calls frequently specify `texel.height` 1 or 2 texels taller than `screen.height` on 1:1 sprites (e.g., Georama plates `0x100x0x78` sampled from `0x100x0x79` in `Sozai`, and sockets `0x24x0x24` sampled from `0x24x0x25` in `HoleGray`/`HoleGold`).
+  * At scaled PC resolutions, those extra texels sample the top row of the adjacent sprite below in the atlas. `DrawMenu2DSprite` clamps `texel.height = screen.height` whenever `texel.width == screen.width` and `texel.height` exceeds `screen.height` by 1–2 texels, and trims the completed gold Georama plate (`u = 0, v = 0x78, 0x100x0x78` in `Sozai`) to `0x77` (`119px`) so the orange gauge cap at row `239` (`0xEF`) does not bleed beneath the bottom-right border.
