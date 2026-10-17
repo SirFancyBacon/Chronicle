@@ -5,16 +5,26 @@ namespace {
 using btlmenu_detail::DecodeMesFromBuffer;
 using btlmenu_detail::RefreshBtlMenuTextures;
 
-UI::Cursor s_move_cursor;
-int        s_last_move_state = -1;
+/**
+ * Animated hand cursor for the move confirmation modal.
+ */
+UI::Cursor move_cursor;
 
-void ExtractMovePromptText(std::string& out_title, std::string& out_desc) {
+/**
+ * Previous move menu state used to detect when the modal opens.
+ */
+int last_move_state = -1;
+
+/**
+ * Extracts the title and description lines for the active move confirmation prompt.
+ */
+void ExtractMovePromptText(std::string &out_title, std::string &out_desc) {
     out_title.clear();
     out_desc.clear();
 
     if (CommonMenuMes3.buff != nullptr && CommonMenuMes3.mes_made > 0) {
-        std::string decoded = DecodeMesFromBuffer(CommonMenuMes3.buff, CommonMenuMes3.mes_made);
-        const size_t nl     = decoded.find('\n');
+        const std::string decoded = DecodeMesFromBuffer(CommonMenuMes3.buff, CommonMenuMes3.mes_made);
+        const size_t      nl      = decoded.find('\n');
         if (nl != std::string::npos) {
             out_title = decoded.substr(0, nl);
             out_desc  = decoded.substr(nl + 1);
@@ -60,35 +70,31 @@ PORT_OVERRIDE void DrawMenuMove() {
     alpha = std::clamp(alpha, 0, 0x80);
 
     if (MenuMove.mode == MENU_MOVE_FIRST_DUNGEON ||
-        MenuMove.mode == MENU_MOVE_INTERIOR_OUT  ||
+        MenuMove.mode == MENU_MOVE_INTERIOR_OUT ||
         MenuMove.mode == MENU_MOVE_DUNGEON_ESCAPE) {
-
         if (MenuMove.mode == MENU_MOVE_DUNGEON_ESCAPE) {
-#ifdef PAL
             DrawEscapeItem(0x32, 0x160, alpha);
-#else
-            DrawEscapeItem(0x32, 0x140, alpha);
-#endif
         }
 
-        if (s_last_move_state != MenuMove.state && MenuMove.state == MENU_MOVE_STATE_OPEN) {
-            const int btn_x  = (640 - 100) / 2;
-            const int btn_y0 = 164 + 58 + 10;
-            const int sel_y  = (MenuMove.cursor == 0) ? btn_y0 : (btn_y0 + 26 + 6);
-            s_move_cursor.SnapTo(static_cast<float>(btn_x - 34), static_cast<float>(sel_y + 3));
+        if (last_move_state != MenuMove.state && MenuMove.state == MENU_MOVE_STATE_OPEN) {
+            constexpr int btn_x  = (640 - 100) / 2;
+            constexpr int btn_y0 = 164 + 58 + 10;
+            const int     sel_y  = (MenuMove.cursor == 0) ? btn_y0 : (btn_y0 + 26 + 6);
+            move_cursor.SnapTo(static_cast<float>(btn_x - 34), static_cast<float>(sel_y + 3));
         }
-        s_last_move_state = MenuMove.state;
+        last_move_state = MenuMove.state;
 
-        std::string prompt_title, prompt_desc;
+        std::string prompt_title;
+        std::string prompt_desc;
         ExtractMovePromptText(prompt_title, prompt_desc);
 
         UI::ConfirmModal::Draw(
             prompt_title,
             prompt_desc,
             LocalizeText("battlemenu.quit.yes", "YES"),
-            LocalizeText("battlemenu.quit.no",  "NO"),
+            LocalizeText("battlemenu.quit.no", "NO"),
             MenuMove.cursor,
-            s_move_cursor,
+            move_cursor,
             alpha
         );
 
@@ -104,15 +110,15 @@ PORT_OVERRIDE void DrawMenuMove() {
         return;
     }
 
-    int x = 0;
-    int y = 0;
+    int            x    = 0;
+    int            y    = 0;
     WORLD_MAP_POS *next = reinterpret_cast<WORLD_MAP_POS *>(NextWorldPos);
     if (next != nullptr) {
         x = next->x;
         y = next->y;
     } else {
-        x = 0x150;
-        y = 0xB2;
+        x         = 0x150;
+        y         = 0xB2;
         SysCur[0] = static_cast<float>(x);
         SysCur[1] = static_cast<float>(y);
     }
@@ -138,7 +144,7 @@ PORT_OVERRIDE void DrawMenuMove() {
     }
     CommonMenuMes3.stay_frame = false;
 
-    const float width = static_cast<float>(CommonMenuMes3.GetMesWidth_system(CommonMenuMes3.mes_no[0]));
+    const float width     = static_cast<float>(CommonMenuMes3.GetMesWidth_system(CommonMenuMes3.mes_no[0]));
     CommonMenuMes3.text_x = static_cast<int>(static_cast<double>(x) - static_cast<double>(width) / 2.0);
     CommonMenuMes3.text_y = y - 0x22;
 
@@ -148,11 +154,7 @@ PORT_OVERRIDE void DrawMenuMove() {
     if (MenuMove.state == MENU_MOVE_STATE_SELECT) {
         MenuTextureReload(MenuMove.tex_block);
         DrawMapCheck(0x80);
-#ifdef PAL
-        CRect_i_ texel(0xE2, 0, 0x1E, 0x20);
-#else
-        CRect_i_ texel(0xE0, 0, 0x20, 0x20);
-#endif
+        const CRect_i_ texel(0xE2, 0, 0x1E, 0x20);
         DrawObjectVibe(x + 2, y + 2, MenuMoveTex, texel, 0xA, 0x50);
         DrawObjectVibe(x, y, MenuMoveTex, texel, 0x80, 0x80);
         CommonMenuMes3.stay_frame = false;
@@ -175,7 +177,10 @@ PORT_OVERRIDE void DrawMenuMove() {
     }
 
     if (MenuMove.state == MENU_MOVE_STATE_CONFIRM) {
-        float win_x = 0.0f, win_y = 0.0f, win_w = 0.0f, win_h = 0.0f;
+        float win_x = 0.0f;
+        float win_y = 0.0f;
+        float win_w = 0.0f;
+        float win_h = 0.0f;
         GetMainMenuRightHelpWinLangOffset(win_x, win_y, win_w, win_h);
         if (GetMenuLangFlag() > LANG_JAPANESE) {
             win_x -= 12.0f;
@@ -183,7 +188,8 @@ PORT_OVERRIDE void DrawMenuMove() {
         }
         MenuHelpWinDraw(static_cast<int>(win_x), static_cast<int>(win_y), win_w, win_h, 0x80);
 
-        int text_x = 0, text_y = 0;
+        int text_x = 0;
+        int text_y = 0;
         GetMainMenuRightHelpMsgLangOffset(text_x, text_y);
         CommonMenuMes2.text_x = static_cast<int>(win_x + static_cast<float>(text_x));
         CommonMenuMes2.text_y = static_cast<int>(win_y + static_cast<float>(text_y));
@@ -193,14 +199,7 @@ PORT_OVERRIDE void DrawMenuMove() {
 
     if (MenuMove.mode == MENU_MOVE_WORLD_MAP_DIRECT) {
         MenuTextureReload(MenuMove.tex_block);
-        int title_w = 0xD8;
-        if (GetMenuLangFlag() > LANG_JAPANESE) {
-#ifdef PAL
-            title_w = 0xE0;
-#else
-            title_w = 0xDE;
-#endif
-        }
+        const int title_w = (GetMenuLangFlag() > LANG_JAPANESE) ? 0xE0 : 0xD8;
         DrawMenu2DSprite(MenuMoveTex, CRect_i_(0x3C, 0x28, title_w, 0x28), CRect_i_(0, 0, title_w, 0x28), 0x80);
     }
 

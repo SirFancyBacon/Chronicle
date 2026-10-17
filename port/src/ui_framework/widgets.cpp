@@ -8,40 +8,65 @@
 
 namespace UI {
 
+namespace {
+
+/**
+ * Gradation color table indices used by progress bars.
+ */
+enum class ProgressGradation : int {
+    Active   = 3,
+    Complete = 4,
+};
+
+} // namespace
+
 void ItemIcon::DrawSocket(int x, int y, int size, bool filled, int alpha) {
-    CTexture* wep_tex = detail::GetWepStatusTex();
-    if (wep_tex == nullptr || size <= 0) return;
+    CTexture *wep_tex = detail::GetWepStatusTex();
+    if (wep_tex == nullptr || size <= 0) {
+        return;
+    }
 
     setbilinear(0);
-    int      src_y = filled ? 0x10A : 0xE0;
-    CRect_i_ src(0xD4, src_y, 0x2A, 0x2A);
+    const int      src_y = filled ? 0x10A : 0xE0;
+    const CRect_i_ src(0xD4, src_y, 0x2A, 0x2A);
     DrawMenu2DSprite(wep_tex, CRect_i_(x + 1, y + 2, size, size), src, 0, 0, 0, (alpha * 80) >> 7);
     DrawMenu2DSprite(wep_tex, CRect_i_(x, y, size, size), src, 0x80, 0x80, 0x80, alpha);
 }
 
 bool ItemIcon::Draw(int item_no, int x, int y, int size, int alpha, bool drop_shadow, bool with_socket) {
-    if (item_no <= 0 || size <= 0) return false;
+    if (item_no <= 0 || size <= 0) {
+        return false;
+    }
 
     if (with_socket) {
         DrawSocket(x - 2, y - 2, size + 4, false, alpha);
     }
 
-    COM_ITEM_INFO* info = GetCommonItemInfo(item_no);
-    if (info == nullptr || info->icon_index < 0) return false;
+    COM_ITEM_INFO *info = GetCommonItemInfo(item_no);
+    if (info == nullptr || info->icon_index < 0) {
+        return false;
+    }
 
-    if (::ItemIcon == nullptr) ::ItemIcon = detail::FindMenuTexture("itemicon");
-    if (::WepIcon == nullptr)  ::WepIcon  = detail::FindMenuTexture("wepicon");
+    if (::ItemIcon == nullptr) {
+        ::ItemIcon = detail::FindMenuTexture("itemicon");
+    }
+    if (::WepIcon == nullptr) {
+        ::WepIcon = detail::FindMenuTexture("wepicon");
+    }
 
-    int       u = 0, v = 0;
-    CTexture* texture = RetCTex(static_cast<short>(item_no), u, v);
-    if (texture == nullptr) return false;
+    int       u       = 0;
+    int       v       = 0;
+    CTexture *texture = RetCTex(static_cast<short>(item_no), u, v);
+    if (texture == nullptr) {
+        return false;
+    }
 
     if (texture->block >= 0) {
         MenuTextureReload(texture->block);
     }
 
     setbilinear(0);
-    CRect_i_ source(u + 1, v + 1, 30, 30);
+    const CRect_i_ source(u + 1, v + 1, 30, 30);
 
     if (drop_shadow) {
         DrawMenu2DSprite(texture, CRect_i_(x + 2, y + 1, size, size), source, 0, 0, 0, (alpha * 0x50) >> 7);
@@ -77,7 +102,9 @@ void Cursor::ClearPointer() {
 
 void Cursor::Draw(int alpha) {
     m_texture = detail::GetWhitePixelTex();
-    if (m_texture == nullptr) return;
+    if (m_texture == nullptr) {
+        return;
+    }
 
     float hand_x = 0.0f;
     float hand_y = 0.0f;
@@ -99,9 +126,9 @@ void Cursor::Draw(int alpha) {
     m_anim_count = (m_anim_count + 1) % 0x107AC0;
 
     setbilinear(0);
-    CRect_i_ uv(0x60, 0x60, 0x20, 0x20);
-    CRect_i_ shadow_rect(static_cast<int>(hand_x + 5.0f), static_cast<int>(hand_y + 3.0f), 0x20, 0x20);
-    CRect_i_ screen_rect(static_cast<int>(hand_x), static_cast<int>(hand_y), 0x20, 0x20);
+    const CRect_i_ uv(0x60, 0x60, 0x20, 0x20);
+    const CRect_i_ shadow_rect(static_cast<int>(hand_x + 5.0f), static_cast<int>(hand_y + 3.0f), 0x20, 0x20);
+    const CRect_i_ screen_rect(static_cast<int>(hand_x), static_cast<int>(hand_y), 0x20, 0x20);
 
     DrawMenu2DSprite(m_texture, shadow_rect, uv, 0, 0, 0, (alpha * 100) >> 7);
     DrawMenu2DSprite(m_texture, screen_rect, uv, alpha);
@@ -114,43 +141,43 @@ void Cursor::DeferDraw(int alpha) {
 }
 
 Brackets::Brackets() {
-    m_texture = TexManager.GetTexture((char*)"option2", -1);
+    m_texture = TexManager.GetTexture(const_cast<char *>("option2"), -1);
 }
 
 void Brackets::Draw(int left, int right, int top, int bottom, int alpha) {
     setbilinear(0);
-    m_texture = TexManager.GetTexture((char*)"option2", -1);
+    m_texture = TexManager.GetTexture(const_cast<char *>("option2"), -1);
     if (m_texture != nullptr) {
         constexpr int   kBracketBeats = 30;
         constexpr float kBracketClose = 4.0f;
 
-        float pulse = kBracketClose * static_cast<float>(m_beat) / static_cast<float>(kBracketBeats - 1);
-        m_beat      = (m_beat + 1) % kBracketBeats;
+        const float pulse = kBracketClose * static_cast<float>(m_beat) / static_cast<float>(kBracketBeats - 1);
+        m_beat            = (m_beat + 1) % kBracketBeats;
 
-        int x0 = static_cast<int>(left + pulse);
-        int x1 = static_cast<int>(right - pulse);
-        int y0 = static_cast<int>(top + pulse);
-        int y1 = static_cast<int>(bottom - pulse);
+        const int x0 = static_cast<int>(left + pulse);
+        const int x1 = static_cast<int>(right - pulse);
+        const int y0 = static_cast<int>(top + pulse);
+        const int y1 = static_cast<int>(bottom - pulse);
 
-        constexpr int corner_w = 12;
-        constexpr int corner_h = 8;
+        constexpr int kCornerW = 12;
+        constexpr int kCornerH = 8;
 
-        DrawMenu2DSprite(m_texture, CRect_i_(x0, y0, corner_w, corner_h), CRect_i_(0xB2, 0xF8, 16, 16), alpha);
-        DrawMenu2DSprite(m_texture, CRect_i_(x1 - corner_w, y0, corner_w, corner_h), CRect_i_(0xC2, 0xF8, 16, 16), alpha);
-        DrawMenu2DSprite(m_texture, CRect_i_(x0, y1 - corner_h, corner_w, corner_h), CRect_i_(0xB2, 0x108, 16, 16), alpha);
-        DrawMenu2DSprite(m_texture, CRect_i_(x1 - corner_w, y1 - corner_h, corner_w, corner_h), CRect_i_(0xC2, 0x108, 16, 16), alpha);
+        DrawMenu2DSprite(m_texture, CRect_i_(x0, y0, kCornerW, kCornerH), CRect_i_(0xB2, 0xF8, 16, 16), alpha);
+        DrawMenu2DSprite(m_texture, CRect_i_(x1 - kCornerW, y0, kCornerW, kCornerH), CRect_i_(0xC2, 0xF8, 16, 16), alpha);
+        DrawMenu2DSprite(m_texture, CRect_i_(x0, y1 - kCornerH, kCornerW, kCornerH), CRect_i_(0xB2, 0x108, 16, 16), alpha);
+        DrawMenu2DSprite(m_texture, CRect_i_(x1 - kCornerW, y1 - kCornerH, kCornerW, kCornerH), CRect_i_(0xC2, 0x108, 16, 16), alpha);
         return;
     }
 
     StayTex = detail::FindMenuTexture("stayframe", StayTex);
     if (StayTex != nullptr) {
-        int box_w = std::max(16, right - left);
-        int box_h = std::max(16, bottom - top);
+        const int box_w = std::max(16, right - left);
+        const int box_h = std::max(16, bottom - top);
         DrawMenuWaku(left - 14, top - 6, box_w + 12, box_h - 4, 0, StayTex, alpha);
     }
 }
 
-void Brackets::DeferDraw(const Rect& box, int alpha) {
+void Brackets::DeferDraw(const Rect &box, int alpha) {
     LayerQueue::Submit(ZLayer::Brackets, [this, box, alpha]() {
         this->Draw(box, alpha);
     });
@@ -158,7 +185,7 @@ void Brackets::DeferDraw(const Rect& box, int alpha) {
 
 ScrollBar::ScrollBar() {
     m_track_tex = TexManager.GetTexture(AtoraVibeTextureName, -1);
-    m_thumb_tex = TexManager.GetTexture((char*)"option2", -1);
+    m_thumb_tex = TexManager.GetTexture(const_cast<char *>("option2"), -1);
 }
 
 void ScrollBar::Update(bool moved) {
@@ -171,7 +198,9 @@ void ScrollBar::Update(bool moved) {
 }
 
 void ScrollBar::Draw(int x, int top_y, int height, int total_rows, int visible_rows, int first_row, int alpha) {
-    if (total_rows <= visible_rows || alpha <= 0) return;
+    if (total_rows <= visible_rows || alpha <= 0) {
+        return;
+    }
 
     int cur_alpha = alpha;
     if (m_bar_frames > 0) {
@@ -180,16 +209,16 @@ void ScrollBar::Draw(int x, int top_y, int height, int total_rows, int visible_r
     }
 
     m_track_tex = TexManager.GetTexture(AtoraVibeTextureName, -1);
-    m_thumb_tex = TexManager.GetTexture((char*)"option2", -1);
+    m_thumb_tex = TexManager.GetTexture(const_cast<char *>("option2"), -1);
 
-    int track_top    = top_y + 14;
-    int track_height = height - 32;
-    int thumb_height = std::max(12, track_height * visible_rows / total_rows);
-    int thumb_y      = track_top + (track_height - thumb_height) * first_row / (total_rows - visible_rows);
+    const int track_top    = top_y + 14;
+    const int track_height = height - 32;
+    const int thumb_height = std::max(12, track_height * visible_rows / total_rows);
+    const int thumb_y      = track_top + (track_height - thumb_height) * first_row / (total_rows - visible_rows);
 
     if (m_track_tex != nullptr) {
         DrawMenu2DSprite(m_track_tex, CRect_i_(x, track_top, 8, track_height), CRect_i_(22, 22, 16, 20), cur_alpha);
-    } else if (CTexture* gaiji_tex = detail::GetWhitePixelTex()) {
+    } else if (CTexture *gaiji_tex = detail::GetWhitePixelTex()) {
         DrawMenu2DSprite(gaiji_tex, CRect_i_(x, track_top, 8, track_height), CRect_i_(0x6A, 0x6E, 1, 1), 25, 28, 30, cur_alpha);
     }
 
@@ -200,8 +229,8 @@ void ScrollBar::Draw(int x, int top_y, int height, int total_rows, int visible_r
     }
 }
 
-void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
-                       const ProgressBarStyle& style, int alpha) {
+void ProgressBar::Draw(const Rect &box, float progress, std::string_view text,
+                       const ProgressBarStyle &style, int alpha) {
     const float clamped  = std::clamp(progress, 0.0f, 1.0f);
     const bool  complete = (clamped >= 1.0f);
 
@@ -211,7 +240,8 @@ void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
     const int fill_w     = static_cast<int>(std::round(clamped * static_cast<float>(max_fill_w)));
 
     if (fill_w > 0 && box.h > 6) {
-        if (GRADATION_COLOR_INFO2* grad_src = GetGradationColorInfo2(complete ? 4 : 3)) {
+        const int grad_idx = static_cast<int>(complete ? ProgressGradation::Complete : ProgressGradation::Active);
+        if (GRADATION_COLOR_INFO2 *grad_src = GetGradationColorInfo2(grad_idx)) {
             GRADATION_COLOR_INFO2 grad = *grad_src;
             for (int c = 0; c < 4; ++c) {
                 grad.colors[c].r = static_cast<u8>((grad.colors[c].r * 3) / 4);
@@ -223,21 +253,21 @@ void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
             DrawMenuColorGradation(fill_rect, &grad.colors[0], &grad.colors[1], &grad.colors[2], &grad.colors[3]);
         }
 
-        if (CTexture* tex = detail::GetWhitePixelTex()) {
-            CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
+        if (CTexture *tex = detail::GetWhitePixelTex()) {
+            const CRect_i_ uv_white(0x6A, 0x6E, 1, 1);
             DrawMenu2DSprite(tex, CRect_i_(box.x + 3, box.y + 3, fill_w, 1), uv_white, 0, 0, 0, (alpha * 55) >> 7);
             DrawMenu2DSprite(tex, CRect_i_(box.x + 3, box.y + 4, fill_w, 1), uv_white, 0, 0, 0, (alpha * 25) >> 7);
         }
     }
 
     if (!text.empty()) {
-        MenuTextureReload(0x1A);
-        TextStyle txt_style{
+        MenuTextureReload(detail::kMessageTextureBlock);
+        const TextStyle txt_style{
             .color       = complete ? ColorGold : style.text_color,
             .drop_shadow = style.drop_shadow,
             .align       = Alignment::Center,
             .scale       = style.text_scale,
-            .weight      = style.text_weight
+            .weight      = style.text_weight,
         };
         Label lbl(text, txt_style);
         lbl.Draw(box.CenterX(), box.y - 2, alpha);
@@ -246,15 +276,14 @@ void ProgressBar::Draw(const Rect& box, float progress, std::string_view text,
 
 void MenuHeader::Draw(MenuIconKind icon, std::string_view title,
                       int x, int y, int alpha,
-                      const MenuHeaderStyle& style) {
-    if (alpha <= 0) return;
+                      const MenuHeaderStyle &style) {
+    if (alpha <= 0) {
+        return;
+    }
 
-    // 1. Draw the oval badge icon from btlmenu
     setbilinear(0);
     MenuTextureReload(BtlMenuReadBlock);
-    if (CTexture* btl_tex = detail::FindMenuTexture("btlmenu")) {
-        // In the btlmenu atlas, the 64x40 oval command icons are stacked in a 2-column grid
-        // (Save's memory card icon is slot 8; Load reuses slot 8).
+    if (CTexture *btl_tex = detail::FindMenuTexture("btlmenu")) {
         int slot = static_cast<int>(icon);
         if (icon == MenuIconKind::Load) {
             slot = static_cast<int>(MenuIconKind::Save);
@@ -262,20 +291,18 @@ void MenuHeader::Draw(MenuIconKind icon, std::string_view title,
             slot = static_cast<int>(MenuIconKind::Option);
         }
 
-        // Standard btlmenu oval icon UVs (64x40 cells starting at U=0, V=0, 5 rows per column)
         const int col = slot / 5;
         const int row = slot % 5;
         const int u   = col * 64;
         const int v   = row * 40;
 
-        CRect_i_ src(u, v, 64, 40);
-        CRect_i_ dst(x, y, 64, 40);
+        const CRect_i_ src(u, v, 64, 40);
+        const CRect_i_ dst(x, y, 64, 40);
         DrawMenu2DSprite(btl_tex, dst, src, alpha);
     }
 
-    // 2. Draw the crisp TrueType header title to the right of the oval badge
     if (!title.empty()) {
-        TextStyle txt_style{
+        const TextStyle txt_style{
             .drop_shadow    = true,
             .align          = Alignment::Left,
             .scale          = style.scale,
@@ -293,7 +320,7 @@ void MenuHeader::Draw(MenuIconKind icon, std::string_view title,
             .raised_bevel   = style.raised_bevel,
             .bevel_r        = style.bevel_r,
             .bevel_g        = style.bevel_g,
-            .bevel_b        = style.bevel_b
+            .bevel_b        = style.bevel_b,
         };
         Label lbl(title, txt_style);
         lbl.Draw(x + 76, y + 10, alpha);

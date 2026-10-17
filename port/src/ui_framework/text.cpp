@@ -16,13 +16,56 @@ namespace UI {
 
 namespace {
 
+/**
+ * TrueType font slots managed by capfont.
+ */
+enum class FontSlot : int {
+    Main   = 0,
+    Thin   = 1,
+    Status = 2,
+};
+
+/**
+ * Parameters controlling multi-pass scaled TrueType text rendering.
+ */
+struct ScaledDrawParams {
+    u32        color          = ColorWhite;         /**< Fallback palette color constant. */
+    FontWeight weight         = FontWeight::Normal; /**< Font weight and slot selector. */
+    bool       drop_shadow    = true;               /**< Whether to cast a drop shadow. */
+    bool       use_custom_rgb = false;              /**< Whether to use explicit RGB fill channels. */
+    u8         fill_r         = 240;                /**< Custom fill red channel. */
+    u8         fill_g         = 238;                /**< Custom fill green channel. */
+    u8         fill_b         = 232;                /**< Custom fill blue channel. */
+    float      outline_width  = 0.0f;               /**< Outer stroke width in logical pixels. */
+    u8         outline_r      = 16;                 /**< Outer stroke red channel. */
+    u8         outline_g      = 28;                 /**< Outer stroke green channel. */
+    u8         outline_b      = 68;                 /**< Outer stroke blue channel. */
+    bool       vertical_grad  = false;              /**< Whether to apply a top-to-bottom highlight gradient. */
+    bool       raised_bevel   = false;              /**< Whether to render a raised 3D extrusion pass. */
+    u8         bevel_r        = 108;                /**< Raised bevel red channel. */
+    u8         bevel_g        = 134;                /**< Raised bevel green channel. */
+    u8         bevel_b        = 192;                /**< Raised bevel blue channel. */
+    bool       recessed       = false;              /**< Whether to render an engraved button text pass. */
+    u8         recess_dark_r  = 72;                 /**< Engraved top-left shadow red channel. */
+    u8         recess_dark_g  = 34;                 /**< Engraved top-left shadow green channel. */
+    u8         recess_dark_b  = 18;                 /**< Engraved top-left shadow blue channel. */
+    u8         recess_light_r = 250;                /**< Engraved bottom-right catch-light red channel. */
+    u8         recess_light_g = 195;                /**< Engraved bottom-right catch-light green channel. */
+    u8         recess_light_b = 155;                /**< Engraved bottom-right catch-light blue channel. */
+};
+
+/**
+ * Decodes a UTF-8 string into UTF-32 code points.
+ */
 std::u32string DecodeUtf8(std::string_view in) {
     std::u32string out;
     for (size_t i = 0; i < in.size();) {
         const unsigned char c     = static_cast<unsigned char>(in[i]);
-        const int           extra = c < 0x80 ? 0 : (c >> 5) == 6 ? 1
-                                                 : (c >> 4) == 14 ? 2
-                                                 : (c >> 3) == 30 ? 3 : -1;
+        const int           extra = c < 0x80       ? 0
+                                  : (c >> 5) == 6  ? 1
+                                  : (c >> 4) == 14 ? 2
+                                  : (c >> 3) == 30 ? 3
+                                                   : -1;
         if (extra < 0 || i + static_cast<size_t>(extra) >= in.size()) {
             out.push_back(U'?');
             i++;
@@ -38,6 +81,9 @@ std::u32string DecodeUtf8(std::string_view in) {
     return out;
 }
 
+/**
+ * Returns whether a label requires the multi-pass scaled TrueType renderer.
+ */
 bool UseScaledRenderer(std::string_view text, float scale, float xscale, float yscale,
                        FontWeight weight, bool use_custom_rgb, float outline_width) {
     if (text.find('{') != std::string::npos) {
@@ -54,13 +100,35 @@ bool UseScaledRenderer(std::string_view text, float scale, float xscale, float y
     return caption::Ready();
 }
 
+/**
+ * Measures the horizontal advance width of a string in logical pixels.
+ */
 int MeasureScaledText(std::string_view text, float scale, float xscale, FontWeight weight) {
-    if (text.empty()) return 0;
+    if (text.empty()) {
+        return 0;
+    }
 
-    const int slot = (weight == FontWeight::Status && caption::StatusReady()) ? 2 : 0;
+    const FontSlot slot = (weight == FontWeight::Status && caption::StatusReady())
+                              ? FontSlot::Status
+                              : FontSlot::Main;
+
+    /**
+     * Scoped guard that activates a capfont slot and restores the main slot on exit.
+     */
     struct VariantGuard {
-        explicit VariantGuard(int s) { capfont::UseFontSlot(s); }
-        ~VariantGuard() { capfont::UseFontSlot(0); }
+        /**
+         * Selects the requested font slot.
+         */
+        explicit VariantGuard(FontSlot s) {
+            capfont::UseFontSlot(static_cast<int>(s));
+        }
+
+        /**
+         * Restores the default main font slot.
+         */
+        ~VariantGuard() {
+            capfont::UseFontSlot(static_cast<int>(FontSlot::Main));
+        }
     } guard(slot);
 
     const gfx::LogicalMapping mapping    = gfx::GetUiMapping(gfx::CurrentRenderTarget());
@@ -88,40 +156,17 @@ int MeasureScaledText(std::string_view text, float scale, float xscale, FontWeig
     return static_cast<int>(std::round(natural));
 }
 
-struct ScaledDrawParams {
-    u32        color          = ColorWhite;
-    FontWeight weight         = FontWeight::Normal;
-    bool       drop_shadow    = true;
-    bool       use_custom_rgb = false;
-    u8         fill_r         = 240;
-    u8         fill_g         = 238;
-    u8         fill_b         = 232;
-    float      outline_width  = 0.0f;
-    u8         outline_r      = 16;
-    u8         outline_g      = 28;
-    u8         outline_b      = 68;
-    bool       vertical_grad  = false;
-    bool       raised_bevel   = false;
-    u8         bevel_r        = 108;
-    u8         bevel_g        = 134;
-    u8         bevel_b        = 192;
-    bool       recessed       = false;
-    u8         recess_dark_r  = 72;
-    u8         recess_dark_g  = 34;
-    u8         recess_dark_b  = 18;
-    u8         recess_light_r = 250;
-    u8         recess_light_g = 195;
-    u8         recess_light_b = 155;
-};
-
-const caption::FillField* GetVerticalGradField(u8 base_r, u8 base_g, u8 base_b) {
+/**
+ * Builds or retrieves a cached vertical gradient fill field for status labels.
+ */
+const caption::FillField *GetVerticalGradField(u8 base_r, u8 base_g, u8 base_b) {
     using Key = std::tuple<u8, u8, u8>;
-    static std::map<Key, caption::FillField> s_fields;
-    static unsigned                          s_next_id = 5000;
+    static std::map<Key, caption::FillField> fields;
+    static unsigned                          next_id = 5000;
 
     const Key key{base_r, base_g, base_b};
-    auto      it = s_fields.find(key);
-    if (it != s_fields.end()) {
+    auto      it = fields.find(key);
+    if (it != fields.end()) {
         return &it->second;
     }
 
@@ -132,7 +177,7 @@ const caption::FillField* GetVerticalGradField(u8 base_r, u8 base_g, u8 base_b) 
     caption::FillField field{};
     field.width  = 2;
     field.height = 16;
-    field.id     = ++s_next_id;
+    field.id     = ++next_id;
     field.rgb.resize(static_cast<size_t>(field.width * field.height * 3));
 
     for (int y = 0; y < field.height; ++y) {
@@ -152,13 +197,18 @@ const caption::FillField* GetVerticalGradField(u8 base_r, u8 base_g, u8 base_b) 
         }
     }
 
-    auto [ins_it, _] = s_fields.emplace(key, std::move(field));
+    auto [ins_it, _] = fields.emplace(key, std::move(field));
     return &ins_it->second;
 }
 
+/**
+ * Draws a single line of scaled TrueType text with optional shadow, bevel, or engraving passes.
+ */
 void DrawScaledText(std::string_view text, float center_x, float cap_top, float scale,
-                    float xscale, float yscale, const ScaledDrawParams& params, int alpha) {
-    if (text.empty() || alpha <= 0) return;
+                    float xscale, float yscale, const ScaledDrawParams &params, int alpha) {
+    if (text.empty() || alpha <= 0) {
+        return;
+    }
 
     const float snapped_x   = std::round(center_x);
     const float snapped_top = std::round(cap_top);
@@ -206,7 +256,6 @@ void DrawScaledText(std::string_view text, float center_x, float cap_top, float 
         caption::DrawLine(text, snapped_x + s_dx, snapped_top + s_dy, cap_height, 1.0f, 0.0f, shadow_style, fade, rows, nullptr);
     }
 
-    // 1. Recessed / Engraved Button Text Pass
     if (params.recessed) {
         caption::LineStyle light_lip = style;
         light_lip.field      = nullptr;
@@ -235,7 +284,6 @@ void DrawScaledText(std::string_view text, float center_x, float cap_top, float 
         style.edge_width = 0.55f;
     }
 
-    // 2. Raised 3D Bevel Extrusion Pass
     if (params.raised_bevel) {
         caption::LineStyle bevel_style = style;
         bevel_style.field      = nullptr;
@@ -250,7 +298,6 @@ void DrawScaledText(std::string_view text, float center_x, float cap_top, float 
         caption::DrawLine(text, snapped_x + 0.9f, snapped_top + 0.9f, cap_height, 1.0f, 0.0f, bevel_style, fade, rows, nullptr);
     }
 
-    // 3. Main Face Pass
     if (params.use_custom_rgb) {
         style.fill[0] = params.fill_r;
         style.fill[1] = params.fill_g;
@@ -273,7 +320,9 @@ void DrawScaledText(std::string_view text, float center_x, float cap_top, float 
 
 std::vector<std::string> WrapText(std::string_view text, int max_width, float scale) {
     std::vector<std::string> lines;
-    if (text.empty() || max_width <= 0) return lines;
+    if (text.empty() || max_width <= 0) {
+        return lines;
+    }
 
     std::string current_line;
     size_t      i = 0;
@@ -291,11 +340,15 @@ std::vector<std::string> WrapText(std::string_view text, int max_width, float sc
         }
 
         if (current_line.empty()) {
-            while (i < text.size() && text[i] == ' ') i++;
-            if (i >= text.size()) break;
+            while (i < text.size() && text[i] == ' ') {
+                i++;
+            }
+            if (i >= text.size()) {
+                break;
+            }
         }
 
-        size_t word_start = i;
+        const size_t word_start = i;
         while (i < text.size() && text[i] != ' ' && text[i] != '\n' && text[i] != '\r') {
             i++;
         }
@@ -335,7 +388,7 @@ Label::Label(std::string_view text, u32 color, Alignment align, bool drop_shadow
     m_text.Set(m_raw_text.c_str());
 }
 
-Label::Label(std::string_view text, const TextStyle& style)
+Label::Label(std::string_view text, const TextStyle &style)
     : m_raw_text(text),
       m_color(style.color),
       m_align(style.align),
@@ -393,15 +446,40 @@ void Label::SetOutline(float width, u8 r, u8 g, u8 b) {
     m_outline_b     = b;
 }
 
-void Label::SetAlignment(Alignment align) { m_align = align; }
-void Label::SetDropShadow(bool enabled)   { m_drop_shadow = enabled; }
-void Label::SetScale(float scale)         { m_scale = scale; m_dirty = true; }
-void Label::SetXScale(float xscale)       { m_xscale = xscale; m_dirty = true; }
-void Label::SetYScale(float yscale)       { m_yscale = yscale; m_dirty = true; }
-void Label::SetWeight(FontWeight weight)  { m_weight = weight; m_dirty = true; }
-void Label::SetOffset(int dx, int dy)     { m_dx = dx; m_dy = dy; }
+void Label::SetAlignment(Alignment align) {
+    m_align = align;
+}
 
-void Label::SetStyle(const TextStyle& style) {
+void Label::SetDropShadow(bool enabled) {
+    m_drop_shadow = enabled;
+}
+
+void Label::SetScale(float scale) {
+    m_scale = scale;
+    m_dirty = true;
+}
+
+void Label::SetXScale(float xscale) {
+    m_xscale = xscale;
+    m_dirty  = true;
+}
+
+void Label::SetYScale(float yscale) {
+    m_yscale = yscale;
+    m_dirty  = true;
+}
+
+void Label::SetWeight(FontWeight weight) {
+    m_weight = weight;
+    m_dirty  = true;
+}
+
+void Label::SetOffset(int dx, int dy) {
+    m_dx = dx;
+    m_dy = dy;
+}
+
+void Label::SetStyle(const TextStyle &style) {
     m_color          = style.color;
     m_align          = style.align;
     m_drop_shadow    = style.drop_shadow;
@@ -446,9 +524,9 @@ int Label::GetWidth() {
 }
 
 void Label::Draw(int x, int y, int alpha) {
-    int draw_x = x + m_dx;
-    int draw_y = y + m_dy;
-    int width  = GetWidth();
+    int       draw_x = x + m_dx;
+    const int draw_y = y + m_dy;
+    const int width  = GetWidth();
 
     if (UseScaledRenderer(m_raw_text, m_scale, m_xscale, m_yscale, m_weight, m_use_custom_rgb, m_outline_width)) {
         float center_x = static_cast<float>(draw_x);
@@ -457,10 +535,10 @@ void Label::Draw(int x, int y, int alpha) {
         } else if (m_align == Alignment::Right) {
             center_x = static_cast<float>(draw_x) - static_cast<float>(width) * 0.5f;
         }
-        float cap_height = detail::kBaseCapHeight * m_scale;
-        float cap_top    = static_cast<float>(draw_y) + 3.0f + (detail::kBaseCapHeight - cap_height) * 0.5f;
+        const float cap_height = detail::kBaseCapHeight * m_scale;
+        const float cap_top    = static_cast<float>(draw_y) + 3.0f + (detail::kBaseCapHeight - cap_height) * 0.5f;
 
-        ScaledDrawParams params{
+        const ScaledDrawParams params{
             .color          = m_color,
             .weight         = m_weight,
             .drop_shadow    = m_drop_shadow,
@@ -483,7 +561,7 @@ void Label::Draw(int x, int y, int alpha) {
             .recess_dark_b  = m_recess_dark_b,
             .recess_light_r = m_recess_light_r,
             .recess_light_g = m_recess_light_g,
-            .recess_light_b = m_recess_light_b
+            .recess_light_b = m_recess_light_b,
         };
         DrawScaledText(m_raw_text, center_x, cap_top, m_scale, m_xscale, m_yscale, params, alpha);
         return;
@@ -495,25 +573,25 @@ void Label::Draw(int x, int y, int alpha) {
         draw_x -= width;
     }
 
-    MenuTextureReload(0x1A);
+    MenuTextureReload(detail::kMessageTextureBlock);
     detail::ScopedShadow shadow_guard(m_drop_shadow);
     m_text.SetColour(m_color);
     m_text.Draw(draw_x, draw_y, alpha);
 }
 
-void Label::DrawInRect(const Rect& box, int alpha) {
+void Label::DrawInRect(const Rect &box, int alpha) {
     if (UseScaledRenderer(m_raw_text, m_scale, m_xscale, m_yscale, m_weight, m_use_custom_rgb, m_outline_width)) {
-        int   width    = GetWidth();
-        float center_x = static_cast<float>(box.x) + static_cast<float>(box.w) * 0.5f;
+        const int width    = GetWidth();
+        float     center_x = static_cast<float>(box.x) + static_cast<float>(box.w) * 0.5f;
         if (m_align == Alignment::Left) {
             center_x = static_cast<float>(box.x + 6) + static_cast<float>(width) * 0.5f;
         } else if (m_align == Alignment::Right) {
             center_x = static_cast<float>(box.x + box.w - 6) - static_cast<float>(width) * 0.5f;
         }
-        float cap_height = detail::kBaseCapHeight * m_scale;
-        float cap_top    = static_cast<float>(box.y) + (static_cast<float>(box.h) - cap_height) * 0.5f - 1.0f;
+        const float cap_height = detail::kBaseCapHeight * m_scale;
+        const float cap_top    = static_cast<float>(box.y) + (static_cast<float>(box.h) - cap_height) * 0.5f - 1.0f;
 
-        ScaledDrawParams params{
+        const ScaledDrawParams params{
             .color          = m_color,
             .weight         = m_weight,
             .drop_shadow    = m_drop_shadow,
@@ -536,7 +614,7 @@ void Label::DrawInRect(const Rect& box, int alpha) {
             .recess_dark_b  = m_recess_dark_b,
             .recess_light_r = m_recess_light_r,
             .recess_light_g = m_recess_light_g,
-            .recess_light_b = m_recess_light_b
+            .recess_light_b = m_recess_light_b,
         };
         DrawScaledText(m_raw_text, center_x + static_cast<float>(m_dx), cap_top + static_cast<float>(m_dy),
                        m_scale, m_xscale, m_yscale, params, alpha);
@@ -545,58 +623,85 @@ void Label::DrawInRect(const Rect& box, int alpha) {
 
     const textwipe::MessageContext msg_ctx(textwipe::Kind::Message);
 
-    int text_w = GetWidth();
-    int draw_x = box.x + 6;
+    const int text_w = GetWidth();
+    int       draw_x = box.x + 6;
     if (m_align == Alignment::Center) {
         draw_x = box.x + (box.w - text_w) / 2;
     } else if (m_align == Alignment::Right) {
         draw_x = box.x + box.w - text_w - 6;
     }
 
-    int draw_y = box.y + (box.h - 22) / 2;
+    const int draw_y = box.y + (box.h - 22) / 2;
 
-    MenuTextureReload(0x1A);
+    MenuTextureReload(detail::kMessageTextureBlock);
     detail::ScopedShadow shadow_guard(m_drop_shadow);
     m_text.SetColour(m_color);
     m_text.Draw(draw_x + m_dx, draw_y + m_dy, alpha);
 }
 
 void Label::DrawCenteredInRect(int x, int y, int width, int height, int alpha) {
-    Alignment prev = m_align;
-    m_align        = Alignment::Center;
+    const Alignment prev = m_align;
+    m_align              = Alignment::Center;
     DrawInRect(Rect(x, y, width, height), alpha);
     m_align = prev;
 }
 
-void Label::DrawAnchored(const Rect& parent, Anchor anchor, int offset_x, int offset_y, int alpha) {
-    Alignment prev_align = m_align;
-    int       px         = parent.x;
-    int       py         = parent.y;
+void Label::DrawAnchored(const Rect &parent, Anchor anchor, int offset_x, int offset_y, int alpha) {
+    const Alignment prev_align = m_align;
+    int             px         = parent.x;
+    int             py         = parent.y;
 
     switch (anchor) {
         case Anchor::TopLeft:
         case Anchor::TopWide:
         case Anchor::LeftWide:
         case Anchor::FullRect:
-            m_align = Alignment::Left;   px = parent.Left();    py = parent.Top();          break;
+            m_align = Alignment::Left;
+            px      = parent.Left();
+            py      = parent.Top();
+            break;
         case Anchor::TopCenter:
-            m_align = Alignment::Center; px = parent.CenterX(); py = parent.Top();          break;
+            m_align = Alignment::Center;
+            px      = parent.CenterX();
+            py      = parent.Top();
+            break;
         case Anchor::TopRight:
         case Anchor::RightWide:
-            m_align = Alignment::Right;  px = parent.Right();   py = parent.Top();          break;
+            m_align = Alignment::Right;
+            px      = parent.Right();
+            py      = parent.Top();
+            break;
         case Anchor::CenterLeft:
-            m_align = Alignment::Left;   px = parent.Left();    py = parent.CenterY() - 10; break;
+            m_align = Alignment::Left;
+            px      = parent.Left();
+            py      = parent.CenterY() - 10;
+            break;
         case Anchor::Center:
-            m_align = Alignment::Center; px = parent.CenterX(); py = parent.CenterY() - 10; break;
+            m_align = Alignment::Center;
+            px      = parent.CenterX();
+            py      = parent.CenterY() - 10;
+            break;
         case Anchor::CenterRight:
-            m_align = Alignment::Right;  px = parent.Right();   py = parent.CenterY() - 10; break;
+            m_align = Alignment::Right;
+            px      = parent.Right();
+            py      = parent.CenterY() - 10;
+            break;
         case Anchor::BottomLeft:
         case Anchor::BottomWide:
-            m_align = Alignment::Left;   px = parent.Left();    py = parent.Bottom() - 20;  break;
+            m_align = Alignment::Left;
+            px      = parent.Left();
+            py      = parent.Bottom() - 20;
+            break;
         case Anchor::BottomCenter:
-            m_align = Alignment::Center; px = parent.CenterX(); py = parent.Bottom() - 20;  break;
+            m_align = Alignment::Center;
+            px      = parent.CenterX();
+            py      = parent.Bottom() - 20;
+            break;
         case Anchor::BottomRight:
-            m_align = Alignment::Right;  px = parent.Right();   py = parent.Bottom() - 20;  break;
+            m_align = Alignment::Right;
+            px      = parent.Right();
+            py      = parent.Bottom() - 20;
+            break;
     }
 
     Draw(px + offset_x, py + offset_y, alpha);
@@ -604,9 +709,9 @@ void Label::DrawAnchored(const Rect& parent, Anchor anchor, int offset_x, int of
 }
 
 void Label::DrawWithStroke(int x, int y, u32 fill_color, u32 stroke_color, int stroke_px, int alpha) {
-    int draw_x = x + m_dx;
-    int draw_y = y + m_dy;
-    int width  = GetWidth();
+    int       draw_x = x + m_dx;
+    const int draw_y = y + m_dy;
+    const int width  = GetWidth();
 
     if (m_align == Alignment::Center) {
         draw_x -= (width / 2);
@@ -614,12 +719,14 @@ void Label::DrawWithStroke(int x, int y, u32 fill_color, u32 stroke_color, int s
         draw_x -= width;
     }
 
-    MenuTextureReload(0x1A);
+    MenuTextureReload(detail::kMessageTextureBlock);
     detail::ScopedShadow shadow_guard(m_drop_shadow);
     m_text.SetColour(stroke_color);
     for (int dy = -stroke_px; dy <= stroke_px; ++dy) {
         for (int dx = -stroke_px; dx <= stroke_px; ++dx) {
-            if (dx == 0 && dy == 0) continue;
+            if (dx == 0 && dy == 0) {
+                continue;
+            }
             m_text.Draw(draw_x + dx, draw_y + dy, alpha);
         }
     }
@@ -638,7 +745,7 @@ void Label::DrawWrapped(int x, int y, int max_width, int line_height, int alpha)
     }
 }
 
-void DrawTextBox(std::string_view text, const Rect& box, const TextStyle& style, int alpha) {
+void DrawTextBox(std::string_view text, const Rect &box, const TextStyle &style, int alpha) {
     Label lbl(text, style);
     lbl.DrawInRect(box, alpha);
 }
@@ -657,7 +764,7 @@ void DrawStatusText(std::string_view text, int x, int y, Alignment align,
                     u8 fill_r, u8 fill_g, u8 fill_b,
                     float scale, int alpha,
                     u8 out_r, u8 out_g, u8 out_b) {
-    TextStyle style{
+    const TextStyle style{
         .drop_shadow    = false,
         .align          = align,
         .scale          = scale,
@@ -672,14 +779,14 @@ void DrawStatusText(std::string_view text, int x, int y, Alignment align,
         .outline_r      = out_r,
         .outline_g      = out_g,
         .outline_b      = out_b,
-        .raised_bevel   = false
+        .raised_bevel   = false,
     };
     Label(text, style).Draw(x, y, alpha);
 }
 
 void DrawStatusNumber(int value, int right_x, int y,
                       float scale, int alpha, bool highlight_red) {
-    TextStyle style{
+    const TextStyle style{
         .drop_shadow    = false,
         .align          = Alignment::Right,
         .scale          = scale * 1.12f,
@@ -691,13 +798,13 @@ void DrawStatusNumber(int value, int right_x, int y,
         .fill_g         = highlight_red ? static_cast<u8>(120) : static_cast<u8>(248),
         .fill_b         = highlight_red ? static_cast<u8>(105) : static_cast<u8>(255),
         .outline_width  = 1.55f,
-        .outline_r      = highlight_red ? static_cast<u8>(52)  : static_cast<u8>(10),
-        .outline_g      = highlight_red ? static_cast<u8>(10)  : static_cast<u8>(18),
-        .outline_b      = highlight_red ? static_cast<u8>(10)  : static_cast<u8>(46),
+        .outline_r      = highlight_red ? static_cast<u8>(52) : static_cast<u8>(10),
+        .outline_g      = highlight_red ? static_cast<u8>(10) : static_cast<u8>(18),
+        .outline_b      = highlight_red ? static_cast<u8>(10) : static_cast<u8>(46),
         .raised_bevel   = true,
         .bevel_r        = highlight_red ? static_cast<u8>(175) : static_cast<u8>(108),
-        .bevel_g        = highlight_red ? static_cast<u8>(55)  : static_cast<u8>(134),
-        .bevel_b        = highlight_red ? static_cast<u8>(55)  : static_cast<u8>(192)
+        .bevel_g        = highlight_red ? static_cast<u8>(55) : static_cast<u8>(134),
+        .bevel_b        = highlight_red ? static_cast<u8>(55) : static_cast<u8>(192),
     };
     Label(std::to_string(value), style).Draw(right_x, y, alpha);
 }
@@ -724,7 +831,7 @@ void DrawStatusSlashPair(int current_val, int max_val, int slash_x, int y,
         .raised_bevel   = true,
         .bevel_r        = 108,
         .bevel_g        = 134,
-        .bevel_b        = 192
+        .bevel_b        = 192,
     };
     Label("/", slash_style).Draw(slash_x + 3, y, alpha);
 
@@ -732,6 +839,6 @@ void DrawStatusSlashPair(int current_val, int max_val, int slash_x, int y,
     slash_style.scale  = scale * 1.12f;
     slash_style.xscale = 1.04f;
     Label(std::to_string(max_val), slash_style).Draw(slash_x + 8, y, alpha);
-} 
+}
 
 } // namespace UI

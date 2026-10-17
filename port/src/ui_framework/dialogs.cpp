@@ -12,15 +12,26 @@ namespace UI {
 
 namespace {
 
+/**
+ * Deferred draw callback associated with a Z-order layer and submission index.
+ */
 struct QueuedDrawCmd {
-    ZLayer                layer;
-    std::size_t           order;
-    std::function<void()> fn;
+    ZLayer                layer; /**< Target Z-layer for sorting. */
+    std::size_t           order; /**< Submission sequence number within the frame. */
+    std::function<void()> fn;    /**< Deferred draw callback. */
 };
 
-std::vector<QueuedDrawCmd>& GetLayerQueueStorage() {
-    static std::vector<QueuedDrawCmd> s_queue;
-    return s_queue;
+/**
+ * Vertical line spacing inside modal dialog boxes in logical pixels.
+ */
+constexpr int kModalLineSpacing = 20;
+
+/**
+ * Returns the frame's deferred layer draw queue.
+ */
+std::vector<QueuedDrawCmd> &GetLayerQueueStorage() {
+    static std::vector<QueuedDrawCmd> queue;
+    return queue;
 }
 
 } // namespace
@@ -30,23 +41,27 @@ void LayerQueue::Begin() {
 }
 
 void LayerQueue::Submit(ZLayer layer, std::function<void()> draw_fn) {
-    if (!draw_fn) return;
-    auto& queue = GetLayerQueueStorage();
+    if (!draw_fn) {
+        return;
+    }
+    auto &queue = GetLayerQueueStorage();
     queue.push_back(QueuedDrawCmd{layer, queue.size(), std::move(draw_fn)});
 }
 
 void LayerQueue::Flush() {
-    auto& queue = GetLayerQueueStorage();
-    if (queue.empty()) return;
+    auto &queue = GetLayerQueueStorage();
+    if (queue.empty()) {
+        return;
+    }
 
-    std::stable_sort(queue.begin(), queue.end(), [](const QueuedDrawCmd& a, const QueuedDrawCmd& b) {
+    std::stable_sort(queue.begin(), queue.end(), [](const QueuedDrawCmd &a, const QueuedDrawCmd &b) {
         if (a.layer != b.layer) {
             return static_cast<int>(a.layer) < static_cast<int>(b.layer);
         }
         return a.order < b.order;
     });
 
-    for (const auto& cmd : queue) {
+    for (const auto &cmd : queue) {
         cmd.fn();
     }
     queue.clear();
@@ -55,7 +70,7 @@ void LayerQueue::Flush() {
 void DialogBox::Configure(std::string_view title, std::string_view description,
                           std::vector<DialogOption> options,
                           std::function<void()> on_cancel,
-                          const DialogStyle& style) {
+                          const DialogStyle &style) {
     m_title       = std::string(title);
     m_description = std::string(description);
     m_options     = std::move(options);
@@ -66,7 +81,7 @@ void DialogBox::Configure(std::string_view title, std::string_view description,
 void DialogBox::Open(int default_choice) {
     m_active = true;
     SetSelectedIndex(default_choice);
-    Rect btn = GetButtonRect(m_selected);
+    const Rect btn = GetButtonRect(m_selected);
     m_cursor.SnapTo(static_cast<float>(btn.x - 34), static_cast<float>(btn.y + 3));
 }
 
@@ -79,7 +94,7 @@ void DialogBox::SetSelectedIndex(int index) {
     m_selected      = ((index % count) + count) % count;
 }
 
-Rect DialogBox::ComputeBoxRect(std::vector<std::string>& out_lines) const {
+Rect DialogBox::ComputeBoxRect(std::vector<std::string> &out_lines) const {
     out_lines.clear();
     const int wrap_w = m_style.max_width - 48;
 
@@ -96,15 +111,14 @@ Rect DialogBox::ComputeBoxRect(std::vector<std::string>& out_lines) const {
     }
 
     int max_text_w = 0;
-    for (const std::string& line : out_lines) {
+    for (const std::string &line : out_lines) {
         max_text_w = std::max(max_text_w, Label(line, ColorWhite).GetWidth());
     }
 
-    constexpr int kLineSpacing = 20;
-    const int     box_w        = std::clamp(max_text_w + 48, m_style.min_width, m_style.max_width);
-    const int     box_h        = 38 + static_cast<int>(out_lines.size() - 1) * kLineSpacing;
-    const int     box_x        = (Metrics::kScreenWidth - box_w) / 2;
-    const int     box_y        = m_style.base_y - std::max(0, static_cast<int>(out_lines.size()) - 2) * 12;
+    const int box_w = std::clamp(max_text_w + 48, m_style.min_width, m_style.max_width);
+    const int box_h = 38 + static_cast<int>(out_lines.size() - 1) * kModalLineSpacing;
+    const int box_x = (Metrics::kScreenWidth - box_w) / 2;
+    const int box_y = m_style.base_y - std::max(0, static_cast<int>(out_lines.size()) - 2) * 12;
     return Rect(box_x, box_y, box_w, box_h);
 }
 
@@ -118,7 +132,7 @@ Rect DialogBox::GetButtonRect(int index) const {
 
 int DialogBox::HitTest(float px, float py) const {
     for (size_t i = 0; i < m_options.size(); ++i) {
-        Rect r = GetButtonRect(static_cast<int>(i)).Inset(-14, -3);
+        const Rect r = GetButtonRect(static_cast<int>(i)).Inset(-14, -3);
         if (r.Contains(px, py)) {
             return static_cast<int>(i);
         }
@@ -127,11 +141,14 @@ int DialogBox::HitTest(float px, float py) const {
 }
 
 bool DialogBox::HandleInput() {
-    if (!m_active) return false;
+    if (!m_active) {
+        return false;
+    }
 
     const int count = static_cast<int>(m_options.size());
 
-    float ptr_x = 0.0f, ptr_y = 0.0f;
+    float ptr_x = 0.0f;
+    float ptr_y = 0.0f;
     if (MenuPointerHand(ptr_x, ptr_y)) {
         const float tip_x = ptr_x + 26.0f;
         const float tip_y = ptr_y + 14.0f;
@@ -178,18 +195,19 @@ bool DialogBox::HandleInput() {
 }
 
 void DialogBox::Draw(int alpha) {
-    if (alpha <= 0) return;
+    if (alpha <= 0) {
+        return;
+    }
 
-    MenuTextureReload(0x1A);
+    MenuTextureReload(detail::kMessageTextureBlock);
     std::vector<std::string> lines;
     const Rect               box = ComputeBoxRect(lines);
 
     TrackerWindow::Draw(box, alpha, m_style.window_preset);
 
-    MenuTextureReload(0x1A);
-    constexpr int kLineSpacing = 20;
+    MenuTextureReload(detail::kMessageTextureBlock);
     for (size_t i = 0; i < lines.size(); ++i) {
-        Label(lines[i], ColorWhite).Draw(box.x + 22, box.y + 12 + static_cast<int>(i) * kLineSpacing, alpha);
+        Label(lines[i], ColorWhite).Draw(box.x + 22, box.y + 12 + static_cast<int>(i) * kModalLineSpacing, alpha);
     }
 
     for (size_t i = 0; i < m_options.size(); ++i) {
@@ -216,11 +234,13 @@ void DialogBox::Draw(int alpha) {
 
 void ConfirmModal::Draw(std::string_view title, std::string_view description,
                         std::string_view yes_label, std::string_view no_label,
-                        int selected_choice, Cursor& cursor, int alpha,
+                        int selected_choice, Cursor &cursor, int alpha,
                         WindowPreset preset) {
-    if (alpha <= 0) return;
+    if (alpha <= 0) {
+        return;
+    }
 
-    MenuTextureReload(0x1A);
+    MenuTextureReload(detail::kMessageTextureBlock);
 
     std::vector<std::string> lines;
     if (!title.empty()) {
@@ -236,21 +256,20 @@ void ConfirmModal::Draw(std::string_view title, std::string_view description,
     }
 
     int max_text_w = 0;
-    for (const std::string& line : lines) {
+    for (const std::string &line : lines) {
         max_text_w = std::max(max_text_w, Label(line, ColorWhite).GetWidth());
     }
 
-    constexpr int line_spacing = 20;
-    const int     box_w        = std::clamp(max_text_w + 48, Metrics::kModalMinWidth, Metrics::kModalMaxWidth);
-    const int     box_h        = 38 + static_cast<int>(lines.size() - 1) * line_spacing;
-    const int     box_x        = (Metrics::kScreenWidth - box_w) / 2;
-    const int     box_y        = 164 - std::max(0, static_cast<int>(lines.size()) - 2) * 12;
+    const int box_w = std::clamp(max_text_w + 48, Metrics::kModalMinWidth, Metrics::kModalMaxWidth);
+    const int box_h = 38 + static_cast<int>(lines.size() - 1) * kModalLineSpacing;
+    const int box_x = (Metrics::kScreenWidth - box_w) / 2;
+    const int box_y = 164 - std::max(0, static_cast<int>(lines.size()) - 2) * 12;
 
     TrackerWindow::Draw(box_x, box_y, box_w, box_h, alpha, preset);
 
-    MenuTextureReload(0x1A);
+    MenuTextureReload(detail::kMessageTextureBlock);
     for (size_t i = 0; i < lines.size(); ++i) {
-        Label(lines[i], ColorWhite).Draw(box_x + 22, box_y + 12 + static_cast<int>(i) * line_spacing, alpha);
+        Label(lines[i], ColorWhite).Draw(box_x + 22, box_y + 12 + static_cast<int>(i) * kModalLineSpacing, alpha);
     }
 
     constexpr int btn_w  = Metrics::kButtonWidth;
@@ -259,9 +278,9 @@ void ConfirmModal::Draw(std::string_view title, std::string_view description,
     const int     btn_y0 = box_y + box_h + 10;
     const int     btn_y1 = btn_y0 + btn_h + Metrics::kButtonGap;
 
-    ButtonStyle btn_style = ButtonStyle::Thick(ButtonPreset::Terracotta);
+    const ButtonStyle btn_style = ButtonStyle::Thick(ButtonPreset::Terracotta);
     BevelButton::Draw(Rect(btn_x, btn_y0, btn_w, btn_h), yes_label, btn_style, alpha);
-    BevelButton::Draw(Rect(btn_x, btn_y1, btn_w, btn_h), no_label,  btn_style, alpha);
+    BevelButton::Draw(Rect(btn_x, btn_y1, btn_w, btn_h), no_label, btn_style, alpha);
 
     const int sel_y = (selected_choice == 0) ? btn_y0 : btn_y1;
     setbilinear(0);
@@ -316,7 +335,9 @@ Rect ListView::GetVisibleRowRect(int visible_slot) const {
 }
 
 int ListView::HitTest(float px, float py, int total_items) const {
-    if (total_items <= 0) return -1;
+    if (total_items <= 0) {
+        return -1;
+    }
     const int vis = std::min(m_cfg.visible_rows, total_items - m_first_row);
     for (int s = 0; s < vis; ++s) {
         if (GetVisibleRowRect(s).Contains(px, py)) {
@@ -327,14 +348,17 @@ int ListView::HitTest(float px, float py, int total_items) const {
 }
 
 bool ListView::HandleInput(int total_items,
-                           const std::function<void(int)>& on_confirm,
-                           const std::function<void()>& on_cancel) {
-    if (total_items <= 0) return false;
+                           const std::function<void(int)> &on_confirm,
+                           const std::function<void()> &on_cancel) {
+    if (total_items <= 0) {
+        return false;
+    }
 
     const int prev_sel   = m_selected;
     const int prev_first = m_first_row;
 
-    float ptr_x = 0.0f, ptr_y = 0.0f;
+    float ptr_x = 0.0f;
+    float ptr_y = 0.0f;
     if (MenuPointerHand(ptr_x, ptr_y)) {
         const int hit = HitTest(ptr_x + 26.0f, ptr_y + 14.0f, total_items);
         if (hit >= 0 && hit != m_selected) {
@@ -366,8 +390,10 @@ bool ListView::HandleInput(int total_items,
     return m_selected != prev_sel;
 }
 
-void ListView::Draw(int total_items, const RowDrawFn& draw_row, int alpha) {
-    if (total_items <= 0 || alpha <= 0) return;
+void ListView::Draw(int total_items, const RowDrawFn &draw_row, int alpha) {
+    if (total_items <= 0 || alpha <= 0) {
+        return;
+    }
 
     EnsureVisible(total_items);
     const int vis = std::min(m_cfg.visible_rows, total_items - m_first_row);

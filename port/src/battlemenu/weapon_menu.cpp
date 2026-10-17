@@ -6,35 +6,71 @@ using btlmenu_detail::DecodeItemNamePort;
 using btlmenu_detail::DecodeMesFromBuffer;
 using btlmenu_detail::RefreshBtlMenuTextures;
 
-WEAPON_HAVE* GetNowSelectWeaponPort() {
-    if (BtlMenuStatusPt == nullptr) return nullptr;
+/**
+ * Bitflags indicating which customization actions are available for a weapon.
+ */
+enum class WeaponActionBit : int {
+    Upgrade      = 1 << 1,
+    Synthesize   = 1 << 2,
+    BuildUpEntry = 1 << 3,
+    BuildUpReady = 1 << 4,
+};
+
+/**
+ * Label text and RGB color palette for a primary weapon stat row.
+ */
+struct StatLabelSpec {
+    const char *name;  /**< Two-letter stat abbreviation. */
+    u8          r;     /**< Base fill red channel. */
+    u8          g;     /**< Base fill green channel. */
+    u8          b;     /**< Base fill blue channel. */
+    u8          out_r; /**< Outline red channel. */
+    u8          out_g; /**< Outline green channel. */
+    u8          out_b; /**< Outline blue channel. */
+};
+
+/**
+ * Returns a pointer to the weapon currently highlighted in the Weapon Menu.
+ */
+WEAPON_HAVE *GetNowSelectWeaponPort() {
+    if (BtlMenuStatusPt == nullptr) {
+        return nullptr;
+    }
     return &BtlMenuStatusPt->chara_weapons[static_cast<int>(WepMenu.chara)][static_cast<int>(WepMenu.weapon_slot)];
 }
 
+/**
+ * Computes the bitmask of available upgrade, synthesis, and build-up actions for a weapon.
+ */
 int NowWeaponStatusValuePort(WEAPON_HAVE *weapon) {
-    if (weapon == nullptr) return 0;
+    if (weapon == nullptr) {
+        return 0;
+    }
 
     int status = 0;
     if (weapon->experience >= GetWeaponMaxExp(weapon) || GetNowItemNum(ITEM_POWERUP_POWDER, MenuItemPackPt) > 0) {
-        status |= 2;
+        status |= static_cast<int>(WeaponActionBit::Upgrade);
     }
     if (WeaponStatusBreakEnable(weapon) != 0) {
-        status |= 4;
+        status |= static_cast<int>(WeaponActionBit::Synthesize);
     }
-    status |= 8;
+    status |= static_cast<int>(WeaponActionBit::BuildUpEntry);
 
     int build_up = 0;
     if (WeaponStatusBuildUp(weapon, build_up) > 0 && GetNowWeaponAttachNum(weapon) == 0 && build_up > 0) {
-        status |= 0x10;
+        status |= static_cast<int>(WeaponActionBit::BuildUpReady);
     }
     if (IsNotBuildUpWeapon(weapon->item_no) != 0) {
-        status &= ~8;
-        status &= ~0x10;
+        status &= ~static_cast<int>(WeaponActionBit::BuildUpEntry);
+        status &= ~static_cast<int>(WeaponActionBit::BuildUpReady);
     }
     return status;
 }
 
-std::string FormatWeaponTitlePort(const WEAPON_HAVE* weapon) {
+/**
+ * Formats a weapon's localized name and enhancement level suffix.
+ */
+std::string FormatWeaponTitlePort(const WEAPON_HAVE *weapon) {
     if (weapon == nullptr || weapon->item_no < ITEM_WEAPON_START) {
         return {};
     }
@@ -48,11 +84,14 @@ std::string FormatWeaponTitlePort(const WEAPON_HAVE* weapon) {
     return name;
 }
 
+/**
+ * Draws the three-tab weapon status, element, and anti-monster board.
+ */
 void DrawWeaponTagBoardPort(int x, int y, WEAPON_HAVE *weapon, int build, int weapon_no, int alpha) {
-    int page    = WepMenu.tag_page;
-    int tag     = 0;
-    int step    = 1;
-    int wrapped = 0;
+    const int page    = WepMenu.tag_page;
+    int       tag     = 0;
+    int       step    = 1;
+    int       wrapped = 0;
 
     for (int i = 0; i < 3; i++) {
         int brightness = 128;
@@ -68,7 +107,7 @@ void DrawWeaponTagBoardPort(int x, int y, WEAPON_HAVE *weapon, int build, int we
         if (WepMenu.mode == WEP_MENU_ELEMENT && tag != WEP_TAG_ELEMENT) {
             brightness = 64;
         }
-        int top = tag * 0xAA;
+        const int top = tag * 0xAA;
         DrawMenu2DSprite(WepStatus, CRect_i_(x, y, 0xD4, 0xAA), CRect_i_(0, top, 0xD4, 0xAA),
                          brightness, brightness, brightness, alpha);
         tag += step;
@@ -89,6 +128,9 @@ void DrawWeaponTagBoardPort(int x, int y, WEAPON_HAVE *weapon, int build, int we
     }
 }
 
+/**
+ * Draws a weapon action confirmation prompt with YES and NO buttons.
+ */
 void DrawWeaponLeftConfirmDialog(int box_x, int box_y, int yes_x, int yes_y,
                                  std::string_view fallback_prompt, int alpha) {
     std::string prompt = DecodeMesFromBuffer(CommonMenuMes1.buff, CommonMenuMes1.mes_made);
@@ -102,33 +144,36 @@ void DrawWeaponLeftConfirmDialog(int box_x, int box_y, int yes_x, int yes_y,
     }
 
     int max_w = 0;
-    for (const auto& line : lines) {
+    for (const auto &line : lines) {
         max_w = std::max(max_w, UI::Label(line, UI::ColorWhite, UI::Alignment::Left, true, 0.92f).GetWidth());
     }
 
-    constexpr int kLineH = 20;
+    constexpr int line_h = 20;
     const int     box_w  = std::clamp(max_w + 44, 212, 260);
-    const int     box_h  = 34 + static_cast<int>(lines.size() - 1) * kLineH;
+    const int     box_h  = 34 + static_cast<int>(lines.size() - 1) * line_h;
 
     UI::HelpBox::Draw(box_x, box_y, box_w, box_h, alpha);
 
     for (size_t i = 0; i < lines.size(); ++i) {
         UI::Label(lines[i], UI::ColorWhite, UI::Alignment::Center, true, 0.92f)
-            .Draw(box_x + box_w / 2, box_y + 10 + static_cast<int>(i) * kLineH, alpha);
+            .Draw(box_x + box_w / 2, box_y + 10 + static_cast<int>(i) * line_h, alpha);
     }
 
     UI::ButtonStyle btn_style = UI::ButtonStyle::Thick(UI::ButtonPreset::Terracotta);
-    btn_style.text_scale = 1.0f;
+    btn_style.text_scale      = 1.0f;
 
     const std::string yes_txt = LocalizeText("battlemenu.quit.yes", "YES");
-    const std::string no_txt  = LocalizeText("battlemenu.quit.no",  "NO");
+    const std::string no_txt  = LocalizeText("battlemenu.quit.no", "NO");
 
-    UI::BevelButton::Draw(UI::Rect(yes_x, yes_y,        0x60, 24), yes_txt, btn_style, alpha);
-    UI::BevelButton::Draw(UI::Rect(yes_x, yes_y + 0x1C, 0x60, 24), no_txt,  btn_style, alpha);
+    UI::BevelButton::Draw(UI::Rect(yes_x, yes_y, 0x60, 24), yes_txt, btn_style, alpha);
+    UI::BevelButton::Draw(UI::Rect(yes_x, yes_y + 0x1C, 0x60, 24), no_txt, btn_style, alpha);
 }
 
+/**
+ * Draws a centered warning message box over the Weapon Menu.
+ */
 void DrawWeaponCenteredWarningModal(int alpha) {
-    std::string msg = DecodeMesFromBuffer(CommonMenuMes1.buff, CommonMenuMes1.mes_made);
+    const std::string msg = DecodeMesFromBuffer(CommonMenuMes1.buff, CommonMenuMes1.mes_made);
     if (msg.empty()) {
         CommonMenuMes1.auto_pos = MES_POS_CENTRE;
         MenuTextureReload(CommonMenuMes1.tex_block);
@@ -138,14 +183,14 @@ void DrawWeaponCenteredWarningModal(int alpha) {
     }
 
     std::vector<std::string> lines = UI::WrapText(msg, 320, 0.92f);
-    int max_w = 0;
-    for (const auto& line : lines) {
+    int                      max_w = 0;
+    for (const auto &line : lines) {
         max_w = std::max(max_w, UI::Label(line, UI::ColorWhite, UI::Alignment::Left, true, 0.92f).GetWidth());
     }
 
-    constexpr int kLineH = 22;
+    constexpr int line_h = 22;
     const int     box_w  = std::clamp(max_w + 52, 260, 380);
-    const int     box_h  = 38 + static_cast<int>(lines.size() - 1) * kLineH;
+    const int     box_h  = 38 + static_cast<int>(lines.size() - 1) * line_h;
     const int     box_x  = (640 - box_w) / 2;
     const int     box_y  = (480 - box_h) / 2 - 16;
 
@@ -153,14 +198,16 @@ void DrawWeaponCenteredWarningModal(int alpha) {
 
     for (size_t i = 0; i < lines.size(); ++i) {
         UI::Label(lines[i], UI::ColorWhite, UI::Alignment::Center, true, 0.92f)
-            .Draw(320, box_y + 12 + static_cast<int>(i) * kLineH, alpha);
+            .Draw(320, box_y + 12 + static_cast<int>(i) * line_h, alpha);
     }
 }
 
 } // namespace
 
 PORT_OVERRIDE void DrawWepDamageDraw(RECT rect, WEAPON_HAVE *weapon, int alpha) {
-    if (weapon == nullptr || alpha <= 0) return;
+    if (weapon == nullptr || alpha <= 0) {
+        return;
+    }
 
     const int x          = rect.x;
     int       y          = rect.y;
@@ -169,17 +216,18 @@ PORT_OVERRIDE void DrawWepDamageDraw(RECT rect, WEAPON_HAVE *weapon, int alpha) 
     int       max_exp    = GetWeaponMaxExp(weapon);
     int       exp        = weapon->experience;
 
-    if (max_exp < exp) exp = max_exp;
-    if (exp < 0)       exp = 0;
-    if (max_exp <= 0)  max_exp = 99;
+    if (max_exp < exp) {
+        exp = max_exp;
+    }
+    if (exp < 0) {
+        exp = 0;
+    }
+    if (max_exp <= 0) {
+        max_exp = 99;
+    }
 
     const int exp_len = (exp * 99) / max_exp;
 
-#ifdef PAL
-    MenuTextureReload(BtlMenuExtBlock);
-#else
-    MenuTextureReload(BtlMenuReadBlock);
-#endif
     setbilinear(0);
 
     DrawMenu2DSprite(WepStatus, CRect_i_(rect.x, y, durability, 8), CRect_i_(0x100, 0x70, 8, 8), alpha);
@@ -204,20 +252,19 @@ PORT_OVERRIDE void DrawWepDamageDraw(RECT rect, WEAPON_HAVE *weapon, int alpha) 
 
     const int slash_x = x + rect.width - 0x20;
     UI::DrawStatusSlashPair(now, durability, slash_x, whp_text_y, 0.64f, alpha);
-    UI::DrawStatusSlashPair(exp, max_exp,    slash_x, abs_text_y, 0.64f, alpha);
+    UI::DrawStatusSlashPair(exp, max_exp, slash_x, abs_text_y, 0.64f, alpha);
 
     setbilinear(0);
-#ifdef PAL
-    MenuTextureReload(BtlMenuExtBlock);
-#else
-    MenuTextureReload(BtlMenuReadBlock);
-#endif
 }
 
 PORT_OVERRIDE void DrawWepVolumeDisplay(int x, int y, WEAPON_HAVE *weapon, int alpha) {
-    if (weapon == nullptr || alpha <= 0) return;
+    if (weapon == nullptr || alpha <= 0) {
+        return;
+    }
     WEAPON_DATA *data = GetWeaponData(weapon->item_no);
-    if (data == nullptr) return;
+    if (data == nullptr) {
+        return;
+    }
 
     WEAPON_HAVE total{};
     WeaponAllValueSet(weapon, &total, 0);
@@ -230,30 +277,25 @@ PORT_OVERRIDE void DrawWepVolumeDisplay(int x, int y, WEAPON_HAVE *weapon, int a
                          CRect_i_(0xE0, weapon->best_elem * 16, 15, 16),
                          alpha);
 
-        static constexpr const char* kElemNames[5] = {"Fl", "Ch", "Th", "Wi", "Ho"};
-        UI::DrawStatusText(kElemNames[static_cast<int>(weapon->best_elem)], x + 16, y - 0x12, UI::Alignment::Left,
+        static constexpr const char *elem_names[5] = {"Fl", "Ch", "Th", "Wi", "Ho"};
+        UI::DrawStatusText(elem_names[static_cast<int>(weapon->best_elem)], x + 16, y - 0x12, UI::Alignment::Left,
                            240, 200, 55, 0.64f, alpha, 18, 34, 88);
     }
 
-    int values[4] = {total.attack, total.endurance, total.speed, total.magic};
-    const float rate = GetNowWeaponRate(&total);
-    int limit[4] = {
+    int         values[4] = {total.attack, total.endurance, total.speed, total.magic};
+    const float rate      = GetNowWeaponRate(&total);
+    const int   limit[4]  = {
         static_cast<int>(static_cast<float>(data->attack_max) * rate),
         99,
         99,
         static_cast<int>(static_cast<float>(data->magic_max) * rate)
     };
 
-    struct StatLabelSpec {
-        const char* name;
-        u8 r, g, b;
-        u8 out_r, out_g, out_b;
-    };
-    static constexpr StatLabelSpec kStatSpecs[4] = {
-        {"At",  65, 235, 145,   8, 38, 36},
-        {"Ed", 235, 190,  35,  38, 32, 10},
-        {"Sp",  75, 210, 215,   8, 36, 46},
-        {"Mp", 225, 145, 215,  36, 18, 44}
+    static constexpr StatLabelSpec stat_specs[4] = {
+        {"At",  65, 235, 145,  8, 38, 36},
+        {"Ed", 235, 190,  35, 38, 32, 10},
+        {"Sp",  75, 210, 215,  8, 36, 46},
+        {"Mp", 225, 145, 215, 36, 18, 44}
     };
 
     for (int i = 0; i < 4; i++) {
@@ -261,19 +303,14 @@ PORT_OVERRIDE void DrawWepVolumeDisplay(int x, int y, WEAPON_HAVE *weapon, int a
             values[i] = limit[i];
         }
         const int row_y = y + i * 16 - 2;
-        UI::DrawStatusText(kStatSpecs[i].name, x, row_y, UI::Alignment::Left,
-                           kStatSpecs[i].r, kStatSpecs[i].g, kStatSpecs[i].b,
+        UI::DrawStatusText(stat_specs[i].name, x, row_y, UI::Alignment::Left,
+                           stat_specs[i].r, stat_specs[i].g, stat_specs[i].b,
                            0.66f, alpha,
-                           kStatSpecs[i].out_r, kStatSpecs[i].out_g, kStatSpecs[i].out_b);
+                           stat_specs[i].out_r, stat_specs[i].out_g, stat_specs[i].out_b);
         UI::DrawStatusNumber(values[i], x + 48, row_y, 0.64f, alpha, false);
     }
 
     setbilinear(0);
-#ifdef PAL
-    MenuTextureReload(BtlMenuExtBlock);
-#else
-    MenuTextureReload(BtlMenuReadBlock);
-#endif
 }
 
 PORT_OVERRIDE void DrawWeaponSelectDialog(int x, int y, int alpha) {
@@ -281,24 +318,26 @@ PORT_OVERRIDE void DrawWeaponSelectDialog(int x, int y, int alpha) {
     const int    left   = x + shift;
     const int    top    = y + shift;
     WEAPON_HAVE *weapon = GetNowSelectWeaponPort();
-    if (weapon == nullptr) return;
+    if (weapon == nullptr) {
+        return;
+    }
 
     const int repair_items = GetNowItemNum(ITEM_REPAIR_POWDER, MenuItemPackPt);
     const int options      = NowWeaponStatusValuePort(weapon);
 
-    constexpr int kBtnW      = 0x60;
-    constexpr int kBtnH      = 23;
-    constexpr int kRowStride = 0x1A;
+    constexpr int btn_w      = 0x60;
+    constexpr int btn_h      = 23;
+    constexpr int row_stride = 0x1A;
 
     UI::BevelButton::Draw(
-        UI::Rect(left, top + 1, kBtnW, kBtnH),
+        UI::Rect(left, top + 1, btn_w, btn_h),
         LocalizeText("weaponmenu.action.equip", "EQUIP"),
         UI::ButtonStyle::Thin(UI::ButtonPreset::Terracotta, 0x80),
         alpha
     );
 
     UI::BevelButton::Draw(
-        UI::Rect(left, top + 1 + kRowStride, kBtnW, kBtnH),
+        UI::Rect(left, top + 1 + row_stride, btn_w, btn_h),
         LocalizeText("weaponmenu.action.customize", "CUSTOMIZE"),
         UI::ButtonStyle::Thin(UI::ButtonPreset::Terracotta, 0x80),
         alpha
@@ -306,7 +345,7 @@ PORT_OVERRIDE void DrawWeaponSelectDialog(int x, int y, int alpha) {
 
     const int attr_x = (WepMenu.mode == WEP_MENU_ELEMENT) ? (left + 0x28) : left;
     UI::BevelButton::Draw(
-        UI::Rect(attr_x, top + 1 + kRowStride * 2, kBtnW, kBtnH),
+        UI::Rect(attr_x, top + 1 + row_stride * 2, btn_w, btn_h),
         LocalizeText("weaponmenu.action.attribute", "ATTRIBUTE"),
         UI::ButtonStyle::Thin(UI::ButtonPreset::Terracotta, 0x80),
         alpha
@@ -316,24 +355,24 @@ PORT_OVERRIDE void DrawWeaponSelectDialog(int x, int y, int alpha) {
     if (repair_items <= 0 || weapon->durability_f == static_cast<float>(weapon->durability)) {
         repair_bright = 0x48;
     }
-    static int s_warm_cnt = 0;
+    static int warm_cnt   = 0;
     const int  default_no = GetDefaultWeaponNo(WepMenu.chara);
     if ((weapon->durability_f <= 0.1f * weapon->durability || weapon->item_no == default_no) && repair_items > 0) {
-        repair_bright = std::abs(static_cast<int>(50.0f * std::sin(static_cast<float>(s_warm_cnt) / 12.0f))) + 0x78;
-        s_warm_cnt    = (s_warm_cnt + 1) % 1000000;
+        repair_bright = std::abs(static_cast<int>(50.0f * std::sin(static_cast<float>(warm_cnt) / 12.0f))) + 0x78;
+        warm_cnt      = (warm_cnt + 1) % 1000000;
     }
 
     UI::BevelButton::Draw(
-        UI::Rect(left, top + 1 + kRowStride * 3, kBtnW, kBtnH),
+        UI::Rect(left, top + 1 + row_stride * 3, btn_w, btn_h),
         LocalizeText("weaponmenu.action.repair", "REPAIR"),
         UI::ButtonStyle::Thin(UI::ButtonPreset::Terracotta, repair_bright),
         alpha
     );
 
-    static int s_level_blink_cnt = 0;
-    s_level_blink_cnt = (s_level_blink_cnt + 1) % 1000000;
+    static int level_blink_cnt = 0;
+    level_blink_cnt            = (level_blink_cnt + 1) % 1000000;
 
-    int dest_y = top + 1 + kRowStride * 4;
+    int dest_y = top + 1 + row_stride * 4;
     for (int i = 1; i <= 3; i++) {
         int row_bright = 0x80;
         if (i == 3) {
@@ -341,7 +380,7 @@ PORT_OVERRIDE void DrawWeaponSelectDialog(int x, int y, int alpha) {
             WeaponStatusBuildUp(weapon, build);
             const int attached = GetNowWeaponAttachNum(weapon);
             if (build > 0 && attached == 0) {
-                row_bright += std::abs(static_cast<int>(40.0f * std::sin(static_cast<float>(s_level_blink_cnt) / 12.0f)));
+                row_bright += std::abs(static_cast<int>(40.0f * std::sin(static_cast<float>(level_blink_cnt) / 12.0f)));
             }
         }
 
@@ -360,18 +399,18 @@ PORT_OVERRIDE void DrawWeaponSelectDialog(int x, int y, int alpha) {
             }
 
             UI::BevelButton::Draw(
-                UI::Rect(left, dest_y, kBtnW, kBtnH),
+                UI::Rect(left, dest_y, btn_w, btn_h),
                 btn_label,
                 UI::ButtonStyle::Thin(btn_preset, row_bright),
                 alpha
             );
-            dest_y += kRowStride;
+            dest_y += row_stride;
         }
     }
 
     if (WepMenu.state == WEP_STATE_SCRAP_PROMPT || WepMenu.state == WEP_STATE_SCRAP_CONFIRM) {
         UI::BevelButton::Draw(
-            UI::Rect(x + 0x64, y + 0x33, kBtnW, kBtnH),
+            UI::Rect(x + 0x64, y + 0x33, btn_w, btn_h),
             LocalizeText("weaponmenu.action.discard", "DISCARD"),
             UI::ButtonStyle::Thin(UI::ButtonPreset::Terracotta, 0x80),
             0x80
@@ -380,18 +419,20 @@ PORT_OVERRIDE void DrawWeaponSelectDialog(int x, int y, int alpha) {
 }
 
 PORT_OVERRIDE void RepairAndLevelUpDraw(int x, int y, int alpha) {
-    if (alpha <= 0) return;
+    if (alpha <= 0) {
+        return;
+    }
 
     setbilinear(0);
     MenuTextureReload(BtlMenuReadBlock);
 
-    constexpr int kBoxW = 248;
-    constexpr int kBoxH = 82;
-    UI::HelpBox::Draw(x - 10, y, kBoxW, kBoxH, alpha);
+    constexpr int box_w = 248;
+    constexpr int box_h = 82;
+    UI::HelpBox::Draw(x - 10, y, box_w, box_h, alpha);
 
-    const int   items[2] = {ITEM_REPAIR_POWDER, ITEM_POWERUP_POWDER};
-    const char* kKeys[2] = {"weaponmenu.repair_powder", "weaponmenu.powerup_powder"};
-    const char* kDefs[2] = {"Repair Powder",            "Powerup Powder"};
+    constexpr int         items[2] = {ITEM_REPAIR_POWDER, ITEM_POWERUP_POWDER};
+    constexpr const char *keys[2]  = {"weaponmenu.repair_powder", "weaponmenu.powerup_powder"};
+    constexpr const char *defs[2]  = {"Repair Powder", "Powerup Powder"};
 
     for (int i = 0; i < 2; i++) {
         const int item_no = items[i];
@@ -400,9 +441,11 @@ PORT_OVERRIDE void RepairAndLevelUpDraw(int x, int y, int alpha) {
 
         UI::ItemIcon::Draw(item_no, x + 6, row_y, 26, alpha, true, false);
 
-        std::string item_name = DecodeItemNamePort(item_no, LocalizeText(kKeys[i], kDefs[i]));
-        for (char& ch : item_name) {
-            if (ch == '\n' || ch == '\r') ch = ' ';
+        std::string item_name = DecodeItemNamePort(item_no, LocalizeText(keys[i], defs[i]));
+        for (char &ch : item_name) {
+            if (ch == '\n' || ch == '\r') {
+                ch = ' ';
+            }
         }
 
         UI::Label name_lbl(item_name, UI::ColorWhite, UI::Alignment::Left, true, 0.80f);
@@ -421,10 +464,12 @@ PORT_OVERRIDE void RepairAndLevelUpDraw(int x, int y, int alpha) {
 }
 
 PORT_OVERRIDE void DrawBuildUpWeaponSelect(int x, int y, int cursor) {
-    WEAPON_HAVE* weapon = GetNowSelectWeaponPort();
-    if (weapon == nullptr) return;
+    WEAPON_HAVE *weapon = GetNowSelectWeaponPort();
+    if (weapon == nullptr) {
+        return;
+    }
 
-    int build = 0;
+    int       build = 0;
     const int count = WeaponStatusBuildUp(weapon, build);
 
     WEP_BUILDUP_INFO builds[8]{};
@@ -435,10 +480,10 @@ PORT_OVERRIDE void DrawBuildUpWeaponSelect(int x, int y, int cursor) {
         header = LocalizeText("weaponmenu.buildup.prompt", "Select weapon to build up to:");
     }
 
-    std::vector<std::string> h_lines = UI::WrapText(header, 220, 0.86f);
-    const int header_h = std::max(1, static_cast<int>(h_lines.size())) * 20 + 14;
-    const int box_w    = 252;
-    const int box_h    = header_h + count * 0x26 + 22;
+    std::vector<std::string> h_lines  = UI::WrapText(header, 220, 0.86f);
+    const int                header_h = std::max(1, static_cast<int>(h_lines.size())) * 20 + 14;
+    constexpr int            box_w    = 252;
+    const int                box_h    = header_h + count * 0x26 + 22;
 
     UI::HelpBox::Draw(x - 14, y - 12, box_w, box_h, 0x80);
 
@@ -459,11 +504,11 @@ PORT_OVERRIDE void DrawBuildUpWeaponSelect(int x, int y, int cursor) {
             text_col    = selected ? UI::ColorYellow : UI::ColorWhite;
         }
 
-        UI::TextStyle banner_txt{
+        const UI::TextStyle banner_txt{
             .color       = text_col,
             .drop_shadow = true,
             .align       = UI::Alignment::Center,
-            .scale       = 0.90f
+            .scale       = 0.90f,
         };
 
         UI::TrackerWindow::DrawStoneBanner(
@@ -480,7 +525,9 @@ PORT_OVERRIDE void DrawBuildUpWeaponSelect(int x, int y, int cursor) {
 
 PORT_OVERRIDE void DrawAallWeapon(int x, int y, float depth, CCharacter *model,
                                   WEAPON_HAVE *weapon, int equipped, int selected, int alpha) {
-    if (weapon == nullptr) return;
+    if (weapon == nullptr) {
+        return;
+    }
 
     MenuTextureReload(MenuExtendReadBlock);
     float         spin     = 0.0f;
@@ -488,7 +535,7 @@ PORT_OVERRIDE void DrawAallWeapon(int x, int y, float depth, CCharacter *model,
 
     if (model != nullptr) {
         if (equipped != 0) {
-            position[1] = -1.3f + std::sin(WepFrameRate);
+            position[1]  = -1.3f + std::sin(WepFrameRate);
             WepFrameRate = std::min(static_cast<float>(PI), WepFrameRate + 0.34906587f);
             if (static_cast<float>(PI) != WepFrameRate) {
                 spin = 0.0f;
@@ -510,21 +557,21 @@ PORT_OVERRIDE void DrawAallWeapon(int x, int y, float depth, CCharacter *model,
             MenuWepLevelUp.operation_kind == WEP_EFFECT_RECOVER ||
             MenuWepLevelUp.operation_kind == WEP_EFFECT_BUILDUP) {
             float rot_x = -HALF_PI;
-            if (rot_x > PI_D) rot_x -= PI;
-            if (spin > PI_D)  spin  -= PI;
+            if (rot_x > PI_D) {
+                rot_x -= PI;
+            }
+            if (spin > PI_D) {
+                spin -= PI;
+            }
             float rot_z = 0.62831855f;
-            if (rot_z > PI_D) rot_z -= PI;
+            if (rot_z > PI_D) {
+                rot_z -= PI;
+            }
             model->SetRotation(rot_x, spin, rot_z);
         }
 
         model->Draw();
     }
-
-#ifdef PAL
-    MenuTextureReload(BtlMenuExtBlock);
-#else
-    MenuTextureReload(BtlMenuReadBlock);
-#endif
 
     switch (WepMenu.mode) {
         case WEP_MENU_LIST:
@@ -550,12 +597,12 @@ PORT_OVERRIDE void DrawAallWeapon(int x, int y, float depth, CCharacter *model,
 
     const std::string weapon_title = hide_title ? std::string{} : FormatWeaponTitlePort(weapon);
 
-    UI::TextStyle title_style{
+    const UI::TextStyle title_style{
         .color       = UI::ColorGold,
         .drop_shadow = true,
         .align       = UI::Alignment::Center,
         .scale       = 1.14f,
-        .text_dy     = 1
+        .text_dy     = 1,
     };
 
     UI::TrackerWindow::DrawStoneBanner(
@@ -567,11 +614,6 @@ PORT_OVERRIDE void DrawAallWeapon(int x, int y, float depth, CCharacter *model,
     );
 
     setbilinear(0);
-#ifdef PAL
-    MenuTextureReload(BtlMenuExtBlock);
-#else
-    MenuTextureReload(BtlMenuReadBlock);
-#endif
 
     if (equipped != 0) {
         DrawMenu2DSprite(WepStatus, CRect_i_(x + 10, y - 0x15, 0x40, 0x17), CRect_i_(0xD4, 0x141, 0x40, 0x17), alpha);
@@ -590,9 +632,9 @@ PORT_OVERRIDE void DrawAallWeapon(int x, int y, float depth, CCharacter *model,
         WeaponOptionStatusDraw(weapon, x + 0x50, y - 0x12, alpha);
     }
 
-    const float hole_scale[2] = {0.75f, 1.0f};
-    float       width         = static_cast<float>(GetWeaponHoleNum(weapon->item_no) * 0x12 + 10) * hole_scale[selected];
-    const int   draw_x        = static_cast<int>(static_cast<float>(x + 0x52) - width);
+    constexpr float hole_scale[2] = {0.75f, 1.0f};
+    const float     width         = static_cast<float>(GetWeaponHoleNum(weapon->item_no) * 0x12 + 10) * hole_scale[selected];
+    const int       draw_x        = static_cast<int>(static_cast<float>(x + 0x52) - width);
 
     if (WepMenu.mode >= WEP_MENU_ATTACH_WEAPON) {
         DrawWepHole(draw_x, 0xB8, weapon, selected, alpha);
@@ -674,8 +716,8 @@ PORT_OVERRIDE void BtlWeaponDraw(int x, float depth, int chara, int alpha) {
             if (GetNowTestNo() == 1) {
                 if (is_equipped != 0) {
                     MenuTextureReload(MenuShadowReadBlock);
-                    const char *shadows[6] = {"kagetoan", "kagesyao", "kagegoro", "kageruby", "kageunga", "kageozu"};
-                    DrawMenu2DSprite(TexManager.GetTexture(const_cast<char*>(shadows[static_cast<int>(WepMenu.chara)]), -1),
+                    constexpr const char *shadows[6] = {"kagetoan", "kagesyao", "kagegoro", "kageruby", "kageunga", "kageozu"};
+                    DrawMenu2DSprite(TexManager.GetTexture(const_cast<char *>(shadows[static_cast<int>(WepMenu.chara)]), -1),
                                      CRect_i_(x + 0x24, 0x96, 0x64, 0x63),
                                      CRect_i_(0, 0, 0x64, 0x64), draw_alpha * 9 / 40);
                     MenuTextureReload(MenuExtendReadBlock);
@@ -692,13 +734,8 @@ PORT_OVERRIDE void BtlWeaponDraw(int x, float depth, int chara, int alpha) {
                 DrawAallWeapon(x, 0xA0, depth, frame, weapon, is_equipped, is_selected, draw_alpha);
             }
         } else {
-#ifdef PAL
-            MenuTextureReload(BtlMenuExtBlock);
-#else
-            MenuTextureReload(BtlMenuReadBlock);
-#endif
             if (is_selected == 0 || WepMenu.state != WEP_STATE_STATUS_BREAK_EFFECT) {
-                DrawMenuNothing(x - 4, 0x82, 0xB4, 0x96, (char*)"wepstatus", 0, draw_alpha);
+                DrawMenuNothing(x - 4, 0x82, 0xB4, 0x96, const_cast<char *>("wepstatus"), 0, draw_alpha);
             }
         }
 
@@ -711,9 +748,6 @@ PORT_OVERRIDE void BtlWeaponDraw(int x, float depth, int chara, int alpha) {
             case WEP_MENU_ATTACH_WEAPON:
                 MenuTextureReload(BtlMenuReadBlock);
                 DrawBtlMenuLRCursor(x - 0x1C, 0xE6, 0xD4, draw_alpha);
-#ifdef PAL
-                MenuTextureReload(BtlMenuExtBlock);
-#endif
                 DrawWeaponTagBoardPort(x - 0xC, 0xF0, weapon, 0, 0, draw_alpha);
                 [[fallthrough]];
             case WEP_MENU_LIST:
@@ -738,7 +772,7 @@ PORT_OVERRIDE void BtlWeaponDraw(int x, float depth, int chara, int alpha) {
             break;
         default: {
             const int dim = (WepMenu.mode != WEP_MENU_LIST) ? 1 : 0;
-            FadeTexX(0, 0xCC, 0x1AE, 0xD2, (char*)"frame_image", dim);
+            FadeTexX(0, 0xCC, 0x1AE, 0xD2, const_cast<char *>("frame_image"), dim);
             break;
         }
     }
@@ -800,18 +834,18 @@ PORT_OVERRIDE void WeaponMenuDraw() {
                 }
             }
 
-            FadeTexX(0xDC, 0x32, 0x172, 0x32, (char*)"frame_image", 0);
+            FadeTexX(0xDC, 0x32, 0x172, 0x32, const_cast<char *>("frame_image"), 0);
 
             if (attach_mode == 0) {
-                static int s_arrow_ct = 0;
-                int scratch = alpha;
+                static int arrow_ct = 0;
+                int        scratch  = alpha;
                 if (WepMenu.mode == WEP_MENU_LIST) {
-                    s_arrow_ct = (s_arrow_ct + 1) % 1000000;
+                    arrow_ct = (arrow_ct + 1) % 1000000;
                 } else {
                     scratch = 0;
                 }
-                if (s_arrow_ct % 50 < 30) {
-                    const int step = (s_arrow_ct % 30) / 10 * 2;
+                if (arrow_ct % 50 < 30) {
+                    const int step = (arrow_ct % 30) / 10 * 2;
                     CRect_i_  arrow(0x60, 0x68, 10, 0x18);
                     DrawMenu2DSprite(BtStatus, CRect_i_(0x102 - step, 0x48, arrow.width, arrow.height), arrow, scratch);
                     arrow.x += arrow.width;
@@ -846,15 +880,11 @@ PORT_OVERRIDE void WeaponMenuDraw() {
     BtlWeaponDraw(static_cast<int>(WeaponPos), WepPolyPos, WepMenu.chara, scratch);
 
     if (attach_mode == 0) {
-#ifdef PAL
-        const u8 repair_x[7] = {78, 78, 78, 26, 64, 64, 66};
+        constexpr u8 repair_x[7] = {78, 78, 78, 26, 64, 64, 66};
         RepairAndLevelUpDraw(repair_x[BtlMenuNowLang], 0x164, alpha);
-#else
-        RepairAndLevelUpDraw(0x4E, 0x144, alpha);
-#endif
     }
 
-    constexpr int dialog_pos = 0x70;
+    constexpr int    dialog_pos = 0x70;
     WEP_BUILDUP_INFO builds[4]{};
 
     switch (WepMenu.mode) {
@@ -875,18 +905,12 @@ PORT_OVERRIDE void WeaponMenuDraw() {
             MenuTextureReload(BtlMenuReadBlock);
             DrawBtlMenuLRCursor(0x158, 0x6E, 0xD4, alpha);
             EnableBuildUpModel(builds, GetNowSelectWeaponPort());
-#ifdef PAL
-            MenuTextureReload(BtlMenuExtBlock);
-#endif
             DrawWeaponTagBoardPort(0x16C, 0x78, GetNowSelectWeaponPort(), 1, builds[WepMenu.board.cursor].weapon_no, 0x80);
             [[fallthrough]];
         case WEP_MENU_BUILDUP_SELECT:
             DrawBuildUpWeaponSelect(0x58, 0x9C, WepMenu.board.cursor);
             break;
         case WEP_MENU_ELEMENT:
-#ifdef PAL
-            MenuTextureReload(BtlMenuExtBlock);
-#endif
             DrawWeaponTagBoardPort(0x18A, 0x64, GetNowSelectWeaponPort(), 0, 0, 0x80);
             [[fallthrough]];
         case WEP_MENU_ACTION:
@@ -914,11 +938,11 @@ PORT_OVERRIDE void WeaponMenuDraw() {
             break;
     }
 
-    int slot = std::clamp(static_cast<int>(WepMenu.weapon_slot), 0, 9);
+    const int slot      = std::clamp(static_cast<int>(WepMenu.weapon_slot), 0, 9);
     WepMenu.weapon_slot = static_cast<s8>(slot);
 
-    const int holes = GetWeaponHoleNum(DngWepHavePt[slot].item_no);
-    s16 cursor_pos[12][2] = {
+    const int holes             = GetWeaponHoleNum(DngWepHavePt[slot].item_no);
+    s16       cursor_pos[12][2] = {
         {0xC0,  0xA5},
         {0x50,  0   },
         {0x16E, 0   },
@@ -991,7 +1015,7 @@ PORT_OVERRIDE void WeaponMenuDraw() {
     frames[10].x = cursor_x + 0xC;
     frames[10].y = cursor_y - 8;
 
-    RECT frame = frames[WepMenu.mode];
+    RECT         frame    = frames[WepMenu.mode];
     WEAPON_HAVE *selected = GetNowSelectWeaponPort();
     if (selected != nullptr && selected->item_no < ITEM_WEAPON_START) {
         frame = frames[11];
@@ -1014,8 +1038,8 @@ PORT_OVERRIDE void WeaponMenuDraw() {
             if (WepMenu.board.cursor >= WEP_ACTION_LEVELUP &&
                 WepMenu.state != WEP_STATE_SCRAP_PROMPT &&
                 WepMenu.state != WEP_STATE_SCRAP_CONFIRM) {
-                int offset_y = 0;
-                const int options = NowWeaponStatusValuePort(&DngWepHavePt[static_cast<int>(WepMenu.weapon_slot)]);
+                int       offset_y = 0;
+                const int options  = NowWeaponStatusValuePort(&DngWepHavePt[static_cast<int>(WepMenu.weapon_slot)]);
                 for (int i = 4; WepMenu.board.cursor >= i; i++) {
                     if (options & (1 << (i - 3))) {
                         offset_y += 0x1A;
