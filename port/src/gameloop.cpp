@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "battle_globals.hpp"
+#include "battlemenu.hpp"
 #include "btsysscript.hpp"
 #include "caption_text.hpp"
 #include "dataread.hpp"
@@ -947,7 +948,22 @@ int RunGame(int argc, char **argv) {
                 StartEventNo = -1;
                 result = 1;
             }
-
+            
+            if (result == 0 && NextMapNo == 9999 && BattleMenuFlag == 0) {
+                // An in-game Load from the Battle Menu finished reading into SaveData:
+                // extract the loaded save's map_no (just as TitleLoop does before returning 2)
+                // and reset OldMapNo = -1 so EditInit() loads the saved town and spawn position!
+                const s32 loaded_map = *reinterpret_cast<const s32 *>(
+                    reinterpret_cast<const char *>(SaveData) + kSaveMapNoOffset);
+                MapNo      = (loaded_map >= 0 && loaded_map < 200) ? loaded_map : 0;
+                LocalMapNo = MapNo;
+                OldMapNo   = -1;
+                NextMapNo  = -1;
+                StartEventNo = -1;
+                GameApplyLoopResult(GAME_MODE_TITLE, 2);
+                break;
+            }
+            
             GiveOnArrival();
             InputSetLookOnLeftStick((mode == GAME_MODE_DUNGEON && gameTask == GAME_TASK_EYE_CAMERA) ||
                                     (mode == GAME_MODE_EDIT && viewMode != 0 && EdInteriorFlag == 0));
