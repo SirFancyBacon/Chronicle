@@ -56,6 +56,20 @@ PORT_OVERRIDE void DrawFullSizePicture(CTexture *texture, int x, int y, int alph
 // The Register Name screen's hand follows the mouse while the pointer is in use.
 PORT_OVERRIDE void DrawMenu2DSprite(CTexture *texture, CRect_i_ screen, CRect_i_ texel, unsigned char r, unsigned char g,
                                   unsigned char b, int alpha) {
+    // Retail often specifies texel.height 1 or 2 texels taller than screen.height on 1:1 sprites
+    // (such as Georama plates 0x100x0x78 from 0x100x0x79 and sockets 0x24x0x24 from 0x24x0x25).
+    if (screen.width > 0 && screen.height > 0 &&
+        texel.width == screen.width &&
+        (texel.height == screen.height + 1 || texel.height == screen.height + 2)) {
+        texel.height = screen.height;
+        // The completed gold Georama plate in Sozai (u=0, v=0x78, 0x100x0x78) is 119px (0x77) tall;
+        // row 239 (0xEF) at the far right holds two orange texels from the gauge sprite below it.
+        if (screen.width == 0x100 && screen.height == 0x78 && texel.x == 0 && texel.y == 0x78) {
+            screen.height = 0x77;
+            texel.height  = 0x77;
+        }
+    }
+
     NameMouseHand(texture, screen, texel, r == 0 && g == 0 && b == 0);
     set2DSprite(GetVif1Packet(), texture, screen, texel, r, g, b, alpha);
 }

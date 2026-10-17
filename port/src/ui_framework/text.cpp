@@ -511,7 +511,7 @@ void Label::DrawInRect(const Rect& box, int alpha) {
             center_x = static_cast<float>(box.x + box.w - 6) - static_cast<float>(width) * 0.5f;
         }
         float cap_height = detail::kBaseCapHeight * m_scale;
-        float cap_top    = static_cast<float>(box.y) + (static_cast<float>(box.h) - cap_height) * 0.5f - 2.25f;
+        float cap_top    = static_cast<float>(box.y) + (static_cast<float>(box.h) - cap_height) * 0.5f - 1.0f;
 
         ScaledDrawParams params{
             .color          = m_color,
@@ -732,6 +732,6 @@ void DrawStatusSlashPair(int current_val, int max_val, int slash_x, int y,
     slash_style.scale  = scale * 1.12f;
     slash_style.xscale = 1.04f;
     Label(std::to_string(max_val), slash_style).Draw(slash_x + 8, y, alpha);
-}
+} 
 
 } // namespace UI
