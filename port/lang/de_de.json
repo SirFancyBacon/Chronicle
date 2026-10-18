@@ -340,5 +340,15 @@
     "tracker.town.1": "Dorf Matataki",
     "tracker.town.2": "Queens",
     "tracker.town.3": "Muska Lacka",
-    "tracker.town.4": "Gelbe Tropfen"
+    "tracker.town.4": "Gelbe Tropfen",
+    "dialog.common.talk": "Reden",
+    "dialog.common.leave": "Nichts",
+    "dialog.common.back": "Zurück",
+    "dialog.common.yes": "Ja",
+    "dialog.common.no": "Nein",
+    "dialog.common.accept": "Annehmen",
+    "dialog.common.decline": "Ablehnen",
+    "dialog.common.next_page": "{cross} Weiter",
+    "dialog.hub.default_prompt": "Kann ich dir helfen?",
+    "dialog.hub.anything_else": "Sonst noch etwas?"
 }

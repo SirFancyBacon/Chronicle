@@ -340,5 +340,15 @@
     "tracker.town.1": "Villaggio Matataki",
     "tracker.town.2": "Queens",
     "tracker.town.3": "Muska Lacka",
-    "tracker.town.4": "Gocce Gialle"
+    "tracker.town.4": "Gocce Gialle",
+    "dialog.common.talk": "Parla",
+    "dialog.common.leave": "Niente",
+    "dialog.common.back": "Indietro",
+    "dialog.common.yes": "Sì",
+    "dialog.common.no": "No",
+    "dialog.common.accept": "Accetta",
+    "dialog.common.decline": "Rifiuta",
+    "dialog.common.next_page": "{cross} Avanti",
+    "dialog.hub.default_prompt": "Ti serve qualcosa?",
+    "dialog.hub.anything_else": "C'è altro?"
 }

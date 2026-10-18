@@ -15,6 +15,7 @@
 #include "menu_manual.hpp"
 #include "weapon_buildup.hpp"
 #include "menu_misc.hpp"
+#include "dialog_npc.hpp"
 #include "menu_option.hpp"
 #include "menu_save.hpp"
 #include "save_slots.hpp"
@@ -1073,6 +1074,14 @@ void MenuMouseUpdate() {
         return;
     }
     NameMouseRelease();
+
+    if (DialogNpcMouseOpen()) {
+        // A villager's conversation through the dialog framework (dialog_npc.cpp).
+        g_battle.Close();
+        DialogNpcMouseUpdate();
+        return;
+    }
+    DialogNpcMouseRelease();
 
     if (battle && BattleMenuFlag != BTLMENU_STATE_EXIT && BattleMenuFlag != BTLMENU_STATE_APPEAR) {
         BattleMouse();

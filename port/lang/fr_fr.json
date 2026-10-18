@@ -340,5 +340,15 @@
     "tracker.town.1": "Village Matataki",
     "tracker.town.2": "Queens",
     "tracker.town.3": "Muska Lacka",
-    "tracker.town.4": "Gouttes Jaunes"
+    "tracker.town.4": "Gouttes Jaunes",
+    "dialog.common.talk": "Parler",
+    "dialog.common.leave": "Non merci",
+    "dialog.common.back": "Retour",
+    "dialog.common.yes": "Oui",
+    "dialog.common.no": "Non",
+    "dialog.common.accept": "Accepter",
+    "dialog.common.decline": "Refuser",
+    "dialog.common.next_page": "{cross} Suivant",
+    "dialog.hub.default_prompt": "Vous désirez quelque chose ?",
+    "dialog.hub.anything_else": "Autre chose ?"
 }

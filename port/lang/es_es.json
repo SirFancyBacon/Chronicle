@@ -340,5 +340,15 @@
     "tracker.town.1": "Aldea Matataki",
     "tracker.town.2": "Queens",
     "tracker.town.3": "Muska Lacka",
-    "tracker.town.4": "Gotas Amarillas"
+    "tracker.town.4": "Gotas Amarillas",
+    "dialog.common.talk": "Hablar",
+    "dialog.common.leave": "Nada",
+    "dialog.common.back": "Volver",
+    "dialog.common.yes": "Sí",
+    "dialog.common.no": "No",
+    "dialog.common.accept": "Aceptar",
+    "dialog.common.decline": "Rechazar",
+    "dialog.common.next_page": "{cross} Siguiente",
+    "dialog.hub.default_prompt": "¿Necesitas algo?",
+    "dialog.hub.anything_else": "¿Algo más?"
 }
