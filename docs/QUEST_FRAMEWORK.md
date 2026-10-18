@@ -43,7 +43,9 @@ quest that ends in a shop (`FetchQuest`).
   applies them until none does; it runs whenever an NPC's menu is put together, and again after
   each quest choice.
 - **Conditions** are plain functions of the quest's `Context`: `AtStage`, `AtStages`, `HasItem`,
-  `HasMoney`, `FloorReached`, `VarAtLeast`, and `All`, `Any`, `Not` to combine them. A lambda works
+  `HasMoney`, `FloorReached`, `DungeonStarted`, `PartyMember`, `VarAtLeast`, the game's flags
+  (`GameFlagSet`, `GameNumberAtLeast`, `MapFlagSet`), its georama (`PartPlaced`, `PartComplete`,
+  `EventDone`, `RequestMet`, `VillagerHome`), and `All`, `Any`, `Not` to combine them. A lambda works
   too.
 - **Choices** (`Option`) are added to the menu of the NPCs an `NpcMatch` names (map, villager, message
   file; `Quest::kAny` matches any) while their condition holds. A choice runs as a `Scene`.
@@ -91,7 +93,12 @@ under `quest.<quest id>.`. `Text` holds views, so it is made of string literals.
 | `DeepestFloor(dungeon)` | `floor_reached`: -1 for a dungeon never entered; 0 is the Divine Beast Cave. |
 | `DungeonCount(dungeon)` | `CSaveData::QuestDungeon(dungeon, 0)`, as the town scripts read it: 0 until the player has been in. |
 | `PartySize()` | How many have joined: Toan 1, Xiao 2, Goro 3... `Quest::PartyMember(chara)` holds once character `chara` (0 Toan, 1 Xiao...) has. |
-| `EventCompleted(event)` | `CEditPartsInfo::GetCompEvent`: a georama event has happened (7 is Gaffer's Buggy). |
+| `GameFlag`, `SetGameFlag` | The game's flags, 0 to 8191, as the town scripts read and set them (`_SGET_GAME_FLAG`, `_SSET_GAME_FLAG`). Setting one changes what retail does, so a quest sets only flags it knows the meaning of. |
+| `GameNumber`, `SetGameNumber` | The game's 32 numbers (`_SGET_GAME_INT_FLAG`, `_SSET_GAME_INT_FLAG`). |
+| `MapFlag`, `SetMapFlag` | A map's flags as the scripts read them (`_SGET_MAP_FLAG`): set where the save holds 0. The map the player is on goes through `EdGetMapFlag`, which shares Treant's chest flags between its two maps. |
+| `PartObtained`, `PartPlaced`, `PartComplete`, `PartEventDone` | A georama part, by town (0 Norune, 1 Matataki, 2 Queens, 3 Muska Lacka, 4 Yellow Drops) and part (0 to 23): obtained, copies standing, every element in place (`CheckComplete`), its completion event run (`GetCompEvent`; Norune's part 7 is Gaffer's Buggy). |
+| `RequestMet(town, request)` | A villager's georama request is met (`_SCHECK_REQUEST`). |
+| `VillagerHome(town, villager)` | A villager, by the number the dialog framework gives them, is back: their house stands and they are in it (`_CHECK_VILLAGER`). Known for the town the player is in only; false for any other. |
 | `TalkLine(message)` | A line of the town's villager message file, the NPCs' own words in the player's language. `Scene::SayTalkLine` says one, with a fallback where the file has none. |
 | `OpenShop(spec)` | A shop screen once the conversation has ended. |
 | `ShowItemReceived(item)` | Once the conversation has ended, the scene the towns' events show an item received with: the camera, the glow, Toan holding it up, the jingle and the message naming it. Shows only (`GiveItem` gives). False where the town's script has no such scene, and the quest says so itself. |
@@ -204,3 +211,15 @@ When the conversation ends, `EdTalkMode` returns the port's event number `kEvent
 (`runscript_port.hpp`) as a talk's own event, and `CRunScript::run` starts the routine with the item,
 no fade and its own camera. Norune, Matataki and Queens have the routine, as do some interiors;
 Muska Lacka and Yellow Drops do not, and there `ShowItemReceived` is false.
+
+---
+
+## 9. Georama, live and saved
+
+The town the player is in keeps its georama in `EditPartsInfo`, written back to the save when they
+leave it (`EditSave`); every other town's is in the save (`SV_GEORAMA_DATA`: each part's state and each
+request's). The georama queries read `EditPartsInfo` for the town the player is in
+(`NowEditMap`), and for any other load a copy of that town's from its save, its parts' catalogue
+coming from the game's own tables (`CEditPartsInfo::Load`), so a quest can ask about Matataki from
+Norune. A villager's being home depends on where their house stands in the town's layout, which only
+the town the player is in has loaded.

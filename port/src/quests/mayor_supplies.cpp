@@ -14,6 +14,8 @@ using Quest::Scene;
 using Quest::Text;
 
 constexpr int kDivineBeastCave = 0;
+// Gaffer's Buggy: part 7 of Norune.
+constexpr int kNorune = 0;
 constexpr int kGaffersBuggy = 7;
 
 // The script's lines for them: what he says handing supplies over, and about the buggy once it is built.
@@ -29,7 +31,7 @@ constexpr Text kNoRoom = {"quest.mayor_supplies.no_room",
                           "You've no room to carry any more. Make some space and come back."};
 
 void HandOutSupplies(Scene &scene) {
-    if (scene.Game().EventCompleted(kGaffersBuggy)) {
+    if (scene.Game().PartEventDone(kNorune, kGaffersBuggy)) {
         scene.SayTalkLine(kBuggyLine, kBuggy);
         return;
     }

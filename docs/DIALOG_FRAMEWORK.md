@@ -66,6 +66,10 @@ The mouse works the window as the menus' does (`DialogNpcMouseUpdate`, from `Men
 takes it (or turns a page of text), the right button backs out and the wheel moves the hand. Each is
 the pad's press, so `DialogNpcStep` does the rest.
 
+A list of choices longer than the window (six) scrolls with the cursor. The window's own page arrow
+(`syst04`, the blinking arrow that says more text follows) blinks below the last choice where more
+are below, and drawn turned over above the first where more are above (`ClsMesSetChoiceScroll`).
+
 The talk window grows to its widest line and does not wrap, so `DialogNpcOpen` sets the layout's
 `max_inner_width` to 380 (about as wide as retail's villager lines run) and `max_visible_choices`
 to 6, to stay within the window's ten rows. Lines are measured in the menu font, which is close to
@@ -149,7 +153,6 @@ a text measurer, so it needs no font.
 
 ## 6. Not done yet
 
-- A list of choices longer than the window scrolls with the cursor but shows no scroll marks.
 - Wrapping measures in the menu font, close to but not exactly the talk window's.
 - The default renderer (for `OpenCustomSession`, not villagers) lays out a speech-bubble tail
   (`ComputedLayout::has_tail`) but does not draw one.

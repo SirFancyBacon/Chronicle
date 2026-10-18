@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "dialog_framework.hpp"
@@ -24,7 +25,14 @@ public:
     std::map<int, int>             stored;
     std::map<int, int>             floors;
     std::map<int, int>             dungeon_counts;
-    std::map<int, bool>            events;
+    std::map<std::pair<int, int>, bool> part_events;
+    std::map<std::pair<int, int>, int>  parts_placed;
+    std::map<std::pair<int, int>, bool> parts_complete;
+    std::map<std::pair<int, int>, bool> requests;
+    std::map<std::pair<int, int>, bool> villagers_home;
+    std::map<int, bool>                 game_flags;
+    std::map<int, int>                  game_numbers;
+    std::map<std::pair<int, int>, bool> map_flags;
     std::map<int, std::string>     talk_lines;
     int                            money = 0;
     int                            party = 1;
@@ -75,9 +83,24 @@ public:
         return it == dungeon_counts.end() ? 0 : it->second;
     }
     int  PartySize() const override { return party; }
-    bool EventCompleted(int event) const override {
-        const auto it = events.find(event);
-        return it != events.end() && it->second;
+    template <typename Map, typename Key>
+    static auto Get(const Map &map, const Key &key) {
+        const auto it = map.find(key);
+        return it == map.end() ? typename Map::mapped_type{} : it->second;
+    }
+    bool GameFlag(int flag) const override { return Get(game_flags, flag); }
+    void SetGameFlag(int flag, bool on) override { game_flags[flag] = on; }
+    int  GameNumber(int slot) const override { return Get(game_numbers, slot); }
+    void SetGameNumber(int slot, int value) override { game_numbers[slot] = value; }
+    bool MapFlag(int map, int flag) const override { return Get(map_flags, std::make_pair(map, flag)); }
+    void SetMapFlag(int map, int flag, bool on) override { map_flags[{map, flag}] = on; }
+    bool PartObtained(int town, int part) const override { return PartPlaced(town, part) > 0; }
+    int  PartPlaced(int town, int part) const override { return Get(parts_placed, std::make_pair(town, part)); }
+    bool PartComplete(int town, int part) const override { return Get(parts_complete, std::make_pair(town, part)); }
+    bool PartEventDone(int town, int part) const override { return Get(part_events, std::make_pair(town, part)); }
+    bool RequestMet(int town, int request) const override { return Get(requests, std::make_pair(town, request)); }
+    bool VillagerHome(int town, int villager) const override {
+        return Get(villagers_home, std::make_pair(town, villager));
     }
     std::string TalkLine(int message) const override {
         const auto it = talk_lines.find(message);
@@ -381,7 +404,7 @@ TEST_F(QuestFramework, MayorTalksOfTheBuggyOnceItIsBuilt) {
     Quest::Register(MayorSupplies());
     const Dialog::NpcContext mayor = Npc(NoruneMayor().map_no, NoruneMayor().npc_id);
     game.dungeon_counts[0] = 1;
-    game.events[7] = true;
+    game.part_events[{0, 7}] = true;
     game.talk_lines[kNoruneMayorLines + 9] = "Gaffer's Buggy line.";
 
     ASSERT_TRUE(Dialog::TryInterceptOpen(mayor, {}));
@@ -487,6 +510,58 @@ TEST_F(QuestFramework, CarlSaysTheSlingshotIsReceivedWhereTheTownCannotShowIt) {
     EXPECT_NE(View().current_slice.raw_text.find("Received the Bone Slingshot"), std::string::npos);
     Read();
     EXPECT_TRUE(Dialog::IsSessionActive());
+}
+
+TEST_F(QuestFramework, ConditionsReadTheGamesFlagsAndGeorama) {
+    // One stage a condition: the rules move the quest on as far as the game allows.
+    Quest::Register(Quest::Builder("test_georama")
+                        .Stages({"a", "b", "c", "d", "e", "f", "g", "h"})
+                        .Advance("a", Quest::GameFlagSet(200), "b")
+                        .Advance("b", Quest::GameNumberAtLeast(3, 100), "c")
+                        .Advance("c", Quest::MapFlagSet(0, 12), "d")
+                        .Advance("d", Quest::PartPlaced(1, 4), "e")
+                        .Advance("e", Quest::PartComplete(1, 4), "f")
+                        .Advance("f", Quest::RequestMet(1, 2), "g")
+                        .Advance("g", Quest::All({Quest::VillagerHome(0, 9), Quest::EventDone(0, 7)}), "h")
+                        .Build());
+    const auto stage_after = [&]() {
+        Quest::Evaluate();
+        return Stage("test_georama");
+    };
+
+    EXPECT_EQ(stage_after(), "a");
+    game.game_flags[200] = true;
+    game.game_numbers[3] = 99;
+    EXPECT_EQ(stage_after(), "b");
+    game.game_numbers[3] = 100;
+    game.map_flags[{0, 12}] = true;
+    // The same part in another town does not count.
+    game.parts_placed[{0, 4}] = 1;
+    EXPECT_EQ(stage_after(), "d");
+    game.parts_placed[{1, 4}] = 1;
+    game.parts_complete[{1, 4}] = true;
+    game.requests[{1, 2}] = true;
+    game.villagers_home[{0, 9}] = true;
+    EXPECT_EQ(stage_after(), "g");
+    game.part_events[{0, 7}] = true;
+    EXPECT_EQ(stage_after(), "h");
+}
+
+TEST_F(QuestFramework, AQuestCanSetTheGamesFlags) {
+    Quest::Register(Quest::Builder("test_flags")
+                        .Stages({"open"})
+                        .Option({0, 4, {}}, nullptr, {"quest.test_flags.ask", "Flags"},
+                                [](Quest::Scene &scene) {
+                                    scene.Game().SetGameFlag(300, true);
+                                    scene.Game().SetGameNumber(5, 7);
+                                    scene.Game().SetMapFlag(2, 9, true);
+                                })
+                        .Build());
+    ASSERT_TRUE(Dialog::TryInterceptOpen(Npc(0, 4), {}));
+    Pick("Flags");
+    EXPECT_TRUE(game.GameFlag(300));
+    EXPECT_EQ(game.GameNumber(5), 7);
+    EXPECT_TRUE(game.MapFlag(2, 9));
 }
 
 TEST_F(QuestFramework, TheSuppliesQuestTakesOverOnlyTheMayors) {

@@ -290,7 +290,7 @@
     "battlemenu.go_outside.help": "Sortir du bâtiment.",
     "battlemenu.escape.title": "\"Fuir\"",
     "battlemenu.escape.help": "S'échapper du\ndonjon actuel.",
-    "battlemenu.save.title": "\"Sauvegarder\"",
+    "battlemenu.save.title": "\"Sauver\"",
     "battlemenu.save.help": "Enregistrer votre\nprogression.",
     "battlemenu.option.title": "\"Options\"",
     "battlemenu.option.help": "Modifier les paramètres\ndu jeu.",

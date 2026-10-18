@@ -151,6 +151,9 @@ void ShowWindow() {
     g_window.first_row = first_row;
     g_window.choice_rows = cursor_row >= 0 ? view->layout.visible_choice_count : 0;
     ClsMesSetChoiceRows(cursor_row >= 0 ? &EditMes1 : nullptr, first_row);
+    const int total = static_cast<int>(view->choices.size());
+    ClsMesSetChoiceScroll(cursor_row >= 0 && view->choice_scroll_offset > 0,
+                          cursor_row >= 0 && view->choice_scroll_offset + g_window.choice_rows < total);
 }
 
 // Gives EditMes1 back the villager's messages, for retail's conversation or the next one.

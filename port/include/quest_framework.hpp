@@ -85,8 +85,34 @@ public:
     // A dungeon's count as the town scripts read it (CSaveData::QuestDungeon): 0 until the player has
     // been in.
     virtual int DungeonCount(int dungeon) const = 0;
-    // Whether a georama event has happened (CEditPartsInfo::GetCompEvent): 7 is Gaffer's Buggy.
-    virtual bool EventCompleted(int event) const = 0;
+    // The game's own flags, as the town scripts read and set them. Setting one changes what retail
+    // does: a quest sets only flags it knows the meaning of.
+    // Game flags, 0 to 8191 (_SGET_GAME_FLAG, _SSET_GAME_FLAG).
+    virtual bool GameFlag(int flag) const = 0;
+    virtual void SetGameFlag(int flag, bool on) = 0;
+    // The 32 game numbers (_SGET_GAME_INT_FLAG, _SSET_GAME_INT_FLAG).
+    virtual int  GameNumber(int slot) const = 0;
+    virtual void SetGameNumber(int slot, int value) = 0;
+    // A map's flags, as the scripts read them (_SGET_MAP_FLAG): set where the save holds 0.
+    virtual bool MapFlag(int map, int flag) const = 0;
+    virtual void SetMapFlag(int map, int flag, bool on) = 0;
+
+    // Georama, by town (0 Norune, 1 Matataki, 2 Queens, 3 Muska Lacka, 4 Yellow Drops) and part (0 to
+    // 23, as the town's parts are numbered): the town the player is in as it stands, any other as its
+    // save keeps it.
+    virtual bool PartObtained(int town, int part) const = 0;
+    // Copies of the part standing in the town.
+    virtual int  PartPlaced(int town, int part) const = 0;
+    // Every element the part wants is in place (CEditPartsInfo::CheckComplete).
+    virtual bool PartComplete(int town, int part) const = 0;
+    // The part's completion event has run (CEditPartsInfo::GetCompEvent): Norune's part 7 is Gaffer's Buggy.
+    virtual bool PartEventDone(int town, int part) const = 0;
+    // A villager's georama request is met (_SCHECK_REQUEST): request n of the town, 0 to 23.
+    virtual bool RequestMet(int town, int request) const = 0;
+    // A villager, by the number the dialog framework gives them, is back in the town: their house
+    // stands and they are in it (_CHECK_VILLAGER). Known only for the town the player is in; false
+    // for any other.
+    virtual bool VillagerHome(int town, int villager) const = 0;
     // How many have joined the party, in the order they join: Toan (1), Xiao (2), Goro, Ruby,
     // Ungaga, Osmond.
     virtual int PartySize() const = 0;
@@ -186,9 +212,16 @@ Condition HasItem(int item, int count = 1);
 Condition HasMoney(int amount);
 Condition FloorReached(int dungeon, int floor = 0);
 Condition DungeonStarted(int dungeon);
+Condition GameFlagSet(int flag);
+Condition GameNumberAtLeast(int slot, int value);
+Condition MapFlagSet(int map, int flag);
+Condition PartPlaced(int town, int part);
+Condition PartComplete(int town, int part);
+Condition RequestMet(int town, int request);
+Condition VillagerHome(int town, int villager);
 // Character chara (0 Toan, 1 Xiao, 2 Goro...) has joined the party.
 Condition PartyMember(int chara);
-Condition EventDone(int event);
+Condition EventDone(int town, int part);
 Condition VarAtLeast(std::string_view name, int value);
 Condition All(std::vector<Condition> conditions);
 Condition Any(std::vector<Condition> conditions);

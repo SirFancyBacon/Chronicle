@@ -44,9 +44,11 @@ enum {
     GAIJI_CELLS,
 };
 
-// The window ClsMesSetChoiceRows names, and its first choice row.
+// The window ClsMesSetChoiceRows names, its first choice row, and whether its choices run on past it.
 const ClsMes *g_choice_mes = nullptr;
 int           g_choice_first_row = 0;
+bool          g_choice_more_above = false;
+bool          g_choice_more_below = false;
 
 // The window ClsMesSetMessageOverlay names, and the messages laid over its own.
 const ClsMes *g_overlay_mes = nullptr;
@@ -1339,6 +1341,29 @@ PORT_OVERRIDE void ClsMes::DrawMesWin() {
         }
     }
 
+    // The dialog framework's choice window, its choices running on past it: the page arrow, blinking as
+    // it does, where the page arrow goes for more below, and turned over above the first choice for
+    // more above (ClsMesSetChoiceScroll).
+    if (this == g_choice_mes && this->cursor_row >= 0 && (g_choice_more_above || g_choice_more_below) &&
+        (this->blink >> 4) % 2 != 0 && MesAbsDrawOff == 0) {
+        texture = draw2d::Get().find_texture("syst04");
+
+        int       screen_x = this->text_x + (this->char_width * this->text_columns >> 1) - 8 + offset_x;
+        const int alpha = this->edge_alpha < 0x80 ? this->edge_alpha : 0x80;
+
+        if (g_choice_more_above) {
+            int screen_y = this->text_y + this->char_height * g_choice_first_row - 0x10;
+            set2DSprite(Vif1Packet, texture, CRect_i_(screen_x, screen_y + offset_y, 0x10, 0x10),
+                        CRect_i_(0, 0x10, 0x10, -0x10), alpha);
+        }
+
+        if (g_choice_more_below) {
+            int screen_y = this->text_y + this->char_height * this->text_rows;
+            set2DSprite(Vif1Packet, texture, CRect_i_(screen_x, screen_y + offset_y, 0x10, 0x10),
+                        CRect_i_(0, 0, 0x10, 0x10), alpha);
+        }
+    }
+
     if (this->cursor_row >= 0) {
         texture = draw2d::Get().find_texture("gaiji");
 
@@ -1373,6 +1398,15 @@ PORT_OVERRIDE void ClsMes::DrawMesWin() {
 void ClsMesSetChoiceRows(const ClsMes *mes, int first_row) {
     g_choice_mes = mes;
     g_choice_first_row = mes != nullptr && first_row > 0 ? first_row : 0;
+    if (mes == nullptr) {
+        g_choice_more_above = false;
+        g_choice_more_below = false;
+    }
+}
+
+void ClsMesSetChoiceScroll(bool more_above, bool more_below) {
+    g_choice_more_above = more_above;
+    g_choice_more_below = more_below;
 }
 
 void ClsMesSetMessageOverlay(const ClsMes *mes, short *file) {

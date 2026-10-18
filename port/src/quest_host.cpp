@@ -10,14 +10,21 @@
 #include <utility>
 #include <vector>
 
+#include <libvu0.h>
+
 #include "custom_shop.hpp"
 #include "dialog_framework.hpp"
 #include "dialog_npc.hpp"
 #include "dngstatusdata.hpp"
 #include "editmenu.hpp"
+#include "edit.hpp"
+#include "editground.hpp"
+#include "editloop.hpp"
+#include "editloop3.hpp"
 #include "editpartsinfo.hpp"
 #include "itemdata.hpp"
 #include "localize.hpp"
+#include "main.hpp"
 #include "menu_save.hpp"
 #include "platform/files.hpp"
 #include "quest_framework.hpp"
@@ -67,6 +74,25 @@ bool PackHasRoom(const CDngStatusData &status) {
         }
     }
     return count + 1 <= status.item_pack.num;
+}
+
+// A town's georama parts as they stand: the live ones for the town the player is in (EditPartsInfo),
+// any other's read from its save into a copy kept for the question. Null for no such town.
+const CEditPartsInfo *TownParts(int town) {
+    if (SaveData == nullptr || town < 0 || town >= TOWN_COUNT) {
+        return nullptr;
+    }
+    if (town == NowEditMap) {
+        return &EditPartsInfo;
+    }
+    static CEditPartsInfo saved;
+    saved.Load(town, SaveData, 1);
+    return &saved;
+}
+
+const EDITPARTS_INFO *TownPart(int town, int part) {
+    const CEditPartsInfo *parts = TownParts(town);
+    return parts != nullptr && part >= 0 && part < 24 ? &parts->parts[part] : nullptr;
 }
 
 // Retail's PlayerAllItemCheck: whether the player has the item in the pack or stored.
@@ -162,8 +188,79 @@ public:
         return SaveData != nullptr ? SaveData->QuestDungeon(dungeon, 0) : 0;
     }
 
-    bool EventCompleted(int event) const override {
-        return EditPartsInfo.GetCompEvent(event) != 0;
+    bool GameFlag(int flag) const override {
+        return SaveData != nullptr && SaveData->GetGameFlag(flag) != 0;
+    }
+
+    void SetGameFlag(int flag, bool on) override {
+        if (SaveData != nullptr) {
+            SaveData->SetGameFlag(flag, on ? 1 : 0);
+        }
+    }
+
+    int GameNumber(int slot) const override {
+        return SaveData != nullptr && slot >= 0 ? SaveData->GetGameIntFlag(slot) : 0;
+    }
+
+    void SetGameNumber(int slot, int value) override {
+        if (SaveData != nullptr && slot >= 0) {
+            SaveData->SetGameIntFlag(slot, value);
+        }
+    }
+
+    // The scripts' map flags are the save's turned over (_SGET_MAP_FLAG, _SSET_MAP_FLAG); the map the
+    // player is on goes through EdGetMapFlag, which shares Treant's chest flags between its two maps.
+    bool MapFlag(int map, int flag) const override {
+        if (SaveData == nullptr || flag <= 0) {
+            return false;
+        }
+        const int stored = map == MapNo ? EdGetMapFlag(flag) : SaveData->GetMapFlag(map, flag);
+        return stored == 0;
+    }
+
+    void SetMapFlag(int map, int flag, bool on) override {
+        if (SaveData == nullptr || flag <= 0) {
+            return;
+        }
+        if (map == MapNo) {
+            EdSetMapFlag(flag, on ? 0 : 1);
+        } else {
+            SaveData->SetMapFlag(map, flag, on ? 0 : 1);
+        }
+    }
+
+    bool PartObtained(int town, int part) const override {
+        const EDITPARTS_INFO *info = TownPart(town, part);
+        return info != nullptr && info->obtained != 0;
+    }
+
+    int PartPlaced(int town, int part) const override {
+        const EDITPARTS_INFO *info = TownPart(town, part);
+        return info != nullptr ? info->placed : 0;
+    }
+
+    bool PartComplete(int town, int part) const override {
+        const CEditPartsInfo *parts = TownParts(town);
+        return parts != nullptr && part >= 0 && part < 24 && const_cast<CEditPartsInfo *>(parts)->CheckComplete(part) != 0;
+    }
+
+    bool PartEventDone(int town, int part) const override {
+        const EDITPARTS_INFO *info = TownPart(town, part);
+        return info != nullptr && (info->completion_flags & 1) != 0;
+    }
+
+    bool RequestMet(int town, int request) const override {
+        const CEditPartsInfo *parts = TownParts(town);
+        return parts != nullptr && request >= 0 && request < 24 && parts->request[request] != 0;
+    }
+
+    bool VillagerHome(int town, int villager) const override {
+        // As _CHECK_VILLAGER asks it, of the sixteen villagers a town's script knows (GetVillagerInfo).
+        if (town != NowEditMap || EdEventInfo.edit_ground == nullptr || EdEventInfo.villagers == nullptr ||
+            villager < 0 || villager >= 16) {
+            return false;
+        }
+        return EdCheckVillager(villager, &EdEventInfo.villagers[villager], EdEventInfo.edit_ground) != 0;
     }
 
     int PartySize() const override {

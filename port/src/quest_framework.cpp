@@ -215,8 +215,36 @@ Condition PartyMember(int chara) {
     return [chara](const Context &ctx) { return ctx.Game().PartySize() > chara; };
 }
 
-Condition EventDone(int event) {
-    return [event](const Context &ctx) { return ctx.Game().EventCompleted(event); };
+Condition EventDone(int town, int part) {
+    return [town, part](const Context &ctx) { return ctx.Game().PartEventDone(town, part); };
+}
+
+Condition GameFlagSet(int flag) {
+    return [flag](const Context &ctx) { return ctx.Game().GameFlag(flag); };
+}
+
+Condition GameNumberAtLeast(int slot, int value) {
+    return [slot, value](const Context &ctx) { return ctx.Game().GameNumber(slot) >= value; };
+}
+
+Condition MapFlagSet(int map, int flag) {
+    return [map, flag](const Context &ctx) { return ctx.Game().MapFlag(map, flag); };
+}
+
+Condition PartPlaced(int town, int part) {
+    return [town, part](const Context &ctx) { return ctx.Game().PartPlaced(town, part) > 0; };
+}
+
+Condition PartComplete(int town, int part) {
+    return [town, part](const Context &ctx) { return ctx.Game().PartComplete(town, part); };
+}
+
+Condition RequestMet(int town, int request) {
+    return [town, request](const Context &ctx) { return ctx.Game().RequestMet(town, request); };
+}
+
+Condition VillagerHome(int town, int villager) {
+    return [town, villager](const Context &ctx) { return ctx.Game().VillagerHome(town, villager); };
 }
 
 Condition VarAtLeast(std::string_view name, int value) {
