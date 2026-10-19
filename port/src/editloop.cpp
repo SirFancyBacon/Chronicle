@@ -1192,61 +1192,23 @@ static void EdVillagersTakeFog(const int *marks, bool on) {
     }
 }
 
-// The steps in which extended shadows fade from the near band's shade to the far band's. Each is a
-// band of parts by their distance from the eye, so a part's shadow changes shade by one step's worth
-// (about 1% of the frame's brightness at retail's shades) as it crosses from one to the next. A step
-// costs the GPU one pass over the frame and the CPU a walk of the map's parts.
-constexpr int kShadowShadeSteps = 16;
-
-// Where the fade of extended shadows ends, as a multiple of shadow_near: 320 to 640 by default,
-// inside retail's far band (to 740), never past a map's shadow_far. A map without a far band
-// (SHADOW_LEVEL 1, whose shadow_far is out of reach) fades over as long a stretch past its own
-// shadow_near.
-constexpr float kShadowFadeEnd = 2.0f;
+// How dark extended shadows are, as a share of the map's near band shade (shadow_mode): one shade
+// at every distance, a little lighter than retail's near band and darker than its far one.
+constexpr float kExtendedShadowShade = 0.9f;
 
 /**
- * Casts extended shadows (EdGroundShadowsExtended) in the light the caller set, faded by the fog
- * and softened beyond the depth of field: the parts nearer than the map's shadow_near at the near
- * band's shade (shadow_mode); past it kShadowShadeSteps bands that step to the far band's
- * (shadow_mode_2) by kShadowFadeEnd, then that shade out to video.shadow_distance. A map whose
- * SHADOW_LEVEL has no far band (1) fades the same way. Every band is gathered in the shadow shade
- * layer from the farthest in and the frame is darkened by it once, after the characters as retail
- * does, so where two parts' shadows overlap the nearer one's shade holds rather than both
- * darkening, and a part crossing from one band to the next changes only its own shade.
+ * Casts extended shadows (EdGroundShadowsExtended) in the light the caller set: every part out to
+ * video.shadow_distance at kExtendedShadowShade of shadow_mode, whatever its distance, cast into
+ * the shadow shade layer that darkens the frame once, after the characters as retail's bands do,
+ * faded by the fog and softened beyond the depth of field (MGApplyShadowShade).
  */
 static void EdDrawExtendedShadows() {
-    float near_distance = EditMapInfo->shadow_near;
-    float fade_end = near_distance * kShadowFadeEnd;
-    float far_distance = ConfigShadowDistance();
-
-    if (EditMapInfo->shadow_far < fade_end) {
-        fade_end = EditMapInfo->shadow_far;
-    }
+    float shade = EditMapInfo->shadow_mode * kExtendedShadowShade;
 
     MGBeginShadowShade();
-
-    // Step -1 is the near band.
-    for (int step = kShadowShadeSteps; step >= -1; step--) {
-        float from = step < 0 ? -10000000.0f : near_distance + (fade_end - near_distance) * step / kShadowShadeSteps;
-        float to = step < 0                     ? near_distance
-                   : step == kShadowShadeSteps ? far_distance
-                                               : near_distance + (fade_end - near_distance) * (step + 1) / kShadowShadeSteps;
-        // The near band keeps shadow_mode and the last step shadow_mode_2; the steps between share
-        // the difference evenly.
-        float shade = EditMapInfo->shadow_mode +
-                      (EditMapInfo->shadow_mode_2 - EditMapInfo->shadow_mode) * (step + 1.0f) / (kShadowShadeSteps + 1.0f);
-
-        if (from >= far_distance) {
-            continue;
-        }
-
-        // A band no part stands in costs the volumes' clear but no pass over the frame. A part with a
-        // shade and no shadow volume still counts.
-        MGBeginDrawShadow(*reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("shadow_buff", -1)->tex0));
-        int cast = EdGroundDrawShadowBetween(pEditGround, from, to);
-        MGEndDrawShadowShade(cast > 0 ? static_cast<u_char>(shade + 0.5f) : 0);
-    }
-
+    MGBeginDrawShadow(*reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("shadow_buff", -1)->tex0));
+    EdGroundDrawShadowBetween(pEditGround, -10000000.0f, ConfigShadowDistance());
+    MGEndDrawShadowShade(static_cast<u_char>(shade + 0.5f));
     MGApplyShadowShade();
 }
 

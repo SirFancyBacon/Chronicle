@@ -331,11 +331,9 @@ namespace {
 // The shadows of the parts whose depth from the eye (radial: distance) lies between near_distance and
 // far_distance. A part within full of the eye takes the precise volume program whatever its
 // draw_distance; past it, one deeper than 300 takes the fast program and one with a draw_distance
-// casts nothing past it. Returns how many parts it took, each of which may draw its shade (the baked
-// shading some parts carry, with or without a volume) as well as its shadow.
-int DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float far_distance, float full,
-                      bool radial) {
-    int cast = 0;
+// casts nothing past it.
+void DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float far_distance, float full,
+                       bool radial) {
     sceVu0FVECTOR position;
     sceVu0FVECTOR view;
     sceVu0FVECTOR clip_position;
@@ -383,7 +381,6 @@ int DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float 
 
         if (measure > near_distance && measure < far_distance) {
             object->DrawShade();
-            cast++;
 
             if (object->shadow_frame != nullptr) {
                 fast = pass != 0;
@@ -416,7 +413,6 @@ int DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float 
 
         if (measure > near_distance && measure < far_distance) {
             fixed->DrawShade();
-            cast++;
 
             if (fixed->shadow_frame != nullptr) {
                 fast = pass != 0;
@@ -429,8 +425,6 @@ int DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float 
             }
         }
     }
-
-    return cast;
 }
 
 } // namespace
@@ -456,16 +450,14 @@ bool EdGroundShadowsExtended(float shadow_far) {
     return ConfigShadowDistance() > shadow_far;
 }
 
-int EdGroundDrawShadowBetween(CEditGround *ground, float near_distance, float far_distance) {
+void EdGroundDrawShadowBetween(CEditGround *ground, float near_distance, float far_distance) {
     float full = ConfigShadowDistance();
 
     if (far_distance > full) {
         far_distance = full;
     }
 
-    if (!(near_distance < far_distance)) {
-        return 0;
+    if (near_distance < far_distance) {
+        DrawShadowBetween(*ground, 0, near_distance, far_distance, full, true);
     }
-
-    return DrawShadowBetween(*ground, 0, near_distance, far_distance, full, true);
 }

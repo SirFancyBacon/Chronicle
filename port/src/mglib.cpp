@@ -1424,13 +1424,12 @@ void MGBeginShadowShade() {
 
 // The volumes' texels through TEXA as MGEndDrawShadow takes them, alpha where one covered and 0
 // where none did; the alpha test leaves the uncovered pixels of the layer as they were, so a later
-// pass overwrites an earlier one only where its own shadows fall. Alpha 0 marks nothing, and skips
-// the pass.
+// pass overwrites an earlier one only where its own shadows fall.
 void MGEndDrawShadowShade(u_char alpha) {
     gfx::TextureHandle target = TakeShadowTarget(alpha);
     gfx::TextureHandle shade = ShadowLayer(kShadowShadeName);
 
-    if (target != gfx::kNullTexture && shade != gfx::kNullTexture && alpha != 0) {
+    if (target != gfx::kNullTexture && shade != gfx::kNullTexture) {
         gfx::SetRenderTarget(shade);
         gfx::DrawState state;
         state.depth_test = gfx::DepthTest::Always;

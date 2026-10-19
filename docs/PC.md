@@ -239,19 +239,11 @@ cheaper volume program, and one with a `draw_distance` drops its shadow past
 it. A part within `shadow_distance` takes the precise program whatever its
 `draw_distance` (`port/src/editground.cpp`). A `shadow_distance` no further
 than the map's `shadow_far`, such as `1`, keeps retail's bands. One past it
-extends them, `EdDrawExtendedShadows` in `port/src/editloop.cpp`. The parts are
-sorted by their distance from the eye rather than their depth, which
-grows towards the sides of a wide view, so turning the camera no longer
-moves a part from one band to the other. Past `shadow_near` the shade
-fades from `shadow_mode` to `shadow_mode_2` in sixteen steps out to twice
-`shadow_near` (640 by default, inside retail's far band to 740; 2000 on a
-map without one), and keeps `shadow_mode_2` from there out to `shadow_distance`
-(at any distance for 0). The near band and the steps are bands of parts,
-gathered into one layer from the farthest in that darkens the frame once,
-after the characters as retail's bands do, so where two parts' shadows
-overlap the nearer one's shade holds instead of both darkening the frame,
-and a part crossing from one band to the next changes only its own shade.
-Retail darkens the finished, fogged frame, so a far shadow stays as dark
+replaces them with one (`EdDrawExtendedShadows` in `port/src/editloop.cpp`):
+every part out to `shadow_distance` (at any distance for 0) casts at 90% of
+`shadow_mode`, whatever its distance, so no shadow changes shade as the
+camera moves. The shadows are gathered into one layer that darkens the frame
+once, after the characters as retail's bands do. Retail darkens the finished, fogged frame, so a far shadow stays as dark
 over the haze as up close; an extended shadow is faded on each pixel by the
 share of the scene the fog leaves there, in eight steps by depth, and
 softened beyond the planes of the soft focus drawn that frame, taking the
