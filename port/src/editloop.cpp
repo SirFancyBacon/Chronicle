@@ -1198,10 +1198,11 @@ static void EdVillagersTakeFog(const int *marks, bool on) {
 // costs the GPU one pass over the frame and the CPU a walk of the map's parts.
 constexpr int kShadowShadeSteps = 16;
 
-// Where the fade of extended shadows ends, as a multiple of shadow_near: retail's far band, 320 to
-// 740 by default. A map without a far band (SHADOW_LEVEL 1, whose shadow_far is out of reach) fades
-// over as long a stretch past its own shadow_near.
-constexpr float kShadowFadeEnd = 740.0f / 320.0f;
+// Where the fade of extended shadows ends, as a multiple of shadow_near: 320 to 640 by default,
+// inside retail's far band (to 740), never past a map's shadow_far. A map without a far band
+// (SHADOW_LEVEL 1, whose shadow_far is out of reach) fades over as long a stretch past its own
+// shadow_near.
+constexpr float kShadowFadeEnd = 2.0f;
 
 /**
  * Casts the shadows of the parts from the map's shadow_near out to video.shadow_distance, for

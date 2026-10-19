@@ -243,9 +243,9 @@ extends them, `EdDrawFarShadows` in `port/src/editloop.cpp`. The parts are
 sorted by their distance from the eye rather than their depth, which
 grows towards the sides of a wide view, so turning the camera no longer
 moves a part from one band to the other. Past `shadow_near` the shade
-fades from `shadow_mode` to `shadow_mode_2` in sixteen steps across
-retail's far band (out to 740 by default, 2.3 times `shadow_near` on a map
-without one), and keeps `shadow_mode_2` from there out to `shadow_distance`
+fades from `shadow_mode` to `shadow_mode_2` in sixteen steps out to twice
+`shadow_near` (640 by default, inside retail's far band to 740; 2000 on a
+map without one), and keeps `shadow_mode_2` from there out to `shadow_distance`
 (at any distance for 0). The steps are bands of parts, gathered into one
 layer from the farthest in, so where two parts' shadows overlap the
 nearer one's shade holds instead of both darkening the frame. Both bands
