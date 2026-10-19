@@ -27,6 +27,15 @@ float MGPortLogicalY(int gs_y);
 // A 24-bit GS depth (near 16,700,000 .. far 1) into the renderer's reverse-Z [0, 1].
 float MGPortDepth(unsigned gs_z);
 
+// The shadow shade layer, for shadows of several shades laid over the frame at once: clear it with
+// MGBeginShadowShade, end each MGBeginDrawShadow's volumes with MGEndDrawShadowShade instead of
+// MGEndDrawShadow to mark the pixels they cover with alpha (a later call overwriting an earlier one
+// where both cover), then darken the frame by the layer with MGApplyShadowShade. The darkening is
+// faded by the fog over the pixels it falls on, as if the shadows had been drawn before the fog.
+void MGBeginShadowShade();
+void MGEndDrawShadowShade(u_char alpha);
+void MGApplyShadowShade();
+
 // The frame buffer and the previous frame, as the TEX0 values MGGetFBuffTex and
 // MGGetFBuffBackTex hand out. Texture lookups by TEX0 recognise these two TBP0 values.
 inline constexpr unsigned kMGPortFrameTbp0 = 0;

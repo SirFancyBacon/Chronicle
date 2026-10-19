@@ -1240,18 +1240,60 @@ PORT_OVERRIDE void MGBeginDrawShadow(sceGsTex0 tex0) {
     gfx::Clear(true, black, false, 0.0f);
 }
 
-// Retail draws shadow_buf over the frame as a 24-bit texture with TEXA AEM 1, TA0 alpha and ALPHA
-// (0 - Cd) * As + Cd: a black texel (no volume covered it) gets alpha 0 and leaves the frame, any
-// other darkens it by alpha / 128 once, however many volumes counted there.
-PORT_OVERRIDE void MGEndDrawShadow(u_char alpha) {
+namespace {
+
+// The layers extended shadows are gathered in: shadow_shade holds, in its alpha, how far each
+// pixel's shadow darkens it (in GS units over 128, as a blend factor reads it), and shadow_fogged
+// the same faded by the fog. Both share the main depth buffer and are drawn in 2D alone, so the
+// renderer replays their depth-tested quads in a display frame as recorded instead of carrying them
+// to the interpolated camera as it does a 3D sprite on a target that holds meshes.
+constexpr const char *kShadowShadeName = "shadow shade";
+constexpr const char *kShadowFoggedName = "shadow fogged";
+
+// The depth planes MGApplyShadowShade fades the shade over.
+constexpr int kShadowFogSteps = 8;
+
+// A quad over the whole logical frame, at depth (1 near, 0 far), sampling the frame-shaped texture
+// it is drawn with texel for pixel and modulated by alpha (0x80: as it is).
+void FrameQuad(gfx::Vertex2D (&quad)[4], float depth, u_char alpha) {
+    float xs[4] = {0.0f, kScreenWidth, kScreenWidth, 0.0f};
+    float ys[4] = {0.0f, 0.0f, kScreenHeight, kScreenHeight};
+
+    for (int i = 0; i < 4; i++) {
+        quad[i] = {};
+        quad[i].x = quad[i].u = xs[i];
+        quad[i].y = quad[i].v = ys[i];
+        quad[i].z = depth;
+        quad[i].color[0] = quad[i].color[1] = quad[i].color[2] = 0x80;
+        quad[i].color[3] = alpha;
+        quad[i].fog = 0xFF;
+    }
+}
+
+gfx::TextureHandle ShadowLayer(const char *name) {
+    return gfx::NamedRenderTarget(name, 640, SCREEN_HEIGHT, true, true);
+}
+
+// Takes the volumes counted since MGBeginDrawShadow off the shadow target, leaving it unbound.
+gfx::TextureHandle TakeShadowTarget(u_char alpha) {
     gfx::TextureHandle target = g_shadow_target;
     g_shadow_target = gfx::kNullTexture;
 
     sceGsTexa texa = mgTexa;
     texa.AEM = 1;
     texa.TA0 = alpha;
-    MGPortRegisters &current = MGPortCurrent();
-    current.texa = texa;
+    MGPortCurrent().texa = texa;
+    return target;
+}
+
+} // namespace
+
+// Retail draws shadow_buf over the frame as a 24-bit texture with TEXA AEM 1, TA0 alpha and ALPHA
+// (0 - Cd) * As + Cd: a black texel (no volume covered it) gets alpha 0 and leaves the frame, any
+// other darkens it by alpha / 128 once, however many volumes counted there.
+PORT_OVERRIDE void MGEndDrawShadow(u_char alpha) {
+    gfx::TextureHandle target = TakeShadowTarget(alpha);
+    MGPortRegisters   &current = MGPortCurrent();
 
     if (target != gfx::kNullTexture) {
         gfx::SetRenderTarget(g_shadow_previous);
@@ -1264,15 +1306,8 @@ PORT_OVERRIDE void MGEndDrawShadow(u_char alpha) {
         state.texa_ta0 = alpha;
         state.scissor = true;
         state.scissor_rect = current.window;
-        float         xs[4] = {0.0f, kScreenWidth, kScreenWidth, 0.0f};
-        float         ys[4] = {0.0f, 0.0f, kScreenHeight, kScreenHeight};
-        gfx::Vertex2D quad[4] = {};
-        for (int i = 0; i < 4; i++) {
-            quad[i].x = quad[i].u = xs[i];
-            quad[i].y = quad[i].v = ys[i];
-            quad[i].color[0] = quad[i].color[1] = quad[i].color[2] = quad[i].color[3] = 0x80;
-            quad[i].fog = 0xFF;
-        }
+        gfx::Vertex2D quad[4];
+        FrameQuad(quad, 0.0f, 0x80);
         gfx::TextureBinding binding;
         binding.texture = target;
         binding.filter = gfx::Filter::Nearest;
@@ -1280,4 +1315,113 @@ PORT_OVERRIDE void MGEndDrawShadow(u_char alpha) {
     }
 
     MGPortRestoreRegisters();
+}
+
+void MGBeginShadowShade() {
+    gfx::TextureHandle shade = ShadowLayer(kShadowShadeName);
+
+    if (shade == gfx::kNullTexture) {
+        return;
+    }
+
+    gfx::TextureHandle previous = gfx::CurrentRenderTarget();
+    gfx::SetRenderTarget(shade);
+    uint8_t clear[4] = {0, 0, 0, 0};
+    gfx::Clear(true, clear, false, 0.0f);
+    gfx::SetRenderTarget(previous);
+}
+
+// The volumes' texels through TEXA as MGEndDrawShadow takes them, alpha where one covered and 0
+// where none did; the alpha test leaves the uncovered pixels of the layer as they were, so a later
+// pass overwrites an earlier one only where its own shadows fall. Alpha 0 marks nothing, and skips
+// the pass.
+void MGEndDrawShadowShade(u_char alpha) {
+    gfx::TextureHandle target = TakeShadowTarget(alpha);
+    gfx::TextureHandle shade = ShadowLayer(kShadowShadeName);
+
+    if (target != gfx::kNullTexture && shade != gfx::kNullTexture && alpha != 0) {
+        gfx::SetRenderTarget(shade);
+        gfx::DrawState state;
+        state.depth_test = gfx::DepthTest::Always;
+        state.texa_aem = true;
+        state.texa_ta0 = alpha;
+        state.alpha_test = true;
+        state.alpha_func = gfx::AlphaFunc::Greater;
+        state.alpha_ref = 0;
+        gfx::Vertex2D quad[4];
+        FrameQuad(quad, 0.0f, 0x80);
+        gfx::TextureBinding binding;
+        binding.texture = target;
+        binding.filter = gfx::Filter::Nearest;
+        gfx::Draw2D(gfx::Primitive::Quads, quad, binding, state);
+    }
+
+    if (target != gfx::kNullTexture) {
+        gfx::SetRenderTarget(g_shadow_previous);
+    }
+
+    MGPortRestoreRegisters();
+}
+
+// The fog leaves F / 255 of the scene, F = a + b / z clamped to fog_far .. fog_near. The shade is
+// copied into shadow_fogged in kShadowFogSteps + 1 quads: the first over every pixel at the fog's
+// floor, then one at each even fall of F, depth tested GEQUAL as the depth of field's bands are, so
+// that it takes in everything beyond its depth, modulated by what the fog leaves there. Each
+// overwrites the last, so a pixel keeps the step of the farthest plane in front of it. That layer
+// then darkens the frame as MGEndDrawShadow's texels do, by its alpha / 128.
+void MGApplyShadowShade() {
+    gfx::TextureHandle shade = ShadowLayer(kShadowShadeName);
+    gfx::TextureHandle fogged = ShadowLayer(kShadowFoggedName);
+
+    if (shade == gfx::kNullTexture || fogged == gfx::kNullTexture) {
+        return;
+    }
+
+    gfx::TextureHandle previous = gfx::CurrentRenderTarget();
+    gfx::TextureBinding binding;
+    binding.filter = gfx::Filter::Nearest;
+    gfx::Vertex2D quad[4];
+
+    gfx::SetRenderTarget(fogged);
+    gfx::DrawState copy;
+    copy.depth_test = gfx::DepthTest::Always;
+    binding.texture = shade;
+
+    const float clear = mgRenderInfo.fog_near;
+    const float densest = mgRenderInfo.fog_far;
+    const bool  fog = mgRenderInfo.fog_b > 0.0f && densest < clear;
+
+    for (int k = 0; k <= (fog ? kShadowFogSteps : 0); k++) {
+        const float f = fog ? clear - (clear - densest) * static_cast<float>(k) / kShadowFogSteps : 255.0f;
+        const u_char alpha = static_cast<u_char>(std::min(128.0f, f / 255.0f * 128.0f + 0.5f));
+        float depth = 0.0f;
+        copy.depth_test = gfx::DepthTest::Always;
+
+        if (k > 0) {
+            // A fall of F the fog never reaches (fog_a above it) has no depth.
+            if (!(f - mgRenderInfo.fog_a > 0.0f)) {
+                continue;
+            }
+
+            sceVu0FVECTOR point = {0.0f, 0.0f, mgRenderInfo.fog_b / (f - mgRenderInfo.fog_a), 1.0f};
+            sceVu0ApplyMatrix(point, mgRenderInfo.screen, point);
+            point[2] /= point[3];
+            depth = MGPortDepth(static_cast<unsigned>(static_cast<int>(point[2])) & 0xFFFFFF);
+            copy.depth_test = gfx::DepthTest::GEqual;
+        }
+
+        FrameQuad(quad, depth, alpha);
+        gfx::Draw2D(gfx::Primitive::Quads, quad, binding, copy);
+    }
+
+    gfx::SetRenderTarget(previous);
+    gfx::DrawState state;
+    state.blend = true;
+    state.alpha = {2, 1, 0, 1, 64};
+    state.depth_test = gfx::DepthTest::Always;
+    state.scissor = true;
+    state.scissor_rect = MGPortCurrent().window;
+    binding.texture = fogged;
+    FrameQuad(quad, 0.0f, 0x80);
+    gfx::Draw2D(gfx::Primitive::Quads, quad, binding, state);
 }

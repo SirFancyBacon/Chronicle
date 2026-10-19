@@ -50,9 +50,11 @@
 #include "menu_misc.hpp"
 #include "menuitemstep.hpp"
 #include "mglib.hpp"
+#include "mglib_port.hpp"
 #include "npcharacter.hpp"
 #include "objanime.hpp"
 #include "objectframe.hpp"
+#include "platform/config.hpp"
 #include "platform/input.hpp"
 #include "rect.hpp"
 #include "runeffect.hpp"
@@ -1173,15 +1175,97 @@ namespace {
 constexpr float kRetailVillagerReach = 150.0f;
 
 /**
+ * Turns fog on or off for the models of the villagers marked. Retail's EdLoadVillager asks for fog
+ * on a villager's model but hands SetAttr the clip mask alone (4, where fog is 0x40), so villagers
+ * never take it; within retail's reach of the player, short of where the towns' fog begins, none
+ * needed it. Those the port draws farther take it while they are drawn, so they fade into the haze
+ * with the houses around them.
+ */
+static void EdVillagersTakeFog(const int *marks, bool on) {
+    CFrameAttr attr;
+    attr.fog_enable = on;
+
+    for (int i = 0; i < 10; i++) {
+        if (marks[i] != 0 && EdVillager[i].frame != nullptr) {
+            EdVillager[i].frame->SetAttr(attr, 1, 0x40);
+        }
+    }
+}
+
+// The steps in which extended shadows fade from the near band's shade to the far band's. Each is a
+// band of parts by their distance from the eye, so a part's shadow changes shade by one step's worth
+// (about 1% of the frame's brightness at retail's shades) as it crosses from one to the next. A step
+// costs the GPU one pass over the frame and the CPU a walk of the map's parts.
+constexpr int kShadowShadeSteps = 16;
+
+// Where the fade of extended shadows ends, as a multiple of shadow_near: retail's far band, 320 to
+// 740 by default. A map without a far band (SHADOW_LEVEL 1, whose shadow_far is out of reach) fades
+// over as long a stretch past its own shadow_near.
+constexpr float kShadowFadeEnd = 740.0f / 320.0f;
+
+/**
+ * Casts the shadows of the parts from the map's shadow_near out to video.shadow_distance, for
+ * extended shadows (EdGroundShadowsExtended), faded by the fog: kShadowShadeSteps bands across
+ * retail's far band that step from the near band's shade (shadow_mode) to the far band's
+ * (shadow_mode_2), then that shade from there on. A map whose SHADOW_LEVEL has no far band (1)
+ * fades the same way. The bands are gathered in the shadow shade layer from the farthest in, so
+ * where two parts' shadows overlap the nearer one's shade holds rather than both darkening.
+ */
+static void EdDrawFarShadows() {
+    float saved_light[4][4];
+    float shadow_light[4][4];
+    float light_colour[4][4];
+    float near_distance = EditMapInfo->shadow_near;
+    float fade_end = near_distance * kShadowFadeEnd;
+    float far_distance = ConfigShadowDistance();
+
+    if (EditMapInfo->shadow_far < fade_end) {
+        fade_end = EditMapInfo->shadow_far;
+    }
+
+    MGGetPLight(saved_light, light_colour);
+    sceVu0CopyMatrix(shadow_light, saved_light);
+    EdLimitShadowLight(shadow_light, 3.0f);
+    MGSetPLight(shadow_light, light_colour);
+    TexManager.ReloadTexture(Vif1Packet, 0x16);
+
+    MGBeginShadowShade();
+
+    for (int step = kShadowShadeSteps; step >= 0; step--) {
+        float from = near_distance + (fade_end - near_distance) * step / kShadowShadeSteps;
+        float to = step == kShadowShadeSteps ? far_distance
+                                             : near_distance + (fade_end - near_distance) * (step + 1) / kShadowShadeSteps;
+        // The near band keeps shadow_mode and the last step shadow_mode_2; the steps between share
+        // the difference evenly.
+        float shade = EditMapInfo->shadow_mode +
+                      (EditMapInfo->shadow_mode_2 - EditMapInfo->shadow_mode) * (step + 1.0f) / (kShadowShadeSteps + 1.0f);
+
+        if (from >= far_distance) {
+            continue;
+        }
+
+        // A band no part stands in costs the volumes' clear but no pass over the frame.
+        MGBeginDrawShadow(*reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("shadow_buff", -1)->tex0));
+        int cast = EdGroundDrawShadowBetween(pEditGround, from, to);
+        MGEndDrawShadowShade(cast > 0 ? static_cast<u_char>(shade + 0.5f) : 0);
+    }
+
+    MGApplyShadowShade();
+    MGSetPLight(saved_light, light_colour);
+}
+
+/**
  * Draws, before the depth of field, what the port draws past retail's distances, so that the
  * softening takes it in with the scenery: the villagers further than retail's reach from the player,
- * with their shadows, and the town parts' shadows that video.shadow_distance moves into the near
- * band. Retail draws the characters and the shadows after the depth of field, and they keep that
- * place. far_marks receives the draw marks of the villagers drawn here, which the characters' own
- * pass then leaves out; returns whether it marked any.
+ * with their shadows, and the far band of the town parts' shadows where video.shadow_distance
+ * extends it (EdGroundShadowsExtended), at the far band's shade and faded by the fog. Retail draws
+ * the characters and its own bands after the depth of field, and they keep that place. far_marks
+ * receives the draw marks of the villagers drawn here, which the characters' own pass then leaves
+ * out; returns whether it marked any. far_shadows says whether it cast the far band.
  */
-static bool EdDrawBeyondRetailReach(int *far_marks) {
+static bool EdDrawBeyondRetailReach(int *far_marks, bool *far_shadows) {
     bool drawn = false;
+    *far_shadows = false;
 
     for (int i = 0; i < 10; i++) {
         far_marks[i] = 0;
@@ -1210,7 +1294,9 @@ static bool EdDrawBeyondRetailReach(int *far_marks) {
 
             if (drawn) {
                 int shadow_on = GameMode != ED_MODE_TALK && EdSystemMesCheck() == 0;
+                EdVillagersTakeFog(far_marks, true);
                 EdDrawCharacter(Chara, 0, 10, EdVillager, far_marks, shadow_on, nullptr);
+                EdVillagersTakeFog(far_marks, false);
             }
             break;
         }
@@ -1218,20 +1304,10 @@ static bool EdDrawBeyondRetailReach(int *far_marks) {
             break;
     }
 
-    if (EdDrawOffMapShadow == 0 && edit_mode_draw == 0 && EditMapInfo->shadow_level > 0) {
-        float saved_light[4][4];
-        float shadow_light[4][4];
-        float light_colour[4][4];
-
-        MGGetPLight(saved_light, light_colour);
-        sceVu0CopyMatrix(shadow_light, saved_light);
-        EdLimitShadowLight(shadow_light, 3.0f);
-        MGSetPLight(shadow_light, light_colour);
-        TexManager.ReloadTexture(Vif1Packet, 0x16);
-        MGBeginDrawShadow(*reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("shadow_buff", -1)->tex0));
-        EdGroundDrawShadowBeyondNear(pEditGround, EditMapInfo->shadow_near);
-        MGEndDrawShadow(EditMapInfo->shadow_mode);
-        MGSetPLight(saved_light, light_colour);
+    if (EdDrawOffMapShadow == 0 && EdDrawOffMap == 0 && edit_mode_draw == 0 && EditMapInfo->shadow_level > 0 &&
+        EdGroundShadowsExtended(EditMapInfo->shadow_far)) {
+        EdDrawFarShadows();
+        *far_shadows = true;
     }
 
     return drawn;
@@ -1252,6 +1328,7 @@ void EditMainDraw() {
     int            i;
     auto           far_marks = std::make_unique<int[]>(10);
     bool           far_drawn = false;
+    bool           far_shadows = false;
 
     if (EdDrawOffFlag == 0) {
         if (EdPauseFlag != 0 || static_cast<unsigned int>(GameMode - 9) < 2U) {
@@ -1358,7 +1435,7 @@ void EditMainDraw() {
             if (depth_of_field != 0) {
                 int dof_level = 2;
 
-                far_drawn = EdDrawBeyondRetailReach(far_marks.get());
+                far_drawn = EdDrawBeyondRetailReach(far_marks.get(), &far_shadows);
 
                 if ((static_cast<int *>(SaveData->GetConfigData()))[6] != 0) {
                     dof_level = 1;
@@ -1511,6 +1588,9 @@ void EditMainDraw() {
             TexManager.ReloadTexture(Vif1Packet, 0x16);
 
             float shadow_range[4] = {-100.0f, EditMapInfo->shadow_near, EditMapInfo->shadow_far, 0.0f};
+            // Extended shadows take the fog in the near band too; their far band was cast before the
+            // depth of field, unless this mode drew none.
+            bool extended = EdGroundShadowsExtended(EditMapInfo->shadow_far);
 
             if (edit_mode_draw != 0) {
                 MGBeginDrawShadow(*reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("shadow_buff", -1)->tex0));
@@ -1518,12 +1598,28 @@ void EditMainDraw() {
                 MGEndDrawShadow(0x20);
             } else {
                 if (EditMapInfo->shadow_level > 0) {
+                    if (extended) {
+                        MGBeginShadowShade();
+                    }
+
                     MGBeginDrawShadow(*reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("shadow_buff", -1)->tex0));
-                    pEditGround->DrawShadow(0, shadow_range[0], shadow_range[1]);
-                    MGEndDrawShadow(EditMapInfo->shadow_mode);
+
+                    if (extended) {
+                        EdGroundDrawShadowBetween(pEditGround, -10000000.0f, shadow_range[1]);
+                        MGEndDrawShadowShade(EditMapInfo->shadow_mode);
+                        MGApplyShadowShade();
+                    } else {
+                        pEditGround->DrawShadow(0, shadow_range[0], shadow_range[1]);
+                        MGEndDrawShadow(EditMapInfo->shadow_mode);
+                    }
                 }
 
-                if (EditMapInfo->shadow_level >= 2) {
+                if (extended) {
+                    if (EditMapInfo->shadow_level > 0 && !far_shadows) {
+                        MGSetPLight(saved_light, light_colour);
+                        EdDrawFarShadows();
+                    }
+                } else if (EditMapInfo->shadow_level >= 2) {
                     MGBeginDrawShadow(*reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("shadow_buff", -1)->tex0));
                     pEditGround->DrawShadow(0, shadow_range[1], shadow_range[2]);
                     MGEndDrawShadow(EditMapInfo->shadow_mode_2);

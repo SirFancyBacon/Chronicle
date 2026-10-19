@@ -159,7 +159,7 @@ key is optional; these are the defaults:
         "show_fps": true,           // the FPS counter at the window's top-left corner (headless: --show-fps)
         "fps_detail": "all",        // what it shows: fps (the frame rate alone), ticks (and the logic ticks) or all (and the draws)
         "detail_distance": 0,       // how far full detail reaches (world units); 0: at any distance
-        "shadow_distance": 0,       // how far town parts cast full shadows (world units); 0: at any distance
+        "shadow_distance": 0,       // how far town parts cast shadows (world units); 0: at any distance
         "anisotropy": 0,            // anisotropic filtering of 3D textures: 0 (off), 2, 4, 8 or 16 samples
         "soft_focus": true          // the game's farside soft focus
     },
@@ -214,7 +214,9 @@ distance of the eye draws its finest level of detail (retail steps down from
 the player steps and draws (retail: the two nearest in front of the camera,
 within 150), but only the ones retail draws play their footsteps: every
 footstep on a ground is the same effect, and a new one cuts off the one still
-sounding, the player's too. A dungeon monster within it of the player draws and animates
+sounding, the player's too. Retail never fogs a villager (`EdLoadVillager`
+asks for fog with the clip mask alone), which its reach never showed; one
+drawn past that reach takes the fog. A dungeon monster within it of the player draws and animates
 while still dormant: it wakes, acts, and shows on the map only at its own
 clip distance (300 unless its script sets one) and under retail's limit of
 four awake at once. The 1200 cull of far town parts is unchanged.
@@ -226,17 +228,34 @@ coarsest model, in georama mode, and `LoadObjectParts` made the cursor's part
 that level too. Every part's four levels are loaded in both modes.
 
 `video.shadow_distance` is how deep into the view a town part (a house, a
-tree, a fixed part) casts its shadow at full strength; past it the game's own
-distances apply, so a small value such as `1` is retail's behaviour. Retail
-sorts the parts into two bands by their depth from the eye
-(`ps2/src/editloop.cpp:2356`, `CEditGround::DrawShadow`): those nearer than
-the map's `shadow_near` (320 unless its `SHADOW_LEVEL` says otherwise) darken
-the ground by `shadow_mode` (0x34 of 0x80), those out to `shadow_far` (740) by
-the fainter `shadow_mode_2` (0x20), and a part past that casts none, so a
-shadow lightens and then goes as the camera backs away. A part deeper than
-300 also takes the cheaper volume program, and one with a `draw_distance`
-drops its shadow past it. A part within `shadow_distance` belongs to the near
-band with the precise program (`port/src/editground.cpp`). The characters'
+tree, a fixed part) casts its shadow. Retail sorts the parts into two bands
+by their depth from the eye (`ps2/src/editloop.cpp:2356`,
+`CEditGround::DrawShadow`): those nearer than the map's `shadow_near` (320
+unless its `SHADOW_LEVEL` says otherwise) darken the ground by `shadow_mode`
+(0x34 of 0x80), those out to `shadow_far` (740) by the fainter
+`shadow_mode_2` (0x20), and a part past that casts none, so a shadow lightens
+and then goes as the camera backs away. A part deeper than 300 also takes the
+cheaper volume program, and one with a `draw_distance` drops its shadow past
+it. A part within `shadow_distance` takes the precise program whatever its
+`draw_distance` (`port/src/editground.cpp`). A `shadow_distance` no further
+than the map's `shadow_far`, such as `1`, keeps retail's bands. One past it
+extends them, `EdDrawFarShadows` in `port/src/editloop.cpp`. The parts are
+sorted by their distance from the eye rather than their depth, which
+grows towards the sides of a wide view, so turning the camera no longer
+moves a part from one band to the other. Past `shadow_near` the shade
+fades from `shadow_mode` to `shadow_mode_2` in sixteen steps across
+retail's far band (out to 740 by default, 2.3 times `shadow_near` on a map
+without one), and keeps `shadow_mode_2` from there out to `shadow_distance`
+(at any distance for 0). The steps are bands of parts, gathered into one
+layer from the farthest in, so where two parts' shadows overlap the
+nearer one's shade holds instead of both darkening the frame. Both bands
+take the fog. Retail darkens the finished, fogged frame, so a far shadow
+stays as dark over the haze as up close; an extended shadow is faded on
+each pixel by the share of the scene the fog leaves there, in eight steps
+by depth, before the layer darkens the frame (`MGApplyShadowShade`,
+`port/src/mglib.cpp`). The layer and its fogged copy hold no 3D, so the
+renderer replays their depth-tested steps in an interpolated display frame
+as recorded rather than carrying them to the moved camera. The characters'
 shadows have no such distances, the overhead view of georama mode keeps its
 own faint shadows, and a map whose `SHADOW_LEVEL` is 0 still has none.
 
@@ -244,11 +263,10 @@ Retail draws the town's characters and shadows after its soft focus
 (`EdDrawDOF`, `ps2/src/editloop.cpp:2212`), so they are never softened, and
 it drew few of them far enough for that to show. The villagers that
 `detail_distance` keeps past retail's 150 from the player, with their
-shadows, and the part shadows that `shadow_distance` moves into the near band
-past `shadow_near` are drawn before the soft focus instead, which softens
-them with the scenery around them (`EdDrawBeyondRetailReach`,
-`port/src/editloop.cpp`). The player, the villagers retail draws and the
-shadows of its own bands keep retail's place after it.
+shadows, and the far band of extended shadows are drawn before the soft
+focus instead, which softens them with the scenery around them
+(`EdDrawBeyondRetailReach`, `port/src/editloop.cpp`). The player, the
+villagers retail draws and the near band keep retail's place after it.
 
 `video.vsync` is shorthand for `present_mode`: `true` is `fifo`, `false`
 `immediate`. A binding is one name or a list of names. The `bindings` shown

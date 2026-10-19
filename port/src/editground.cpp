@@ -328,10 +328,13 @@ PORT_OVERRIDE void CEditGround::Draw(float time, int pass, int lowest, int highe
 
 namespace {
 
-// The shadows of the parts whose depth from the eye lies between near_distance and far_distance.
-// A part within full of the eye takes the precise volume program whatever its draw_distance; past
-// it, one deeper than 300 takes the fast program and one with a draw_distance casts nothing past it.
-void DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float far_distance, float full) {
+// The shadows of the parts whose depth from the eye (radial: distance) lies between near_distance and
+// far_distance. A part within full of the eye takes the precise volume program whatever its
+// draw_distance; past it, one deeper than 300 takes the fast program and one with a draw_distance
+// casts nothing past it. Returns how many parts cast one.
+int DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float far_distance, float full,
+                      bool radial) {
+    int cast = 0;
     sceVu0FVECTOR position;
     sceVu0FVECTOR view;
     sceVu0FVECTOR clip_position;
@@ -375,7 +378,9 @@ void DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float
             }
         }
 
-        if (view[2] > near_distance && view[2] < far_distance) {
+        float measure = radial ? DistVector(view) : view[2];
+
+        if (measure > near_distance && measure < far_distance) {
             object->DrawShade();
 
             if (object->shadow_frame != nullptr) {
@@ -386,6 +391,7 @@ void DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float
                 }
 
                 object->DrawShadow(fast);
+                cast++;
             }
         }
     }
@@ -405,7 +411,9 @@ void DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float
         position[3] = 1.0f;
         sceVu0ApplyMatrix(view, mgRenderInfo.view_scaled, position);
 
-        if (view[2] > near_distance && view[2] < far_distance) {
+        float measure = radial ? DistVector(view) : view[2];
+
+        if (measure > near_distance && measure < far_distance) {
             fixed->DrawShade();
 
             if (fixed->shadow_frame != nullptr) {
@@ -416,9 +424,12 @@ void DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float
                 }
 
                 fixed->DrawShadow(fast);
+                cast++;
             }
         }
     }
+
+    return cast;
 }
 
 } // namespace
@@ -427,32 +438,33 @@ void DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float
 // the parts nearer than the map's shadow_near (320 by default) at shadow_mode (0x34) and those out
 // to shadow_far (740) at the fainter shadow_mode_2 (0x20), and past that a part casts none. A part
 // deeper than 300 takes the fast volume program, and one with a draw_distance casts nothing past
-// it. A part within video.shadow_distance of the eye belongs to the near band, with the precise
-// program and whatever its draw_distance, so its shadow is as dark and as exact as up close; those
-// of them deeper than shadow_near are left out of the near band here and cast by
-// EdGroundDrawShadowBeyondNear. The overhead view of georama mode (pass 1) keeps its own.
+// it. A part within video.shadow_distance of the eye takes the precise program whatever its
+// draw_distance. Extended shadows (EdGroundShadowsExtended) are cast by EdGroundDrawShadowBetween
+// instead. The overhead view of georama mode (pass 1) keeps its own.
 PORT_OVERRIDE void CEditGround::DrawShadow(int pass, float near_distance, float far_distance) {
     float full = pass == 0 ? ConfigShadowDistance() : 0.0f;
 
     if (near_distance < 1.0f) {
         near_distance = -10000000;
-    } else {
-        if (near_distance < full) {
-            near_distance = full;
-        }
-
-        if (far_distance < near_distance) {
-            far_distance = near_distance;
-        }
     }
 
-    DrawShadowBetween(*this, pass, near_distance, far_distance, full);
+    DrawShadowBetween(*this, pass, near_distance, far_distance, full, false);
 }
 
-void EdGroundDrawShadowBeyondNear(CEditGround *ground, float shadow_near) {
+bool EdGroundShadowsExtended(float shadow_far) {
+    return ConfigShadowDistance() > shadow_far;
+}
+
+int EdGroundDrawShadowBetween(CEditGround *ground, float near_distance, float far_distance) {
     float full = ConfigShadowDistance();
 
-    if (full > shadow_near) {
-        DrawShadowBetween(*ground, 0, shadow_near, full, full);
+    if (far_distance > full) {
+        far_distance = full;
     }
+
+    if (!(near_distance < far_distance)) {
+        return 0;
+    }
+
+    return DrawShadowBetween(*ground, 0, near_distance, far_distance, full, true);
 }

@@ -2,8 +2,13 @@
 
 class CEditGround;
 
-// The shadows of the parts within video.shadow_distance of the eye that lie deeper than the map's
-// shadow_near, which retail cast only in its fainter far band or not at all; CEditGround::DrawShadow
-// leaves them out of the near band. EditMainDraw casts them before the depth of field, so that it
-// softens them with the ground they fall on.
-void EdGroundDrawShadowBeyondNear(CEditGround *ground, float shadow_near);
+// Whether video.shadow_distance reaches past the map's shadow_far, where retail's fainter far band
+// ends and a part stops casting. Shadows are then extended: EditMainDraw casts them by the parts'
+// distance from the eye rather than their depth, so that turning the camera does not move a part
+// from one band to another, in a shade that fades from the near band's to the far band's and keeps
+// it out to shadow_distance (forever at 0), and the fog fades them.
+bool EdGroundShadowsExtended(float shadow_far);
+
+// The shadows of the parts whose distance from the eye lies between near_distance and far_distance,
+// cut off at video.shadow_distance: the bands of extended shadows. Returns how many parts cast one.
+int EdGroundDrawShadowBetween(CEditGround *ground, float near_distance, float far_distance);
