@@ -214,6 +214,7 @@ PORT_OVERRIDE void DepthOfField(float *focus, int level, int alpha, int blur) {
                                gfx::SnapshotFrame(snapshot);
 
     if (ready) {
+        MGPortNoteFocus(focus, level);
         DrawBeyond(haze ? near_image : beyond, snapshot, haze ? focus[0] - 84.0f : focus[0],
                    haze ? focus[0] + 84.0f : focus[0], haze);
         if (!haze) {

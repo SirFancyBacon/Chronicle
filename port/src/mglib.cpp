@@ -1253,6 +1253,97 @@ constexpr const char *kShadowFoggedName = "shadow fogged";
 // The depth planes MGApplyShadowShade fades the shade over.
 constexpr int kShadowFogSteps = 8;
 
+// The half- and quarter-size copies of shadow_fogged MGApplyShadowShade softens it with.
+constexpr const char *kShadowHalfName = "shadow soft half";
+constexpr const char *kShadowQuarterName = "shadow soft quarter";
+
+// The depth of field drawn this frame (MGPortNoteFocus); level 0 when none was.
+float g_focus_planes[2] = {0.0f, 0.0f};
+int   g_focus_level = 0;
+
+// The renderer's depth of a plane at eye depth z, as the depth of field places its bands.
+float PlaneDepth(float z) {
+    sceVu0FVECTOR point = {0.0f, 0.0f, z, 1.0f};
+    sceVu0ApplyMatrix(point, mgRenderInfo.screen, point);
+    point[2] /= point[3];
+    return MGPortDepth(static_cast<unsigned>(static_cast<int>(point[2])) & 0xFFFFFF);
+}
+
+// An unblended copy of src's texels u0..u1, v0..v1 over the logical rect x0..x1, y0..y1 of the
+// current target, depth tested GEQUAL at depth unless it is 0 (always).
+void CopyShade(gfx::TextureHandle src, float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1,
+               float depth) {
+    gfx::DrawState state;
+    state.depth_test = depth > 0.0f ? gfx::DepthTest::GEqual : gfx::DepthTest::Always;
+    gfx::TextureBinding binding;
+    binding.texture = src;
+    binding.filter = gfx::Filter::Linear;
+    float         xs[4] = {x0, x1, x1, x0};
+    float         ys[4] = {y0, y0, y1, y1};
+    float         us[4] = {u0, u1, u1, u0};
+    float         vs[4] = {v0, v0, v1, v1};
+    gfx::Vertex2D quad[4];
+
+    for (int i = 0; i < 4; i++) {
+        quad[i] = {};
+        quad[i].x = xs[i];
+        quad[i].y = ys[i];
+        quad[i].z = depth;
+        quad[i].u = us[i];
+        quad[i].v = vs[i];
+        quad[i].color[0] = quad[i].color[1] = quad[i].color[2] = quad[i].color[3] = 0x80;
+        quad[i].fog = 0xFF;
+    }
+
+    gfx::Draw2D(gfx::Primitive::Quads, quad, binding, state);
+}
+
+// Softens the shade beyond the depth of field's planes as DepthOfField does the frame: the shade
+// shrunk to half size takes the place of what lies beyond the near plane and, at level 2, shrunk to
+// a quarter, of what lies beyond the far plane. The copies span the columns the target shows, past
+// the logical frame where the window is wider. The frame's own passes mix the blurred copy in at
+// the map's alpha; the shade's alpha channel cannot be blended, so it takes the copy whole.
+void SoftenShade(gfx::TextureHandle fogged) {
+    if (g_focus_level < 1) {
+        return;
+    }
+
+    gfx::LogicalRect visible = gfx::VisibleLogicalRect(fogged);
+    float            left = std::min(0.0f, std::floor(visible.x));
+    float            right = std::max(kScreenWidth, std::ceil(visible.x + visible.w));
+    uint32_t         half_width = static_cast<uint32_t>(right - left + 1.0f) / 2;
+    uint32_t         half_height = SCREEN_HALF_HEIGHT;
+    uint32_t         quarter_width = (half_width + 1) / 2;
+    uint32_t         quarter_height = half_height / 2;
+    gfx::TextureHandle half = gfx::NamedRenderTarget(kShadowHalfName, half_width, half_height, true);
+    gfx::TextureHandle quarter = g_focus_level >= 2 ? gfx::NamedRenderTarget(kShadowQuarterName, quarter_width,
+                                                                              quarter_height, true)
+                                                    : gfx::kNullTexture;
+
+    if (half == gfx::kNullTexture) {
+        return;
+    }
+
+    const float w = static_cast<float>(half_width);
+    const float h = static_cast<float>(half_height);
+    gfx::SetRenderTarget(half);
+    CopyShade(fogged, 0.0f, 0.0f, w, h, left, 0.0f, right, kScreenHeight, 0.0f);
+
+    if (quarter != gfx::kNullTexture) {
+        gfx::SetRenderTarget(quarter);
+        CopyShade(half, 0.0f, 0.0f, static_cast<float>(quarter_width), static_cast<float>(quarter_height), 0.0f,
+                  0.0f, w, h, 0.0f);
+    }
+
+    gfx::SetRenderTarget(fogged);
+    CopyShade(half, left, 0.0f, right, kScreenHeight, 0.0f, 0.0f, w, h, PlaneDepth(g_focus_planes[0]));
+
+    if (quarter != gfx::kNullTexture) {
+        CopyShade(quarter, left, 0.0f, right, kScreenHeight, 0.0f, 0.0f, static_cast<float>(quarter_width),
+                  static_cast<float>(quarter_height), PlaneDepth(g_focus_planes[1]));
+    }
+}
+
 // A quad over the whole logical frame, at depth (1 near, 0 far), sampling the frame-shaped texture
 // it is drawn with texel for pixel and modulated by alpha (0x80: as it is).
 void FrameQuad(gfx::Vertex2D (&quad)[4], float depth, u_char alpha) {
@@ -1367,8 +1458,9 @@ void MGEndDrawShadowShade(u_char alpha) {
 // copied into shadow_fogged in kShadowFogSteps + 1 quads: the first over every pixel at the fog's
 // floor, then one at each even fall of F, depth tested GEQUAL as the depth of field's bands are, so
 // that it takes in everything beyond its depth, modulated by what the fog leaves there. Each
-// overwrites the last, so a pixel keeps the step of the farthest plane in front of it. That layer
-// then darkens the frame as MGEndDrawShadow's texels do, by its alpha / 128.
+// overwrites the last, so a pixel keeps the step of the farthest plane in front of it. SoftenShade
+// then blurs it beyond the depth of field's planes, and the layer darkens the frame as
+// MGEndDrawShadow's texels do, by its alpha / 128.
 void MGApplyShadowShade() {
     gfx::TextureHandle shade = ShadowLayer(kShadowShadeName);
     gfx::TextureHandle fogged = ShadowLayer(kShadowFoggedName);
@@ -1403,10 +1495,7 @@ void MGApplyShadowShade() {
                 continue;
             }
 
-            sceVu0FVECTOR point = {0.0f, 0.0f, mgRenderInfo.fog_b / (f - mgRenderInfo.fog_a), 1.0f};
-            sceVu0ApplyMatrix(point, mgRenderInfo.screen, point);
-            point[2] /= point[3];
-            depth = MGPortDepth(static_cast<unsigned>(static_cast<int>(point[2])) & 0xFFFFFF);
+            depth = PlaneDepth(mgRenderInfo.fog_b / (f - mgRenderInfo.fog_a));
             copy.depth_test = gfx::DepthTest::GEqual;
         }
 
@@ -1414,6 +1503,7 @@ void MGApplyShadowShade() {
         gfx::Draw2D(gfx::Primitive::Quads, quad, binding, copy);
     }
 
+    SoftenShade(fogged);
     gfx::SetRenderTarget(previous);
     gfx::DrawState state;
     state.blend = true;
@@ -1424,4 +1514,14 @@ void MGApplyShadowShade() {
     binding.texture = fogged;
     FrameQuad(quad, 0.0f, 0x80);
     gfx::Draw2D(gfx::Primitive::Quads, quad, binding, state);
+}
+
+void MGPortNoteFocus(const float *planes, int level) {
+    g_focus_planes[0] = planes[0];
+    g_focus_planes[1] = planes[1];
+    g_focus_level = level;
+}
+
+void MGPortClearFocus() {
+    g_focus_level = 0;
 }

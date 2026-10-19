@@ -331,7 +331,8 @@ namespace {
 // The shadows of the parts whose depth from the eye (radial: distance) lies between near_distance and
 // far_distance. A part within full of the eye takes the precise volume program whatever its
 // draw_distance; past it, one deeper than 300 takes the fast program and one with a draw_distance
-// casts nothing past it. Returns how many parts cast one.
+// casts nothing past it. Returns how many parts it took, each of which may draw its shade (the baked
+// shading some parts carry, with or without a volume) as well as its shadow.
 int DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float far_distance, float full,
                       bool radial) {
     int cast = 0;
@@ -382,6 +383,7 @@ int DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float 
 
         if (measure > near_distance && measure < far_distance) {
             object->DrawShade();
+            cast++;
 
             if (object->shadow_frame != nullptr) {
                 fast = pass != 0;
@@ -391,7 +393,6 @@ int DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float 
                 }
 
                 object->DrawShadow(fast);
-                cast++;
             }
         }
     }
@@ -415,6 +416,7 @@ int DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float 
 
         if (measure > near_distance && measure < far_distance) {
             fixed->DrawShade();
+            cast++;
 
             if (fixed->shadow_frame != nullptr) {
                 fast = pass != 0;
@@ -424,7 +426,6 @@ int DrawShadowBetween(CEditGround &ground, int pass, float near_distance, float 
                 }
 
                 fixed->DrawShadow(fast);
-                cast++;
             }
         }
     }

@@ -36,6 +36,12 @@ void MGBeginShadowShade();
 void MGEndDrawShadowShade(u_char alpha);
 void MGApplyShadowShade();
 
+// The depth of field DepthOfField last drew: its focus planes (eye depths) and level. A shadow
+// shade applied after it is softened beyond the same planes, as the scenery under it was.
+// MGPortClearFocus forgets it, so that a frame without one softens nothing.
+void MGPortNoteFocus(const float *planes, int level);
+void MGPortClearFocus();
+
 // The frame buffer and the previous frame, as the TEX0 values MGGetFBuffTex and
 // MGGetFBuffBackTex hand out. Texture lookups by TEX0 recognise these two TBP0 values.
 inline constexpr unsigned kMGPortFrameTbp0 = 0;

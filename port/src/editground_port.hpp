@@ -10,5 +10,6 @@ class CEditGround;
 bool EdGroundShadowsExtended(float shadow_far);
 
 // The shadows of the parts whose distance from the eye lies between near_distance and far_distance,
-// cut off at video.shadow_distance: the bands of extended shadows. Returns how many parts cast one.
+// cut off at video.shadow_distance: the bands of extended shadows. Returns how many parts it took,
+// whether they drew a shadow, a shade or both.
 int EdGroundDrawShadowBetween(CEditGround *ground, float near_distance, float far_distance);

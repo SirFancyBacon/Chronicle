@@ -239,23 +239,27 @@ cheaper volume program, and one with a `draw_distance` drops its shadow past
 it. A part within `shadow_distance` takes the precise program whatever its
 `draw_distance` (`port/src/editground.cpp`). A `shadow_distance` no further
 than the map's `shadow_far`, such as `1`, keeps retail's bands. One past it
-extends them, `EdDrawFarShadows` in `port/src/editloop.cpp`. The parts are
+extends them, `EdDrawExtendedShadows` in `port/src/editloop.cpp`. The parts are
 sorted by their distance from the eye rather than their depth, which
 grows towards the sides of a wide view, so turning the camera no longer
 moves a part from one band to the other. Past `shadow_near` the shade
 fades from `shadow_mode` to `shadow_mode_2` in sixteen steps out to twice
 `shadow_near` (640 by default, inside retail's far band to 740; 2000 on a
 map without one), and keeps `shadow_mode_2` from there out to `shadow_distance`
-(at any distance for 0). The steps are bands of parts, gathered into one
-layer from the farthest in, so where two parts' shadows overlap the
-nearer one's shade holds instead of both darkening the frame. Both bands
-take the fog. Retail darkens the finished, fogged frame, so a far shadow
-stays as dark over the haze as up close; an extended shadow is faded on
-each pixel by the share of the scene the fog leaves there, in eight steps
-by depth, before the layer darkens the frame (`MGApplyShadowShade`,
-`port/src/mglib.cpp`). The layer and its fogged copy hold no 3D, so the
-renderer replays their depth-tested steps in an interpolated display frame
-as recorded rather than carrying them to the moved camera. The characters'
+(at any distance for 0). The near band and the steps are bands of parts,
+gathered into one layer from the farthest in that darkens the frame once,
+after the characters as retail's bands do, so where two parts' shadows
+overlap the nearer one's shade holds instead of both darkening the frame,
+and a part crossing from one band to the next changes only its own shade.
+Retail darkens the finished, fogged frame, so a far shadow stays as dark
+over the haze as up close; an extended shadow is faded on each pixel by the
+share of the scene the fog leaves there, in eight steps by depth, and
+softened beyond the planes of the soft focus drawn that frame, taking the
+layer shrunk to half size past the near plane and to a quarter past the far
+one, as the soft focus does the frame (`MGApplyShadowShade`,
+`port/src/mglib.cpp`). The layers hold no 3D, so the renderer replays their
+depth-tested steps in an interpolated display frame as recorded rather than
+carrying them to the moved camera. The characters'
 shadows have no such distances, the overhead view of georama mode keeps its
 own faint shadows, and a map whose `SHADOW_LEVEL` is 0 still has none.
 
@@ -263,10 +267,11 @@ Retail draws the town's characters and shadows after its soft focus
 (`EdDrawDOF`, `ps2/src/editloop.cpp:2212`), so they are never softened, and
 it drew few of them far enough for that to show. The villagers that
 `detail_distance` keeps past retail's 150 from the player, with their
-shadows, and the far band of extended shadows are drawn before the soft
-focus instead, which softens them with the scenery around them
-(`EdDrawBeyondRetailReach`, `port/src/editloop.cpp`). The player, the
-villagers retail draws and the near band keep retail's place after it.
+shadows, are drawn before the soft focus instead, which softens them with
+the scenery around them (`EdDrawBeyondRetailReach`,
+`port/src/editloop.cpp`). The player and the villagers retail draws keep
+retail's place after it, and so do the town parts' shadows, which extended
+shadows soften themselves.
 
 `video.vsync` is shorthand for `present_mode`: `true` is `fifo`, `false`
 `immediate`. A binding is one name or a list of names. The `bindings` shown
