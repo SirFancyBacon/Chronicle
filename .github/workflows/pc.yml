@@ -30,6 +30,11 @@ jobs:
         with:
           submodules: true
 
+      # The Flatpak configures without network, so its manifest has to stage every file Kazarov's CMake
+      # downloads; this fails on the pull request that pins a Kazarov with one the manifest lacks.
+      - name: Check the Flatpak stages Kazarov's downloads
+        run: python3 scripts/port/flatpak_sources.py
+
       - name: Install the toolchain and libraries
         run: |
           sudo apt-get update

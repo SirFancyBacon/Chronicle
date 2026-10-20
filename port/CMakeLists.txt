@@ -32,6 +32,17 @@ include(${KZ_ROOT}/cmake/KazarovPort.cmake)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 # Flatpak builds have no network: their single-file libraries are staged in audio_decoders/ and stb_truetype/; others fetch them.
 set(KZ_PORT_VENDOR_DIRS ${CMAKE_SOURCE_DIR}/audio_decoders ${CMAKE_SOURCE_DIR}/stb_truetype)
+# The Flatpak also stages each library Kazarov's FetchContent_Declare downloads, in flatpak-deps/<name>
+# (scripts/port/flatpak_sources.py checks the manifest), and FetchContent takes it from there. Other
+# builds have no flatpak-deps/ and download them as declared.
+file(GLOB staged_dependencies LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/flatpak-deps/*")
+foreach(staged IN LISTS staged_dependencies)
+    if(IS_DIRECTORY "${staged}")
+        get_filename_component(dependency "${staged}" NAME)
+        string(TOUPPER "${dependency}" dependency_upper)
+        set(FETCHCONTENT_SOURCE_DIR_${dependency_upper} "${staged}")
+    endif()
+endforeach()
 kz_port_host_library(dc_host)
 # Chronicle still loads retail HD/BD/SQ audio. These compatibility declarations extend the shared
 # semantic audio API; every host and game unit must see the same class definitions.
