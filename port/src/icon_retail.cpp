@@ -1,5 +1,5 @@
 // Retail format decoding derived from TheMoonPeople/Kazarov 611182d.
-// Copyright (c) 2026 TheMoonPeople; see ../third_party/kazarov-retail-LICENSE.
+// Copyright (c) 2026 TheMoonPeople, under the MIT license in tools/kazarov/LICENSE.
 // No renderer or platform implementation is duplicated.
 #include "icon_retail.hpp"
 
