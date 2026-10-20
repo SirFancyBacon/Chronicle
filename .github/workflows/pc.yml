@@ -175,10 +175,10 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Copy-Item $env:VULKAN_RUNTIME/vulkan-1.dll port/build/windows
 
-      # The renderer's cases run on Linux and macOS: this runner's Vulkan loader has no surface extension, so the cases
-      # that open a window (GfxGpu*, GfxTim2's upload) cannot start here.
+      # The renderer's cases run on Linux and macOS: this runner has a Vulkan loader but no driver, so the cases that
+      # need a device, labeled gpu (port/src/tests/CMakeLists.txt), cannot start here.
       - name: Test
-        run: ctest --test-dir port/build/windows --output-on-failure -j4 -E '^(GfxMisc|GfxGpu[^.]*|GfxTim2|TexDecode|AreaCard|CaptionLine)\.|^[^/]+/GfxGpu'
+        run: ctest --test-dir port/build/windows --output-on-failure -j4 -LE gpu
 
       - name: Package the Windows build
         run: |
