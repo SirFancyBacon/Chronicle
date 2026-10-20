@@ -26,6 +26,11 @@ if(NOT EXISTS ${KZ_ROOT}/include/kazarov/port.h)
     message(FATAL_ERROR "${KZ_ROOT} is empty: run git submodule update --init tools/kazarov")
 endif()
 
+# Archives Kazarov's FetchContent_Declare downloads take their extraction time, so a changed URL
+# rebuilds what they hold. Set before the include: its functions keep the policies they were defined under.
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
 include(${KZ_ROOT}/cmake/KazarovPort.cmake)
 
 # Python runs the port override script from the Kazarov submodule.
@@ -207,10 +212,11 @@ kz_port_sce_sources(DC_SCE_SOURCES LIBS libvu0 libpad libmc sifdev sifrpc eekern
 add_library(dc_port OBJECT ${PORT_LIB_SOURCES} ${DC_SCE_SOURCES})
 target_link_libraries(dc_port PRIVATE dc_options SDL3::SDL3 Vulkan::Vulkan nlohmann_json::nlohmann_json kz_port_headers)
 target_include_directories(dc_port PRIVATE ${PORT_DIR} ${SHADER_HEADER_DIR})
-# captionfont.cpp rasterizes with stb_truetype, which Kazarov stages (or fetches) for dc_host.
+# captionfont.cpp rasterizes with stb_truetype and platform/png_image.cpp decodes with stb_image, which
+# Kazarov stages (or fetches) for dc_host.
 get_target_property(dc_host_includes dc_host INCLUDE_DIRECTORIES)
 foreach(include_dir IN LISTS dc_host_includes)
-    if(EXISTS ${include_dir}/stb_truetype.h)
+    if(EXISTS ${include_dir}/stb_truetype.h OR EXISTS ${include_dir}/stb_image.h)
         target_include_directories(dc_port PRIVATE ${include_dir})
     endif()
 endforeach()

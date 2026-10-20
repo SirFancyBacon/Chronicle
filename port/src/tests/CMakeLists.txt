@@ -37,8 +37,17 @@ target_sources(darkcloud_tests PRIVATE $<TARGET_OBJECTS:dc_test_main_overrides>)
 set(DC_TEST_TIMEOUT 30 CACHE STRING "Seconds a test case may run before it is cut off")
 gtest_discover_tests(darkcloud_tests
     DISCOVERY_MODE PRE_TEST
-    TEST_FILTER -PlatformClock.*
+    TEST_FILTER -PlatformClock.*:*GfxGpu*.*
     PROPERTIES TIMEOUT ${DC_TEST_TIMEOUT} ENVIRONMENT "DC_TEST_FONT=${CMAKE_SOURCE_DIR}/tools/font/DarkCloudCompendium.ttf")
+# Kazarov's device cases are the suites named GfxGpu* (its src/cpp/gfx/README.md, "Shared device test
+# classification"). Some start several renderers, seconds apiece on a software driver such as lavapipe, so
+# they have their own limit, and the gpu label for ctest -L/-LE.
+set(DC_GPU_TEST_TIMEOUT ${DC_TEST_TIMEOUT} CACHE STRING "Seconds a GfxGpu test case may run before it is cut off")
+gtest_discover_tests(darkcloud_tests
+    DISCOVERY_MODE PRE_TEST
+    TEST_FILTER *GfxGpu*.*
+    PROPERTIES TIMEOUT ${DC_GPU_TEST_TIMEOUT} LABELS gpu
+        ENVIRONMENT "DC_TEST_FONT=${CMAKE_SOURCE_DIR}/tools/font/DarkCloudCompendium.ttf")
 gtest_discover_tests(darkcloud_tests
     DISCOVERY_MODE PRE_TEST
     TEST_FILTER PlatformClock.*
