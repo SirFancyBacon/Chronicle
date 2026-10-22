@@ -44,7 +44,9 @@ What the design has to fit. Counts are of `ps2/src` as of this proposal.
 **Identity.** An item is a 16-bit number. `ComItemInfo[296]` (`itemdata.cpp`) covers 81 to 376
 and maps each to a kind (attachment, item or weapon), an index into that kind's table, an icon and
 a name message. Weapons are 257 to 375. 1 to 80 is a second numbering of the weapons that the menus
-use; `TransWepNo` and `TransWepNoNewToOld` (`menu_save.cpp`) convert between the two.
+use; `TransWepNo` and `TransWepNoNewToOld` (`menu_save.cpp`) convert between the two. The weapons
+come in six blocks, one per character, and retail tells a weapon's character from the block its
+number is in (`btmisc.cpp`, `btsysscript.cpp`).
 
 **Properties,** each kind in its own table:
 
@@ -56,21 +58,23 @@ use; `TransWepNo` and `TransWepNoNewToOld` (`menu_save.cpp`) convert between the
 | `esa_info[13]` (`fishing.cpp`, `static`) | the baits and how far fish notice each |
 | `ITEM_NAME_TBL_NEW` (`btitem.cpp`) | the model file each item is drawn with |
 
-**Where copies live,** all fixed-size parts of the save (`userstatus.hpp`):
+**Where copies live,** all fixed-size parts of the save (`userstatus.hpp`, `stockitem.hpp`):
 
 | Place | Per copy |
 |---|---|
 | `ITEM_PACK::item[103]` | item number and `item_vol`, one item per slot |
 | `ITEM_PACK::quick_item_slot[3]` | item, `quick_item_qty`, `active_item_vol`: the only place copies stack |
-| `consumable_items[43]` | stored attachments (`DNG_CONSUMABLE`) |
+| `consumable_items[43]` | the attachments the player carries (`DNG_CONSUMABLE`) |
 | `chara_weapons[6][11]` (`WEAPON_HAVE`, 0xF8 bytes) | level, stats, durability, experience, elements, synthesis count, and six `ATTACH_LIST` copies (0x20 bytes each) |
+| `CSaveData::stock_item` (`CStockItem`) | storage: 60 items with their `item_vol`, 30 weapons (`WEAPON_HAVE`, holes included) and 30 attachments (`ATTACH_LIST`) |
 
 **How code asks about an item.**
 
 - Lookups: `GetCommonItemInfo` (33 call sites), `GetItemTypeInfo`, `GetItemData` (21),
   `GetAttachData`, `GetWeaponDataInfo`.
 - Tables read directly, past those lookups: 14 places, in `itembombeffect.cpp`, `itemdata.cpp` and
-  `mainitemmodel.cpp`.
+  `mainitemmodel.cpp`. Every price goes through `GetItemMoney` (`shop.cpp`), a `static` function
+  that reads `PriceList` by number.
 - Number ranges: 276 comparisons against `ITEM_*_START` and `ITEM_*_END` in 20 files decide an
   item's kind from its number (`shop.cpp` 96, `battlemenu.cpp` 61, `menu_draw.cpp` 35,
   `dngstatusdata.cpp` 19, ...). 14 of them are already in code `port/src` replaces.
@@ -140,7 +144,12 @@ trait can be added without touching the items that don't use it.
 
 `Build` rejects a definition with no fallback when its kind needs one (anything a save can hold), a
 fallback that isn't a vanilla item of the same kind (for a weapon, one the same character can hold;
-section 9), and traits that cannot go together (a `Weapon` that is also `Consumable`).
+section 9), and traits that cannot go together (a `Weapon` that is also `Consumable`). A custom
+weapon belongs to its fallback's character; the `Weapon` trait records no character of its own.
+
+Items the port defines in C++ are written into the base layer at start-up, beside the extraction
+(section 6), as documents of their own (section 7). A datapack overrides one as it overrides a
+vanilla table, so changing a port item needs no recompile.
 
 ---
 
@@ -150,8 +159,8 @@ An item has a string ID in data and a number at run time, because retail's code 
 pass numbers around.
 
 **IDs** are `namespace:name`: `vanilla:` for retail's items (`vanilla:prickly`), `chronicle:` for
-the port's own. A vanilla row in a document keeps its retail `item_no`; a custom item's row (phase 3)
-carries an `id` instead. Saves only ever name custom items by ID, so their numbers can be handed out
+the port's own. A vanilla row in a document keeps its retail `item_no`; a custom item (phase 3) is a
+document of its own, named by its `id` (section 7). Saves only ever name custom items by ID, so their numbers can be handed out
 afresh each run without breaking anything.
 
 **Numbers:**
@@ -160,7 +169,7 @@ afresh each run without breaking anything.
 |---|---|
 | 1 to 80 | retail's menu numbering of the weapons (unchanged) |
 | 81 to 376 | retail's items (unchanged, the same numbers every run); 377 is `ITEM_WEAPON_END` |
-| 0x200 to 0x0FFF | custom definitions, given out in the order they load |
+| 0x200 to 0x0FFF | custom definitions, given out in the order they load, and orphans without state (section 9) |
 | 0x1000 to 0x7FFF | handles: one custom copy each (below) |
 
 **A copy with state of its own gets its own number, its handle.** Retail moves copies around in
@@ -175,7 +184,12 @@ synthesis work on it unchanged.
 any number above 377 falls on the weapon side of the 69 `>= ITEM_WEAPON_START` tests:
 
 - A custom **weapon** above 377 already passes almost all of them; the two `ITEM_WEAPON_END` tests
-  need replacing.
+  need replacing. Its number is in none of the six character blocks, so the tests that pick a
+  weapon's character by block ask the registry instead, which answers with its fallback's
+  character. `TransWepNo` and `TransWepNoNewToOld` return any number outside their blocks
+  unchanged, so a handle crosses the menus' numbering intact. An event script that asks for the
+  equipped weapon (`editloop3.cpp`) gets the handle, which matches none of the weapons scripts test
+  for.
 - A custom **attachment or dungeon item** fails the tests bounded on both sides (`ITEM_ATTACH_START`
   to `ITEM_ATTACH_END`, `ITEM_DUNGEON_START` to `ITEM_DUNGEON_END`), whose ranges are already full.
   Every function with such a test has to ask the registry instead (`Items::KindOf`), which means
@@ -199,14 +213,16 @@ nothing kept depends on it. The handle has to be 16 bits, because it lives where
 numbers (`ITEM_PACK::item`, `WEAPON_HAVE::item_no`, `ATTACH_LIST::item_no`, the quick slots), which
 is what lets retail's code carry it without change. Wider numbers would mean replacing those
 structures, and with them vanilla saves. The 16 bits only limit the copies alive at once, and the
-save's fixed arrays already limit those to a few hundred (103 pack slots, 66 weapon slots with six
-holes each, 43 stored attachments, ...), far below the 28,000 handles. This is the split games built
+save's fixed arrays already limit those to about 900 (103 pack slots, three quick slots, 43 carried
+attachments, 66 carried and 30 stored weapons with six holes each, 60 stored items and 30 stored
+attachments), far below the 28,000 handles. This is the split games built
 on data generally make (Bethesda's engines, for one, keep an item's definition apart from the few
 copies that carry extra data), without their growth problem: here only the permanent IDs persist.
 
 **A handle's life.** A handle is given out when a custom copy is made (a pickup, a purchase, a
 synthesis) or a save is loaded, and freed when no save structure holds it any more. The host checks
-this when saving: a handle found in no slot, weapon or hole is dropped, and its copy with it.
+this when saving: a handle found in no slot, weapon, hole or storage space is dropped, and its copy
+with it.
 
 ---
 
@@ -254,8 +270,8 @@ document only gets a field when that field is in the first two, so no field sile
   `port/src` replaces retail's, with `PORT_OVERRIDE`, or for a `static` one such as a script command,
   through its unit's stubs header (as `PortWorldMapCommand` replaces `_WORLD_MAP`).
 - **Fixed sizes.** The tables are arrays of fixed length (`ITEM_LIST[175]`, `PriceList[296]`, ...).
-  A row for an item number retail doesn't have is refused until phase 3, as ChronicleTwo's loaders
-  skip entries a table can't hold.
+  A row for an item number retail doesn't have is refused, as ChronicleTwo's loaders skip entries a
+  table can't hold; custom items come in documents of their own (section 7, phase 3).
 - **Fields that shape a save are fixed.** An item's kind and table index (`ComItemInfo`) and a
   weapon's number of holes decide where a save's copies can sit, so they come from the extraction
   only, and a document that changes one is refused. Documents tune values; they don't reshape what
@@ -273,7 +289,9 @@ instead. Until then Chronicle keeps `dcdata` and its extraction as they are.
 
 **The lookups.** `GetCommonItemInfo`, `GetItemTypeInfo`, `GetItemData`, `GetAttachData` and
 `GetWeaponDataInfo` are replaced in `port/src` to answer for custom numbers and handles from the
-registry (phase 3), and as retail does for everything else.
+registry (phase 3), and as retail does for everything else. `GetItemMoney` would read past
+`PriceList` for a custom number, and is `static`, so its callers, all in the shop screens, are
+replaced instead; the shops' rebuild (section 11) does that.
 
 **Behaviour.** A trait may carry callbacks (`OnUse`, `OnThrow`, `CanUseHere`, `OnBaitAttach`),
 called from the three places retail decides what using an item does, and only for items that set
@@ -333,6 +351,16 @@ later packs winning, and a path a pack doesn't hold falls through to earlier pac
 base. A pack holding `gameplay/items/items.json` replaces the whole `items` table, as a ChronicleTwo
 pack replaces a whole document.
 
+**Custom items are a document each** (phase 3). Vanilla tables are replaced whole, but custom items
+are added, and two packs that each add items must both be heard; were custom items rows of
+`items.json`, the later pack would silently remove the earlier one's. So each is its own document,
+`gameplay/items/custom/<namespace>.<name>.json` (`kind` `item`; a file name can't hold the ID's
+colon), with everything the item has across the tables: its common fields, its kind's properties,
+its price and its traits. The loader lists the folder across the base and every active pack with
+the index's `DirectoryMembers`, which ChronicleTwo's index already has: every pack's files are read,
+and a later pack's file at the same path replaces an earlier one's, so one item is still overridden
+whole.
+
 **A starting point.** `darkcloud --export-gameplay <directory>` writes the extraction's documents to
 disk, pretty-printed, so changing one field of one item means copying the table's document into a
 pack and editing one line.
@@ -380,7 +408,9 @@ one author, following ChronicleTwo's rules where it has them.
 - **Whole-document overrides are predictable.** Where two packs hold the same table, the later one
   wins entirely, as with every file in ChronicleTwo's datapacks. Two packs changing different items
   of one table therefore don't combine; merging them is a rule every Kazarov document would want, so
-  it belongs in Kazarov if it is ever wanted, not in items alone.
+  it belongs in Kazarov if it is ever wanted, not in items alone. Custom items don't meet this rule:
+  each is a document of its own (section 7), so packs adding different items combine, and two packs
+  holding the same item resolve as any document does.
 - **Unknown fields and traits are kept and reported, not fatal.** A document written for a newer
   version of the port then loads as much as this one understands.
 - **Versions.** A newer `schema_version` than the port supports refuses that candidate, with a
@@ -434,8 +464,10 @@ The items chunk, as the dump command prints it:
 }
 ```
 
-- `at` is where the copy sits: a pack slot, a quick slot, a stored attachment, a weapon slot, or a
-  hole in a weapon. The vanilla struct at that place holds the copy's fallback.
+- `at` is where the copy sits: `pack:<slot>`, `quick:<slot>`, `attach:<slot>` (the attachments
+  carried), `weapon:<character>:<slot>` and `hole:<character>:<slot>:<hole>`, and in storage
+  `stock:<slot>`, `stock_weapon:<slot>`, `stock_hole:<slot>:<hole>` and `stock_attach:<slot>`. The
+  vanilla struct at that place holds the copy's fallback. A quick slot's stack is one record.
 - A **weapon or attachment**'s vanilla fields (level, stats, attachments) stay in its real
   `WEAPON_HAVE` or `ATTACH_LIST` in `save.dat`. With its definition gone, the copy becomes its
   fallback with them intact, so a character never loses a weapon or its progress.
@@ -446,10 +478,13 @@ The items chunk, as the dump command prints it:
 
 ### Missing definitions
 
-**A save whose definitions are missing keeps them.** Loaded without a custom item's definition, each
-of its copies still gets a handle, an orphan's: retail's code and the screens see the fallback
-through it (a Dagger, with the weapon's own level and attachments), while the registry keeps the
-copy's real item, instance and state. The orphan travels and is saved like any other copy, so
+**A save whose definitions are missing keeps them.** Loaded without a custom item's definition, its
+copies still get numbers, orphans'. A copy with state of its own (an `instance`) gets a handle.
+Copies without one share one orphan number per missing definition, from the definitions' range, so
+they still sort together and stack in a quick slot as the item did, since retail stacks by
+comparing numbers. Through either, retail's code and the screens see the fallback (a Dagger, with
+the weapon's own level and attachments), while the registry keeps the copy's real item, instance
+and state. The orphan travels and is saved like any other copy, so
 saving over the game loses nothing, and the item is itself again once its definition returns. Only
 a copy that is sold, used up or destroyed is gone. On loading such a save the game says which
 definitions are missing and what stands in for them, and offers to go back; since nothing is lost by
@@ -472,7 +507,8 @@ Each of these is a way custom items could leave a save wrong, and what prevents 
 - **A runtime number never reaches a file.** Handles and custom definitions' numbers mean something
   for one run only. Before writing, the host strips them from every field of the save that holds an
   item number, found by an audit of the save's types (`savedata.hpp`, `userstatus.hpp`,
-  `itemdata.hpp`): the copies (pack, quick slots, weapons, holes, stored attachments) and the fields
+  `stockitem.hpp`, `itemdata.hpp`): the copies (pack, quick slots, carried attachments, weapons,
+  holes, and storage's items, weapons, holes and attachments) and the fields
   that name a kind of item, such as an attachment's `sphere_weapon_no` and the fishing records'
   `fish_id`. Fields still named `unk_` are audited as they are named. Then the writer checks the
   stripped image: a field holding a number retail doesn't have is written as its fallback instead,
@@ -490,7 +526,8 @@ Each of these is a way custom items could leave a save wrong, and what prevents 
 - **Data can't reshape a save.** The fields that decide the shape of what a save holds, an item's
   kind and table index, a weapon's number of holes, a table's length, come from the extraction only;
   a document can tune values but not change these (section 6). Otherwise a pack could leave a saved
-  attachment in a hole its weapon no longer has.
+  attachment in a hole its weapon no longer has. The quick slots' rules are the one exception, and
+  retail tolerates what they leave behind (section 10).
 - **Writes leave a matching pair, whatever happens.** The container holds records for two hashes
   while a save is written: the `save.dat` on disk and the one being written. The host writes the
   container with both, then `save.dat`, then the container again with only the new one, each under a
@@ -550,7 +587,12 @@ player let it go.
 and given a maximum, through the `QuickSlot` trait. For vanilla items this is the `stack_kind`
 field of the `items` document, which reaches `ITEM_DATA::stack_kind` through the loader, plus a
 maximum, which retail has no field for and the host enforces, so most of retail's code needs no
-change.
+change. The maximum is at most 99, the most the quick-slot counters can draw in their two digits.
+
+A pack's quick-slot rules are the one thing a document changes that a save keeps: a stack built
+under a raised maximum, or an item a pack let into a quick slot, stays in `save.dat` when the pack
+is gone. Retail copes with that: it only counts a stack down as it is used, and won't add to one
+past its own limit (`battlemenu.cpp`), so the stack is simply used up.
 
 **Later: several copies in one bag slot.** The 103-slot pack holds one item per slot throughout
 retail: pickup, sorting (`SeitonItemBoard`), the overflow check, every item menu, shops and storage.
@@ -600,7 +642,11 @@ the same order, the same prices, the same results for every action.
 **Fishing** is the first user. Its bait picker lists every item with the `Bait` trait and attaches
 the chosen bait in C++. That also mends retail PAL's bug in which Carrot, Potato Cake, Minon, Battan
 and Petite Fish are consumed but never attached: the towns' event scripts only accept eight of the
-thirteen baits (program 134 in `gedit/e01`, `e02`, `e04` and `s09`). A town catch never becomes an
+thirteen baits (program 134 in `gedit/e01`, `e02`, `e04` and `s09`). The script goes on after the
+picker: for the eight baits it recognises it attaches the bait itself (`_LOAD_ITEM`,
+`_SET_FISHING_ESA`), and for any other it goes straight to `_GOTO_FISHING`. The framework's attach,
+which covers all thirteen and custom baits, is the one kept, so the script's own is skipped and no
+bait is attached twice. A town catch never becomes an
 inventory item in retail (it becomes fish points and a ranking record), so the `Fish` trait is for
 the fish retail does keep as items (`ITEM_SORT_FISH`) and for custom fish the player may keep.
 
@@ -651,7 +697,8 @@ Each is its own pull request, working and tested on its own.
    Already useful: prices, quick-slot rules, heal amounts and baits can be changed from a pack.
 2. **Fishing**, on phase 1: the `Bait` and `Fish` traits, the bait fix, catch events, and the quest
    conditions. Its bait picker is the first screen on the shared item widgets (section 11).
-3. **Custom items.** Custom numbers and handles, the save's extension file (section 9) and icons;
+3. **Custom items.** Custom item documents (section 7), custom numbers and handles, the save's
+   extension file (section 9) and icons;
    the inventory screens
    rebuilt on the UI framework (section 11), one pull request per screen: the item menu first, then
    storage, the shops and the item picker; and the remaining range comparisons outside the screens
@@ -673,8 +720,12 @@ Each is its own pull request, working and tested on its own.
   reported and the next one used; an unknown field is kept. ChronicleTwo's `datapacks_test.cpp`
   comes across with its code.
 - `--export-gameplay` writes documents that load back to the same tables.
-- Saving: custom copies move to the extension file and back; a missing definition gives an orphan
-  that survives saving and is itself again when the definition returns; an unused handle is dropped.
+- Custom item documents: two packs each adding an item both load; a later pack's file for the same
+  item replaces the earlier one's; a pack overrides an item the port defines in C++.
+- Saving: custom copies move to the extension file and back, from every place in section 9's `at`
+  list, storage included; a missing definition gives an orphan that survives saving and is itself
+  again when the definition returns; orphaned copies without state share one number and stack in a
+  quick slot; an unused handle is dropped.
 - Soundness (section 9): a handle placed in every audited field of a synthetic save never reaches
   `save.dat`; a duplicated handle is split into two instances; a crash simulated after each step of a
   write leaves a container matching the `save.dat` on disk; a damaged chunk costs only its own data;
