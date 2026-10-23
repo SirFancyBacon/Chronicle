@@ -37,6 +37,7 @@ void TouchOverlayPoll();
 #include "exitcodes.hpp"
 #include "gameloop.hpp"
 #include "gamemode.hpp"
+#include "gameplay.hpp"
 #include "gfx/gfx.hpp"
 #include "identity.hpp"
 #include "langset.hpp"
@@ -88,6 +89,7 @@ struct Options {
     bool         show_fps = false;
     bool         screenshot_fps = false;
     const char *export_text = nullptr;
+    const char *export_gameplay = nullptr;
     const char *font = nullptr;
 #if defined(__SWITCH__)
     bool switch_core_affinity = true;
@@ -132,6 +134,8 @@ float g_switch_render_scale = 0.0f;
                  "  --display-per-tick N  headless: also render N interpolated display frames per tick\n"
 #endif
                  "  --export-text DIR  write the game's message files to DIR as language JSON (docs/LOCALIZATION.md)\n"
+                 "  --export-gameplay DIR  write the gameplay documents extracted from the game's tables to DIR,\n"
+                 "                     a starting point for a datapack (docs/ITEM_FRAMEWORK.md)\n"
                  "  --font FILE        draw message text from this TrueType font (else lang/font.ttf)\n"
                  "  --show-fps         draw the FPS counter on presented frames when headless too\n"
                  "test hooks:\n"
@@ -191,6 +195,8 @@ Options ParseOptions(int argc, const char **argv) {
             options.fast_load = true;
         } else if (arg == "--export-text") {
             options.export_text = value();
+        } else if (arg == "--export-gameplay") {
+            options.export_gameplay = value();
         } else if (arg == "--font") {
             options.font = value();
         } else if (arg == "--show-fps") {
@@ -503,6 +509,10 @@ int Run(int argc, const char **argv) {
     argc = PathsConsumeArgs(argc, argv);
     g_options = ParseOptions(argc, argv);
     Options &options = g_options;
+    if (options.export_gameplay != nullptr) {
+        // The tables are the game's own, so this needs no disc data, no window and no game.
+        return GameplayExport(PathsFromUtf8(options.export_gameplay)) ? kExitOk : kExitFailure;
+    }
     FirstRunIfNoData(options.headless);
     DC_ANDROID_TRACE("Run: first-run check passed");
     if (options.jump == nullptr) {
@@ -524,6 +534,7 @@ int Run(int argc, const char **argv) {
     GameSetFastLoad(options.fast_load || (fast_load != nullptr && *fast_load != '\0' && *fast_load != '0'));
     RequireData();
     DC_ANDROID_TRACE("Run: data available");
+    GameplayLoad(PathsDataRoot());
     if (!options.headless) {
         GameSetDataIcon();
     }
