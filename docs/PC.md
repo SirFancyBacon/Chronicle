@@ -1595,6 +1595,17 @@ past the host header) and the event scripts' function records and stacks
 `int`, is recovered by `CCharacter::ClothStep` with `PortImagePointer`, which
 widens it against the image's own address.
 
+## Arithmetic the EE does differently
+
+The EE's floating-point unit is not IEEE: it has no NaN or infinity, and a
+division by zero gives a finite number. Where retail relies on that, the host's
+IEEE result is replaced by a copy of the function with the one case guarded and
+nothing else changed:
+
+| Function | Unit | Change |
+|---|---|---|
+| `FishLineStep` | `fishing.cpp` | a float pinned on its line point (every cast) has a length of 0 between them; it is taken as 1, so the 0/0 that leaves both still on the EE moves them by 0 instead of making them NaN, which ran through the line into Toan's position and crashed the town (#219) |
+
 ## What is still a stub
 
 `tools/kazarov/src/cpp/sce/stubs/` holds the remaining SDK stubs: libdma, libgraph (all but
