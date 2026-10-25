@@ -42,8 +42,9 @@ quest that ends in a shop (`FetchQuest`).
 - **Rules** (`Advance`) move a quest from one stage to another once a condition holds. `Evaluate`
   applies them until none does; it runs whenever an NPC's menu is put together, and again after
   each quest choice.
-- **Conditions** are plain functions of the quest's `Context`: `AtStage`, `AtStages`, `HasItem`,
-  `HasMoney`, `FloorReached`, `DungeonStarted`, `PartyMember`, `VarAtLeast`, the game's flags
+- **Conditions** are plain functions of the quest's `Context`: `AtStage`, `AtStages`, `HasItem` (by
+  number, or by item ID: `HasItem("vanilla:bread", 2)`), `HasItemWith<T>` (any items with an item
+  trait: `HasItemWith<Items::Fish>(3)`), `HasMoney`, `FloorReached`, `DungeonStarted`, `PartyMember`, `VarAtLeast`, the game's flags
   (`GameFlagSet`, `GameNumberAtLeast`, `MapFlagSet`), its georama (`PartPlaced`, `PartComplete`,
   `EventDone`, `RequestMet`, `VillagerHome`), and `All`, `Any`, `Not` to combine them. A lambda works
   too.
@@ -89,7 +90,11 @@ members are `{name2}`...`{name6}` in the text rather than their names, as retail
 
 ## 3. The game
 
-`IGame` is all a quest sees of the game; `quest_host.cpp` implements it over `SaveData`:
+`IGame` is all a quest sees of the game; `quest_host.cpp` implements it over `SaveData`. Its calls take
+item numbers. A quest names an item by its ID (docs/ITEM_FRAMEWORK.md, section 5) through
+`Quest::ItemNo("vanilla:bread")`, which looks it up in the item registry and gives -1 for an ID no item
+has; the host treats -1 as an item the player never has, cannot be given and no shop sells.
+`Quest::ItemCountWith<T>(game)` counts the items with an item trait the player carries.
 
 | Call | In the game |
 |---|---|

@@ -13,6 +13,7 @@
 // tables' original values, whatever has been loaded into them since.
 std::map<std::string, nlohmann::json> ItemDocuments();
 
-// Fills every table from its highest-priority valid document (datapacks::Load must have run). A
-// document that cannot be used leaves its table as it was.
+// Fills every table from its highest-priority valid document (datapacks::Load must have run), then
+// registers every vanilla item with Items:: as the tables now hold it. A document that cannot be used
+// leaves its table as it was.
 void ItemsLoad();

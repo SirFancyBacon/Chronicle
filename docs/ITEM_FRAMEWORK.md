@@ -124,7 +124,10 @@ Items::Def GoldenLure() {
 
 Name and description are text keys (`item.chronicle.golden_lure.name`, `.description`) looked up in
 `port/lang/<language>.json`, as quest text is. A vanilla item's `Def` is assembled from its records
-in the documents (section 7); the builder is for items the port itself adds in C++.
+in the documents (section 7); the builder is for items the port itself adds in C++, and comes with
+custom items (phase 3). Phase 1 registers the vanilla items: `item_host.cpp` builds each `Def` from
+the tables once the documents have loaded, so a pack's change reaches the traits as it reaches the
+tables, and the registry is built again whenever they are.
 
 **Traits** are the point of the design. A system asks whether an item has the trait it cares about,
 rather than what type it is, so one item can be goods, bait and a quest item at once, and a new
@@ -162,6 +165,12 @@ pass numbers around.
 the port's own. A vanilla row in a document keeps its retail `item_no`; a custom item (phase 3) is a
 document of its own, named by its `id` (section 7). Saves only ever name custom items by ID, so their numbers can be handed out
 afresh each run without breaking anything.
+
+A vanilla item's name is its enumerator in `ps2/include/itemdata.hpp` without `ITEM_`, in lower case:
+`ITEM_BREAD` is `vanilla:bread`, `ITEM_WEAPON_DAGGER` is `vanilla:weapon_dagger`, `ITEM_ATTACH_FIRE`
+is `vanilla:attach_fire`. A number the decomp has not named is `vanilla:item_<number>`.
+`scripts/port/item_ids.py` writes the table (`port/src/item_ids.inc`) from the header, naming each
+enumerator rather than its value, so the IDs cannot drift from the numbers; CI runs it with `--check`.
 
 **Numbers:**
 
@@ -329,7 +338,8 @@ its `kind`, and the table's rows under their retail field names, typed as the ga
       "kind_flags": 0,
       "vol": 1,
       "vol_range": 0,
-      "stack_kind": 2
+      "stack_kind": 2,
+      "quick_slot_max": 9
     }
   ]
 }
@@ -339,6 +349,10 @@ Each document is one of retail's tables, as each of ChronicleTwo's is one of its
 is why prices are a document of their own here: Dark Cloud's `PriceList` is a table apart from the
 shops' stock, while Dark Cloud 2's prices share a document with its shop lists only because its
 `shoplst.cfg` held both. Either way a price is one row per item.
+
+Rows hold their table's fields and nothing else, with two exceptions retail keeps elsewhere or not at
+all: `item_common`'s `model`, from `ITEM_NAME_TBL_NEW`, and `items`' `quick_slot_max` (section 10),
+which may be left out for retail's 9.
 
 `schema_version` is 2 because that is the version of ChronicleTwo's native documents, which these
 follow; one loader can then read both ports' documents without a special case. Further tables
@@ -585,9 +599,17 @@ player let it go.
 
 **First version: quick slots.** Any item can be allowed into a quick-use slot, made to stack there,
 and given a maximum, through the `QuickSlot` trait. For vanilla items this is the `stack_kind`
-field of the `items` document, which reaches `ITEM_DATA::stack_kind` through the loader, plus a
-maximum, which retail has no field for and the host enforces, so most of retail's code needs no
-change. The maximum is at most 99, the most the quick-slot counters can draw in their two digits.
+field of the `items` document, which reaches `ITEM_DATA::stack_kind` through the loader (0 stacks,
+1 sits alone, 2 never goes in a quick slot), plus a maximum, `quick_slot_max`, which retail has no
+field for. The maximum is 1 to 99, the most the quick-slot counters can draw in their two digits; a
+row without it keeps retail's 9.
+
+Retail's limit is a 9 written three times into `ItemMenuMainKey` (`battlemenu.cpp`), the item menu's
+input handler, which also decides where a pickup's quick-slot icon lands. Honouring another maximum
+means replacing that 1,286-line function, and the item menu is rebuilt on the UI framework in phase 3
+anyway (section 11). So phase 1 reads, checks and registers `quick_slot_max`, and the rebuilt item
+menu is what honours it; until then every stack stops at 9 as in retail. `stack_kind` takes effect
+now.
 
 A pack's quick-slot rules are the one thing a document changes that a save keeps: a stack built
 under a raised maximum, or an item a pack let into a quick slot, stays in `save.dat` when the pack
@@ -657,9 +679,14 @@ at `ED_FISHING_MES_EVALUATE` in `ebattle.cpp`, where it calls `SetFishingRank` a
 **Quests** gain conditions that read those events ("caught three of a species", "one at least 40
 long", "one with Golden Lure"). The fishing framework registers them with the quest framework, so
 the quest framework never depends on fishing, as dialog providers register with `Dialog::`. The
-weapon framework can add its own ("a weapon at level 10") the same way. `Quest::IGame`'s
-`ItemCount`, `GiveItem`, `TakeItem` and `HasItemAnywhere` take item IDs as well as numbers, so a
-quest can ask for an item defined in JSON.
+weapon framework can add its own ("a weapon at level 10") the same way.
+
+Quests already name items by ID (phase 1): `Quest::ItemNo("vanilla:bread")` gives the number
+`IGame`'s calls take, and `HasItem("vanilla:bread", 2)` looks the ID up as it is checked, so a quest
+built at start-up finds an item registered later, and a custom item defined in JSON (phase 3) without
+a change to the quest framework. An ID no item has is -1, which the host treats as an item the player
+never has, cannot be given and no shop sells. Traits reach quests too: `HasItemWith<Items::Fish>(3)`
+holds while the player carries three items with the `Fish` trait, whatever they are.
 
 **Shops** get a framework of their own later. An item's value, its buy and sell price, belongs to
 the item, since any item can be sold at any shop, and comes from the `prices` document. Which shops
@@ -690,17 +717,24 @@ definition format won't need to change for it.
 
 Each is its own pull request, working and tested on its own.
 
-1. **Documents and registry.** ChronicleTwo's datapack index brought across, with folder packs
-   (section 7), the runtime extraction and
-   the loaders for the item tables, `--export-gameplay`, the `Items::` registry and traits, and
-   quick-slot stacking. No new item numbers yet, so the 276 range comparisons are untouched.
-   Already useful: prices, quick-slot rules, heal amounts and baits can be changed from a pack.
-2. **Fishing**, on phase 1: the `Bait` and `Fish` traits, the bait fix, catch events, and the quest
-   conditions. Its bait picker is the first screen on the shared item widgets (section 11).
-3. **Custom items.** Custom item documents (section 7), custom numbers and handles, the save's
-   extension file (section 9) and icons;
-   the inventory screens
-   rebuilt on the UI framework (section 11), one pull request per screen: the item menu first, then
+1. **Documents, registry and quests.** ChronicleTwo's datapack index brought across, with folder
+   packs (section 7), the runtime extraction and the loaders for the item tables, `--export-gameplay`,
+   the `Items::` registry with every vanilla item and its traits (`Bait` and `Fish` included, as the
+   tables give them), the quick-slot rules (section 10: `stack_kind` takes effect, `quick_slot_max` is
+   read and registered), and quests naming items by ID and asking about traits (section 12). No new
+   item numbers yet, so the 276 range comparisons are untouched. Already useful: prices, quick-slot
+   rules, heal amounts and baits can be changed from a pack.
+
+   After it, the vanilla documents move into the repository as ChronicleTwo's gameplay documents are,
+   sealed into the data through Kazarov's gameplay seed; the runtime extraction (section 6) then
+   becomes the test that proves the checked-in documents match the compiled tables.
+2. **Fishing**, the fishing framework on phase 1: catch events and the quest conditions that read
+   them, and its bait picker, the first screen on the shared item widgets (section 11). The towns'
+   bait fix is already in (`ListBaitForScript`, `fish_port.hpp`); the framework's own attach (section
+   12) replaces it with custom baits, in phase 3.
+3. **Custom items.** Custom item documents (section 7), the builder, custom numbers and handles, the
+   save's extension file (section 9) and icons; the inventory screens rebuilt on the UI framework
+   (section 11), one pull request per screen: the item menu first, which honours `quick_slot_max`, then
    storage, the shops and the item picker; and the remaining range comparisons outside the screens
    replaced to ask `Items::KindOf`.
 4. **Weapons**, on phase 3: the weapon framework.
@@ -720,6 +754,12 @@ Each is its own pull request, working and tested on its own.
   reported and the next one used; an unknown field is kept. ChronicleTwo's `datapacks_test.cpp`
   comes across with its code.
 - `--export-gameplay` writes documents that load back to the same tables.
+- The registry: every one of the 296 vanilla items is registered under a unique ID with the traits its
+  rows give; a pack's change reaches the traits and leaves with the pack; `quick_slot_max` may be left
+  out and is refused outside 1 to 99; the registry refuses a duplicate ID or number, an ID that is not
+  `namespace:name`, and traits that cannot go together.
+- Quests: an item named by ID is found as the condition is checked, even one registered after the
+  quest; an ID no item has never holds; `HasItemWith` counts every item with the trait.
 - Custom item documents: two packs each adding an item both load; a later pack's file for the same
   item replaces the earlier one's; a pack overrides an item the port defines in C++.
 - Saving: custom copies move to the extension file and back, from every place in section 9's `at`

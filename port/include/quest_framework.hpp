@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "dialog_framework.hpp"
+#include "item_framework.hpp"
 
 // Quests (docs/QUEST_FRAMEWORK.md). A quest is a state machine: named stages, its own numbers, rules
 // that move it on when a condition holds, and choices it adds to NPCs' conversations. A quest reaches
@@ -205,10 +206,31 @@ struct NpcMatch {
     bool Matches(const Dialog::NpcContext &npc) const;
 };
 
+// An item's number for IGame by its ID (vanilla:bread), or -1 for an ID no item has; IGame's calls
+// treat -1 as an item the player never has and cannot be given.
+int ItemNo(std::string_view id);
+
+// How many items with trait T the player carries, as ItemCount counts each.
+template <class T>
+int ItemCountWith(const IGame &game) {
+    int count = 0;
+    for (const Items::Def *item : Items::With<T>()) {
+        count += game.ItemCount(item->number);
+    }
+    return count;
+}
+
 // Conditions, for rules and choices.
 Condition AtStage(std::string_view stage);
 Condition AtStages(std::initializer_list<std::string_view> stages);
 Condition HasItem(int item, int count = 1);
+// The ID is looked up as the condition is checked, so a quest can be built before the items load.
+Condition HasItem(std::string_view id, int count = 1);
+// At least count items with trait T, of any kind: HasItemWith<Items::Fish>() for any fish.
+template <class T>
+Condition HasItemWith(int count = 1) {
+    return [count](const Context &ctx) { return ItemCountWith<T>(ctx.Game()) >= count; };
+}
 Condition HasMoney(int amount);
 Condition FloorReached(int dungeon, int floor = 0);
 Condition DungeonStarted(int dungeon);

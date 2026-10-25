@@ -5,11 +5,13 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "btitem.hpp"
 #include "gameplay.hpp"
+#include "item_framework.hpp"
 #include "item_host.hpp"
 #include "itemdata.hpp"
 #include "platform/datapacks.hpp"
@@ -180,5 +182,93 @@ TEST_F(ItemDocumentsTest, TheExportLoadsBackToTheSameTables) {
     ASSERT_TRUE(GameplayExport(directory / "datapacks/exported"));
     EXPECT_TRUE(fs::is_regular_file(directory / "datapacks/exported/gameplay/items/weapons.json"));
     Order(R"("exported")");
+    EXPECT_EQ(Tables(), compiled);
+}
+
+TEST_F(ItemDocumentsTest, EveryVanillaItemIsRegisteredWithTheTraitsItsRowsGive) {
+    GameplayLoad(data);
+    const auto all = Items::All();
+    ASSERT_EQ(all.size(), 296u);
+    std::set<std::string> ids;
+    for (const Items::Def *item : all) {
+        EXPECT_TRUE(Items::ValidId(item->id)) << item->id;
+        EXPECT_TRUE(ids.insert(item->id).second) << item->id;
+        const COM_ITEM_INFO &info = ComItemInfo[item->number - ITEM_ATTACH_START];
+        const ITEM_MONEY_ENTRY &price = PriceList[item->number - ITEM_ATTACH_START];
+        ASSERT_NE(item->Get<Items::Sellable>(), nullptr);
+        EXPECT_EQ(item->Get<Items::Sellable>()->buy, price.buy_price);
+        EXPECT_EQ(item->Get<Items::Sellable>()->sell, price.sell_price);
+        EXPECT_EQ(item->icon, info.icon_index);
+        if (info.kind == ITEMKIND_ITEM && info.index >= 0 && info.index < 175) {
+            const ITEM_DATA &row = ITEM_LIST[info.index];
+            EXPECT_EQ(item->kind, Items::Kind::Item);
+            EXPECT_EQ(item->Has<Items::Consumable>(), (row.kind_flags & ITEMKINDF_CONSUMABLE) != 0) << item->id;
+            EXPECT_EQ(item->Has<Items::Throwable>(), (row.kind_flags & ITEMKINDF_THROWABLE) != 0) << item->id;
+            EXPECT_EQ(item->Has<Items::QuickSlot>(), row.stack_kind != ITEM_STACK_NEVER) << item->id;
+            EXPECT_EQ(item->Has<Items::Fish>(), row.sort_key == ITEM_SORT_FISH) << item->id;
+            EXPECT_EQ(item->Has<Items::KeyItem>(), row.sort_key == ITEM_SORT_KEY_ITEM) << item->id;
+            EXPECT_EQ(item->Has<Items::QuestItem>(), row.sort_key == ITEM_SORT_QUEST) << item->id;
+        } else if (info.kind == ITEMKIND_WEAPON && info.index >= 0 && info.index < 120) {
+            ASSERT_NE(item->Get<Items::Weapon>(), nullptr) << item->id;
+            EXPECT_EQ(item->Get<Items::Weapon>()->owner, WeaponList[info.index].owner);
+            EXPECT_EQ(item->Get<Items::Weapon>()->attack, WeaponList[info.index].attack);
+        } else if (info.kind == ITEMKIND_ATTACH && info.index >= 0 && info.index < 50) {
+            ASSERT_NE(item->Get<Items::Attachment>(), nullptr) << item->id;
+            EXPECT_EQ(item->Get<Items::Attachment>()->attack, AttachList[info.index].attack);
+        }
+    }
+    EXPECT_EQ(Items::With<Items::Bait>().size(), 13u);
+
+    const Items::Def *bread = Items::Find("vanilla:bread");
+    ASSERT_NE(bread, nullptr);
+    EXPECT_EQ(bread->number, ITEM_BREAD);
+    ASSERT_NE(bread->Get<Items::QuickSlot>(), nullptr);
+    EXPECT_EQ(bread->Get<Items::QuickSlot>()->max, Items::kRetailQuickSlotMax);
+    EXPECT_EQ(Items::NumberOf("vanilla:weapon_bone_slingshot"), ITEM_WEAPON_BONE_SLINGSHOT);
+    EXPECT_EQ(Items::NumberOf("vanilla:attach_fire"), ITEM_ATTACH_FIRE);
+    ASSERT_NE(Items::Find("vanilla:prickly")->Get<Items::Bait>(), nullptr);
+    // A number the decomp has not named.
+    EXPECT_EQ(Items::Find(86)->id, "vanilla:item_86");
+}
+
+TEST_F(ItemDocumentsTest, APacksChangesReachTheRegistryAndLeaveWithThem) {
+    auto items = Document("items.json");
+    Row(items, "items", ITEM_BREAD)["quick_slot_max"] = 20;
+    Row(items, "items", ITEM_PRICKLY)["stack_kind"] = ITEM_STACK_MULTI; // never, in retail
+    auto prices = Document("prices.json");
+    Row(prices, "prices", ITEM_BREAD)["buy_price"] = 1;
+    Pack("bakery", "items.json", items);
+    Pack("bakery", "prices.json", prices);
+    Order(R"("bakery")");
+    EXPECT_EQ(Items::Find("vanilla:bread")->Get<Items::QuickSlot>()->max, 20);
+    EXPECT_EQ(Items::Find("vanilla:bread")->Get<Items::Sellable>()->buy, 1);
+    EXPECT_TRUE(Items::Find("vanilla:prickly")->Has<Items::QuickSlot>());
+
+    Order("");
+    EXPECT_EQ(Items::Find("vanilla:bread")->Get<Items::QuickSlot>()->max, Items::kRetailQuickSlotMax);
+    EXPECT_EQ(Items::Find("vanilla:bread")->Get<Items::Sellable>()->buy, PriceList[ITEM_BREAD - ITEM_ATTACH_START].buy_price);
+    EXPECT_FALSE(Items::Find("vanilla:prickly")->Has<Items::QuickSlot>());
+    EXPECT_EQ(Tables(), compiled);
+}
+
+TEST_F(ItemDocumentsTest, AQuickSlotMaximumIsOptionalAndRangeChecked) {
+    // A pack written before the field existed keeps retail's maximum and still loads.
+    auto older = Document("items.json");
+    for (auto &row : older["items"]) {
+        row.erase("quick_slot_max");
+    }
+    Row(older, "items", ITEM_BREAD)["vol"] = 7;
+    Pack("older", "items.json", older);
+    Order(R"("older")");
+    EXPECT_EQ(GetItemData(ITEM_BREAD)->vol, 7);
+    EXPECT_EQ(Items::Find("vanilla:bread")->Get<Items::QuickSlot>()->max, Items::kRetailQuickSlotMax);
+
+    // Past what the counters can draw: the whole document is refused, its other changes with it.
+    auto too_many = Document("items.json");
+    Row(too_many, "items", ITEM_BREAD)["quick_slot_max"] = Items::kQuickSlotMaxLimit + 1;
+    Row(too_many, "items", ITEM_PRICKLY)["vol"] = 5;
+    Pack("too_many", "items.json", too_many);
+    Order(R"("too_many")");
+    EXPECT_EQ(Items::Find("vanilla:bread")->Get<Items::QuickSlot>()->max, Items::kRetailQuickSlotMax);
     EXPECT_EQ(Tables(), compiled);
 }

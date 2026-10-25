@@ -198,8 +198,19 @@ Condition AtStages(std::initializer_list<std::string_view> stages) {
     };
 }
 
+int ItemNo(std::string_view id) {
+    return Items::NumberOf(id);
+}
+
 Condition HasItem(int item, int count) {
     return [item, count](const Context &ctx) { return ctx.Game().ItemCount(item) >= count; };
+}
+
+Condition HasItem(std::string_view id, int count) {
+    return [id = std::string(id), count](const Context &ctx) {
+        const int item = ItemNo(id);
+        return item >= 0 && ctx.Game().ItemCount(item) >= count;
+    };
 }
 
 Condition HasMoney(int amount) {

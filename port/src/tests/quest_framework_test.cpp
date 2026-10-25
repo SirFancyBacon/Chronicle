@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "dialog_framework.hpp"
+#include "item_framework.hpp"
 #include "itemdata.hpp"
 #include "mainselect.hpp"
 #include "quest_framework.hpp"
@@ -150,6 +151,7 @@ protected:
     void SetUp() override {
         LanguageCode = 2; // en_gb: the built-in English.
         Quest::Clear();
+        Items::Clear();
         Quest::SetGame(&game);
         Dialog::Shutdown();
         Dialog::Init();
@@ -162,6 +164,17 @@ protected:
         Dialog::Shutdown();
         Quest::SetGame(nullptr);
         Quest::Clear();
+        Items::Clear();
+    }
+
+    static void RegisterItem(std::string id, int number, bool fish = false) {
+        Items::Def item;
+        item.id = std::move(id);
+        item.number = number;
+        if (fish) {
+            item.With(Items::Fish{});
+        }
+        Items::Register(std::move(item));
     }
 
     static Dialog::NpcContext Npc(int map_no, int npc_id) {
@@ -599,6 +612,57 @@ TEST_F(QuestFramework, TheSuppliesQuestTakesOverOnlyTheMayors) {
     EXPECT_TRUE(Quest::TakesOver(Npc(0, 13), Quest::Retail::MayorSupplies));
     EXPECT_FALSE(Quest::TakesOver(Npc(0, 12), Quest::Retail::MayorSupplies));
     EXPECT_FALSE(Quest::TakesOver(Npc(1, 13), Quest::Retail::MayorSupplies));
+}
+
+TEST_F(QuestFramework, ItemsCanBeNamedByTheirIds) {
+    RegisterItem("test:bread", ITEM_BREAD);
+    Quest::Register(Quest::Builder("by_id")
+                        .Stages({"start", "end"})
+                        .Advance("start", Quest::HasItem("test:bread", 2), "end")
+                        .Build());
+    EXPECT_EQ(Quest::ItemNo("test:bread"), ITEM_BREAD);
+    game.items[ITEM_BREAD] = 1;
+    Quest::Evaluate();
+    EXPECT_EQ(Stage("by_id"), "start");
+    game.items[ITEM_BREAD] = 2;
+    Quest::Evaluate();
+    EXPECT_EQ(Stage("by_id"), "end");
+}
+
+TEST_F(QuestFramework, AnIdNoItemHasNeverHolds) {
+    // The condition is built before any item is registered, as quests are at start-up.
+    Quest::Register(Quest::Builder("missing")
+                        .Stages({"start", "end"})
+                        .Advance("start", Quest::HasItem("test:cake"), "end")
+                        .Build());
+    EXPECT_EQ(Quest::ItemNo("test:cake"), -1);
+    game.items[-1] = 5;
+    Quest::Evaluate();
+    EXPECT_EQ(Stage("missing"), "start");
+
+    // Registered later, it is found as the condition is checked.
+    RegisterItem("test:cake", ITEM_CHEESE);
+    game.items[ITEM_CHEESE] = 1;
+    Quest::Evaluate();
+    EXPECT_EQ(Stage("missing"), "end");
+}
+
+TEST_F(QuestFramework, ItemsCanBeCountedByTrait) {
+    RegisterItem("test:bread", ITEM_BREAD);
+    RegisterItem("test:flapping_fish", ITEM_FLAPPING_FISH, true);
+    RegisterItem("test:rotten_fish", ITEM_ROTTEN_FISH, true);
+    Quest::Register(Quest::Builder("fishmonger")
+                        .Stages({"start", "end"})
+                        .Advance("start", Quest::HasItemWith<Items::Fish>(3), "end")
+                        .Build());
+    game.items[ITEM_BREAD] = 5;
+    game.items[ITEM_FLAPPING_FISH] = 2;
+    Quest::Evaluate();
+    EXPECT_EQ(Stage("fishmonger"), "start");
+    EXPECT_EQ(Quest::ItemCountWith<Items::Fish>(game), 2);
+    game.items[ITEM_ROTTEN_FISH] = 1;
+    Quest::Evaluate();
+    EXPECT_EQ(Stage("fishmonger"), "end");
 }
 
 } // namespace

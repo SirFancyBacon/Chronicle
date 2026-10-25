@@ -22,6 +22,7 @@
 #include "editloop3.hpp"
 #include "editmenu.hpp"
 #include "editpartsinfo.hpp"
+#include "item_framework.hpp"
 #include "itemdata.hpp"
 #include "localize.hpp"
 #include "main.hpp"
@@ -42,6 +43,12 @@ constexpr int         kMostMoney = 0xFFFF;
 
 CDngStatusData *Status() {
     return SaveData != nullptr ? SaveData->GetDngStatus() : nullptr;
+}
+
+// An item the registry knows. A quest's item ID that names none is -1 (Quest::ItemNo), which retail's
+// lookups would take for an empty slot or read outside their tables.
+bool Known(int item) {
+    return Items::Find(item) != nullptr;
 }
 
 bool InPack(int item) {
@@ -97,7 +104,7 @@ const EDITPARTS_INFO *TownPart(int town, int part) {
 
 // Retail's PlayerAllItemCheck: whether the player has the item in the pack or stored.
 bool HasAnywhere(int item) {
-    if (SaveData == nullptr) {
+    if (SaveData == nullptr || !Known(item)) {
         return false;
     }
     return SaveData->GetDngStatus()->SearchItemIndexNo(item) >= 0 || SaveData->GetStockItem()->SearchItem(item) != 0;
@@ -112,7 +119,7 @@ class SaveGame final : public Quest::IGame {
 public:
     int ItemCount(int item) const override {
         const CDngStatusData *status = Status();
-        if (status == nullptr) {
+        if (status == nullptr || !Known(item)) {
             return 0;
         }
         // What the pack carries, which TakeItem takes from; the game counts other kinds its own way.
@@ -308,7 +315,7 @@ void SaveGame::OpenShop(Quest::ShopSpec shop) {
 }
 
 bool SaveGame::ShowItemReceived(int item) {
-    if (!EventScriptHasItemGet()) {
+    if (!Known(item) || !EventScriptHasItemGet()) {
         return false;
     }
     g_pending_item_shown = item;
@@ -414,7 +421,9 @@ bool QuestHostTakeShop(const char *speaker_model, int *shop_no) {
     CustomShop shop;
     shop.look = spec.look_of_shop;
     for (const Quest::ShopGood &good : spec.goods) {
-        shop.goods.emplace_back(good.item, good.price);
+        if (Known(good.item)) {
+            shop.goods.emplace_back(good.item, good.price);
+        }
     }
     if (spec.keeper == Quest::Shopkeeper::Speaker && speaker_model != nullptr) {
         shop.keeper = speaker_model;

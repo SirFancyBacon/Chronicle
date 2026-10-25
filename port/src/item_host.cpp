@@ -1,6 +1,7 @@
 #include "item_host.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -9,14 +10,17 @@
 #include <deque>
 #include <functional>
 #include <limits>
+#include <map>
 #include <optional>
 #include <set>
 #include <span>
 #include <stdexcept>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
 #include "btitem.hpp"
+#include "item_framework.hpp"
 #include "itemdata.hpp"
 #include "platform/native_config.hpp"
 
@@ -314,6 +318,17 @@ bool HasModel(int item) {
     return item - ITEM_ATTACH_START < 175;
 }
 
+// Each ITEM_LIST row's quick-slot maximum, which retail has no field for: the items document's
+// quick_slot_max, kept here for the registry.
+std::array<int, 175> &QuickSlotMaxima() {
+    static std::array<int, 175> maxima = [] {
+        std::array<int, 175> retail;
+        retail.fill(Items::kRetailQuickSlotMax);
+        return retail;
+    }();
+    return maxima;
+}
+
 // A model name as BtGetItemNamePath builds it into its 64-byte paths ("dun/item/main_data/<name>.mds").
 bool ValidModel(const std::string &name) {
     return name.size() <= 32 && std::ranges::all_of(name, [](char c) {
@@ -341,16 +356,20 @@ Json Document(const Table &table) {
             const char *model = Original().models[item - ITEM_ATTACH_START];
             row["model"] = model != nullptr ? Json(model) : Json(nullptr);
         }
+        if (std::string_view(table.kind) == "items") {
+            row["quick_slot_max"] = Items::kRetailQuickSlotMax;
+        }
         rows.push_back(std::move(row));
     }
     return {{"schema_version", native_config::kSchemaVersion}, {"kind", table.kind}, {table.rows, std::move(rows)}};
 }
 
-// A table's rows as a document gives them, checked whole: bytes per item in the table's order, and for
-// item_common the model names.
+// A table's rows as a document gives them, checked whole: bytes per item in the table's order, for
+// item_common the model names, and for items the quick-slot maxima.
 struct Parsed {
     std::vector<std::vector<unsigned char> > rows;
     std::vector<std::optional<std::string> > models;
+    std::vector<int>                         quick_slot_max;
     std::set<std::string>                    unknown;
 };
 
@@ -366,6 +385,7 @@ Parsed Parse(const Table &table, const Json &document) {
         }
     }
     const bool common = std::string_view(table.kind) == "item_common";
+    const bool items = std::string_view(table.kind) == "items";
     Parsed     parsed;
     for (int item : table.items) {
         const auto found = by_item.find(item);
@@ -394,7 +414,7 @@ Parsed Parse(const Table &table, const Json &document) {
             }
         }
         for (const auto &[key, value] : row.items()) {
-            const bool known = key == "item_no" || (common && key == "model") ||
+            const bool known = key == "item_no" || (common && key == "model") || (items && key == "quick_slot_max") ||
                                std::ranges::any_of(table.fields, [&](const Field &field) { return key == field.name; });
             if (!known) {
                 parsed.unknown.insert(key);
@@ -410,6 +430,20 @@ Parsed Parse(const Table &table, const Json &document) {
             } else {
                 parsed.models.push_back(model.get<std::string>());
             }
+        }
+        if (items) {
+            // Optional, so a pack written before the field existed keeps retail's maximum.
+            int max = Items::kRetailQuickSlotMax;
+            if (row.contains("quick_slot_max")) {
+                const Json &value = row["quick_slot_max"];
+                if (!value.is_number_integer() || value.get<long long>() < 1 ||
+                    value.get<long long>() > Items::kQuickSlotMaxLimit) {
+                    throw std::runtime_error("item " + std::to_string(item) + " quick_slot_max must be 1 to " +
+                                             std::to_string(Items::kQuickSlotMaxLimit));
+                }
+                max = value.get<int>();
+            }
+            parsed.quick_slot_max.push_back(max);
         }
         parsed.rows.push_back(std::move(bytes));
     }
@@ -428,6 +462,120 @@ void LoadModels(const std::vector<std::optional<std::string> > &models) {
         } else {
             ITEM_NAME_TBL_NEW[i] = names.emplace_back(*models[i]).data();
         }
+    }
+}
+
+// The vanilla items' IDs by number; a number the decomp has not named is vanilla:item_<number>.
+std::string VanillaId(int item) {
+    static const std::map<int, std::string_view> names = [] {
+        struct Entry {
+            int              number;
+            std::string_view name;
+        };
+        static constexpr Entry kIds[] = {
+#include "item_ids.inc"
+        };
+        std::map<int, std::string_view> by_number;
+        for (const Entry &entry : kIds) {
+            by_number.emplace(entry.number, entry.name);
+        }
+        return by_number;
+    }();
+    const auto found = names.find(item);
+    return "vanilla:" + (found != names.end() ? std::string(found->second) : "item_" + std::to_string(item));
+}
+
+Items::Sort SortOf(int sort_key) {
+    return sort_key >= ITEM_SORT_NONE && sort_key < ITEM_SORT_COUNT ? static_cast<Items::Sort>(sort_key) : Items::Sort::None;
+}
+
+// A vanilla item as the tables hold it now, documents and packs included.
+Items::Def VanillaDef(int item) {
+    const COM_ITEM_INFO &info = ComItemInfo[item - ITEM_ATTACH_START];
+    Items::Def           def;
+    def.id = VanillaId(item);
+    def.number = item;
+    def.icon = info.icon_index;
+    def.message = info.msg;
+    if (HasModel(item) && ITEM_NAME_TBL_NEW[item - ITEM_ATTACH_START] != nullptr) {
+        def.model = ITEM_NAME_TBL_NEW[item - ITEM_ATTACH_START];
+    }
+    const ITEM_MONEY_ENTRY &price = PriceList[item - ITEM_ATTACH_START];
+    def.With(Items::Sellable{.buy = price.buy_price, .sell = price.sell_price});
+    switch (info.kind) {
+        case ITEMKIND_ITEM: {
+            def.kind = Items::Kind::Item;
+            if (info.index < 0 || info.index >= 175) {
+                break;
+            }
+            const ITEM_DATA &data = ITEM_LIST[info.index];
+            def.sort = SortOf(data.sort_key);
+            if (data.kind_flags & ITEMKINDF_CONSUMABLE) {
+                def.With(Items::Consumable{.heals_hp = (data.use_flags & ITEMUSE_HEAL_HP) != 0,
+                                           .restores_water = (data.use_flags & ITEMUSE_DRINK) != 0,
+                                           .grants_status = (data.use_flags & ITEMUSE_STATUS) != 0,
+                                           .volume = data.vol,
+                                           .volume_range = data.vol_range});
+            }
+            if (data.kind_flags & ITEMKINDF_THROWABLE) {
+                def.With(Items::Throwable{});
+            }
+            if (data.stack_kind == ITEM_STACK_MULTI || data.stack_kind == ITEM_STACK_SINGLE) {
+                def.With(Items::QuickSlot{
+                    .stack = data.stack_kind == ITEM_STACK_MULTI ? Items::Stack::Multi : Items::Stack::Single,
+                    .max = QuickSlotMaxima()[info.index]});
+            }
+            if (def.sort == Items::Sort::Fish) {
+                def.With(Items::Fish{});
+            } else if (def.sort == Items::Sort::KeyItem) {
+                def.With(Items::KeyItem{});
+            } else if (def.sort == Items::Sort::Quest) {
+                def.With(Items::QuestItem{});
+            }
+            break;
+        }
+        case ITEMKIND_ATTACH: {
+            def.kind = Items::Kind::Attachment;
+            if (info.index < 0 || info.index >= 50) {
+                break;
+            }
+            const ATTACH_DATA &data = AttachList[info.index];
+            Items::Attachment  attachment{.attack = data.attack, .endurance = data.endurance, .speed = data.speed, .magic = data.magic};
+            std::ranges::copy(data.elem, attachment.elements);
+            std::ranges::copy(data.vs_monster, attachment.vs_monster);
+            def.With(attachment);
+            break;
+        }
+        case ITEMKIND_WEAPON: {
+            def.kind = Items::Kind::Weapon;
+            if (info.index < 0 || info.index >= 120) {
+                break;
+            }
+            const WEAPON_DATA &data = WeaponList[info.index];
+            def.With(Items::Weapon{.owner = data.owner,
+                                   .durability = data.durability,
+                                   .attack = data.attack,
+                                   .endurance = data.endurance,
+                                   .speed = data.speed,
+                                   .magic = data.magic,
+                                   .attack_max = data.attack_max,
+                                   .magic_max = data.magic_max,
+                                   .holes = data.hole_num});
+            break;
+        }
+    }
+    for (const EsaInfo &bait : esa_info) {
+        if (bait.item_no == item) {
+            def.With(Items::Bait{.radius = bait.radius});
+        }
+    }
+    return def;
+}
+
+void RegisterVanilla() {
+    Items::Clear();
+    for (int item = ITEM_ATTACH_START; item < ITEM_ATTACH_START + 296; item++) {
+        Items::Register(VanillaDef(item));
     }
 }
 
@@ -454,6 +602,11 @@ void ItemsLoad() {
         if (std::string_view(table.kind) == "item_common") {
             LoadModels(parsed->models);
         }
+        if (std::string_view(table.kind) == "items") {
+            for (std::size_t i = 0; i < table.items.size(); i++) {
+                QuickSlotMaxima()[Original().common[table.items[i] - ITEM_ATTACH_START].index] = parsed->quick_slot_max[i];
+            }
+        }
         if (!parsed->unknown.empty()) {
             std::string names;
             for (const std::string &name : parsed->unknown) {
@@ -462,4 +615,5 @@ void ItemsLoad() {
             native_config::Report(std::string("gameplay/") + table.path, "fields this version does not read: " + names);
         }
     }
+    RegisterVanilla();
 }
