@@ -1824,6 +1824,10 @@ renames what the unit takes from MWCC or from the PS2 link alone:
   it, and the script attaches it as it does the others.
 - `main` gets an overload of `LoadFileMenuData` for a `const char *`: one call
   names its file with a comma expression ending in a string literal.
+- `snd` gives its static `LoadSoundInfo` a global forwarder, `PortLoadSoundInfo`,
+  for the sound publishing test (`port/src/tests/sound_publish_test.cpp`), which
+  reads every sound pack's `.cfg` as the game does and compares what `dcdata`
+  published.
 - `mathutil` gets the Metrowerks runtime's own `std::exception` and
   `std::bad_exception` renamed apart from the host library's, and
   `__exception_magic`, which MWCC provides inside an exception handler.
@@ -1978,6 +1982,7 @@ The game reads extracted files from a plain directory or a sibling `data.zip` ar
 port/build/pc/dcdata extract "rom/pal/Dark Cloud (PAL).iso" data
 port/build/pc/dcdata pack data
 port/build/pc/dcdata list "rom/pal/Dark Cloud (PAL).iso"
+port/build/pc/dcdata publish-sound data
 ```
 
 `pack` takes an existing extracted directory and writes a ZIP archive beside it by default; a second output path is optional. It stores files without compression so the port can read them on Switch without a decompression cost. The runtime also reads standard deflated ZIP entries. ZIP64, encrypted and multi-disk archives are unsupported. The game gives `data.zip` priority over loose files when both exist. Do not modify an archive while the game is running.
@@ -1992,6 +1997,24 @@ and copies the index itself to `<data>/data.hd2`. A file already present at
 its size is kept, so a rerun only repairs what is missing. When a path is
 listed twice, only the first is written, as the game only ever finds the
 first. `list` prints each file's sector, size and path.
+
+`extract` then publishes the sound in ChronicleTwo's formats beside the originals
+(`docs/AUDIO_FRAMEWORK.md`, section 4); `publish-sound <data>` does the same for data
+extracted before, and repeats harmlessly:
+
+- each distinct bank of the sound packs, once, as `sound/banks/<member>-<hash>.sound/bank.json`
+  and its WAV samples, converted by Kazarov (`kazarov::audio_publish_bank`);
+- each pack's sequences, as `<pack>.sound/sequences/<member>.json` (`kazarov::audio_publish_sequence`);
+- a document per pack, `<pack>.sound.json` (`kind: "sound_pack"`), with each of its load lists (its
+  `.txt` members) in order: the members a list loads, their slot letter and the published bank or
+  sequence each became, and the list's `.cfg` commands (reverb mode and depth, effect table);
+- `sound/tbl/sqtbl.json` (`sequence_volumes`) and `sound/tbl/setbl.json` (`effect_volumes`), the
+  global tables as `CSound::LoadSqInf` and `LoadSeInf` read them.
+
+Empty members (the dummy banks some packs carry) are left out, as the game skips them. The game still
+plays the originals; `SoundPublishRealData` (`DC_DATA`) checks every published bank, sequence and
+`.cfg` against them, and the effect table against the port's reader. The first-run window does not
+publish sound yet.
 
 The layout of `data/` or the root of `data.zip` is the disc archive's own: `dun/pack/maindat.pac`,
 `commenu/a_eng/savetex.pak`, `sound/bgm/...` and so on. Lookups fold case,

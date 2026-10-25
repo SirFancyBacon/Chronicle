@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -17,6 +18,7 @@
 #include <vector>
 
 #include "dcdata.hpp"
+#include "sound_data.hpp"
 
 namespace {
 namespace fs = std::filesystem;
@@ -173,10 +175,121 @@ void BakeTextures(const fs::path &raw, const fs::path &data) {
     dcdata::Log(stdout, "baked {} texture sources into {} PNGs\n", textures.sources, textures.pngs);
 }
 
+rust::Slice<const std::uint8_t> Bytes(const dcdata::PackMember &member) {
+    return {member.data.data(), member.data.size()};
+}
+
+std::string Lower(std::string_view text) {
+    std::string out(text);
+    std::ranges::transform(out, out.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return out;
+}
+
+void WriteText(const fs::path &path, const std::string &text) {
+    dcdata::WriteFile(path, std::span(reinterpret_cast<const unsigned char *>(text.data()), text.size()));
+}
+
+// Publishes the game's sound packs beside the originals in ChronicleTwo's formats
+// (docs/AUDIO_FRAMEWORK.md, section 4): each distinct bank once, through Kazarov, each pack's
+// sequences, and a document per pack holding its load lists and their .cfg commands; then the global
+// volume tables. The game still plays the originals.
+void PublishSound(const fs::path &data) {
+    namespace sound = dcdata::sound;
+    std::vector<fs::path> packs;
+    for (const auto &entry : fs::recursive_directory_iterator(data)) {
+        const fs::path relative = entry.path().lexically_relative(data);
+        if (entry.is_regular_file() && *relative.begin() != "normalized" &&
+            Lower(entry.path().extension().string()) == ".snd") {
+            packs.push_back(relative);
+        }
+    }
+    std::ranges::sort(packs);
+    const std::string       out = Utf8Path(data);
+    std::map<std::string, std::string> banks; // shared key to published bank document
+    std::size_t             bank_references = 0;
+    std::size_t             sequences = 0;
+    for (const fs::path &relative : packs) {
+        const std::string               pack = relative.generic_string();
+        const std::vector<dcdata::PackMember> members = dcdata::ReadPack(dcdata::ReadFile(data / relative));
+        std::map<std::string, std::string> pack_sequences; // member to published sequence document
+        std::string                     lists;
+        for (const dcdata::PackMember &list : members) {
+            if (!Lower(list.name).ends_with(".txt")) {
+                continue;
+            }
+            std::string loads;
+            for (const sound::LoadEntry &entry : sound::ReadLoadList({reinterpret_cast<const char *>(list.data.data()), list.data.size()})) {
+                std::string published;
+                if (entry.kind == sound::LoadKind::Bank) {
+                    const dcdata::PackMember *hd = sound::FindMember(members, entry.member);
+                    const dcdata::PackMember *bd = sound::FindMember(members, entry.member.substr(0, 7) + "bd");
+                    if (hd == nullptr || bd == nullptr || hd->data.empty() || bd->data.empty()) {
+                        continue; // the game skips a bank whose HD or BD is missing or empty
+                    }
+                    bank_references++;
+                    const std::string key = sound::SharedBankKey(entry.member, hd->data, bd->data);
+                    auto              found = banks.find(key);
+                    if (found == banks.end()) {
+                        found = banks.emplace(key, std::string(kazarov::audio_publish_bank(key, Bytes(*hd), Bytes(*bd), out))).first;
+                    }
+                    published = std::format("\"bank\": {}", sound::JsonString(found->second));
+                } else {
+                    const dcdata::PackMember *sq = sound::FindMember(members, entry.member);
+                    if (sq == nullptr || sq->data.empty()) {
+                        continue;
+                    }
+                    const std::string name = Lower(entry.member);
+                    auto              found = pack_sequences.find(name);
+                    if (found == pack_sequences.end()) {
+                        found = pack_sequences.emplace(name, std::string(kazarov::audio_publish_sequence(pack + "/" + name, Bytes(*sq), out))).first;
+                        sequences++;
+                    }
+                    published = std::format("\"sequence\": {}", sound::JsonString(found->second));
+                }
+                loads += std::format("{}\n        {{\"member\": {}, \"slot\": {}, {}}}", loads.empty() ? "" : ",",
+                                     sound::JsonString(entry.member), sound::JsonString(std::string(1, entry.slot)), published);
+            }
+            const std::string stem = list.name.substr(0, list.name.find('.'));
+            std::string       config = "null";
+            if (const dcdata::PackMember *cfg = sound::FindMember(members, stem + ".cfg")) {
+                const sound::PackConfig c = sound::ReadPackConfig({reinterpret_cast<const char *>(cfg->data.data()), cfg->data.size()});
+                config = std::format("{{\"reverb_mode\": {}, \"reverb_depth\": {}, \"se_table\": {}, \"se_table_type\": {}}}",
+                                     c.reverb_mode, c.reverb_depth, c.se_table, c.se_table_type);
+            }
+            lists += std::format("{}\n    {{\"name\": {}, \"config\": {}, \"load\": [{}\n    ]}}", lists.empty() ? "" : ",",
+                                 sound::JsonString(list.name), config, loads);
+        }
+        fs::path document = relative;
+        document.replace_extension(".sound.json");
+        WriteText(data / document, std::format("{{\n  \"schema_version\": 1,\n  \"kind\": \"sound_pack\",\n  \"lists\": [{}\n  ]\n}}\n", lists));
+    }
+
+    const fs::path tables = data / "sound" / "tbl";
+    if (fs::exists(tables / "sqtbl.txt")) {
+        const auto  bytes = dcdata::ReadFile(tables / "sqtbl.txt");
+        std::string rows;
+        for (const sound::SequenceVolume &row : sound::ReadSequenceVolumes({reinterpret_cast<const char *>(bytes.data()), bytes.size()})) {
+            rows += std::format("{}\n    {{\"name\": {}, \"volume\": {}}}", rows.empty() ? "" : ",", sound::JsonString(row.name), row.volume);
+        }
+        WriteText(tables / "sqtbl.json", std::format("{{\n  \"schema_version\": 1,\n  \"kind\": \"sequence_volumes\",\n  \"rows\": [{}\n  ]\n}}\n", rows));
+    }
+    if (fs::exists(tables / "setbl.txt")) {
+        const auto  bytes = dcdata::ReadFile(tables / "setbl.txt");
+        std::string rows;
+        for (const sound::EffectVolume &row : sound::ReadEffectVolumes({reinterpret_cast<const char *>(bytes.data()), bytes.size()})) {
+            rows += std::format("{}\n    {{\"bank\": {}, \"program\": {}, \"volume\": {}}}", rows.empty() ? "" : ",", row.bank, row.program, row.volume);
+        }
+        WriteText(tables / "setbl.json", std::format("{{\n  \"schema_version\": 1,\n  \"kind\": \"effect_volumes\",\n  \"rows\": [{}\n  ]\n}}\n", rows));
+    }
+    dcdata::Log(stdout, "published {} sound packs: {} banks for {} references, {} sequences\n", packs.size(), banks.size(),
+                bank_references, sequences);
+}
+
 int Usage() {
     std::fputs("usage: dcdata extract <iso-or-directory> <data-directory>\n"
                "       dcdata extract-raw <iso-or-directory> <data-directory>\n"
                "       dcdata bake-textures <raw-directory> <data-directory>\n"
+               "       dcdata publish-sound <data-directory>\n"
                "       dcdata texture-map <raw-directory> <mapping.json>\n"
                "       dcdata pack <data-directory> [output.zip]\n"
                "       dcdata list <iso-or-directory>\n",
@@ -261,6 +374,7 @@ int Extract(const std::filesystem::path &source, const std::filesystem::path &ou
         return result;
     }
     BakeTextures(out, out);
+    PublishSound(out);
     return 0;
 }
 
@@ -276,6 +390,10 @@ int main(int argc, char **argv) {
         }
         if (argc == 3 && std::strcmp(argv[1], "list") == 0) {
             return List(argv[2]);
+        }
+        if (argc == 3 && std::strcmp(argv[1], "publish-sound") == 0) {
+            PublishSound(argv[2]);
+            return 0;
         }
         if (argc == 4 && std::strcmp(argv[1], "bake-textures") == 0) {
             BakeTextures(argv[2], argv[3]);
