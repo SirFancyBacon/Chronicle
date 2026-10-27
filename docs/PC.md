@@ -1952,6 +1952,12 @@ first. `list` prints each file's sector, size and path. `publish-sound`
 converts an extracted folder's sound packs into ChronicleTwo's bank, sample
 and sequence formats beside the originals, which the game still plays
 (`docs/AUDIO_FRAMEWORK.md`).
+`extract` also converts the models, motions, skin weights and bind poses to
+glTF beside the originals, indexed by `models.json`; the game rebuilds the
+retail records from them as it reads a file. `convert-models <raw> <out>`
+writes that conversion to a folder of its own, `bake-assets <raw> <data>`
+publishes it into extracted data, and `strip-models <data>` empties the
+converted originals (`docs/MODEL_FRAMEWORK.md`).
 
 The layout of `data/` or the root of `data.zip` is the disc archive's own: `dun/pack/maindat.pac`,
 `commenu/a_eng/savetex.pak`, `sound/bgm/...` and so on. Lookups fold case,
