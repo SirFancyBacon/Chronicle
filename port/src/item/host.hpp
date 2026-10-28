@@ -1,6 +1,11 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
+#include <string_view>
+
+#include "itemdata.hpp"
+#include "shop.hpp"
 
 /**
  * Retail's item tables as gameplay documents (docs/ITEM_FRAMEWORK.md): ComItemInfo with each item's
@@ -20,5 +25,59 @@ void Load();
  * point for a datapack. Returns false when one cannot be written.
  */
 bool Export(const std::filesystem::path &directory);
+
+// The game finds an item's name at its number + 100 in the system messages, which use ids up to 2080,
+// so custom numbers start past them.
+inline constexpr int kCustomFirst = 0x800; /**< Custom items' numbers start here... */
+inline constexpr int kCustomEnd = 0x1000;  /**< ...and stop before the copies' handles. */
+
+/**
+ * A custom item's name and description in one language.
+ */
+struct ItemText {
+    std::string name;
+    std::string description;
+};
+
+/**
+ * A custom item's row of ComItemInfo: a bag item with no row in retail's tables, its icon, and its
+ * own number as its message number. Null for a number that is not a custom item.
+ */
+game::COM_ITEM_INFO *CustomCommonInfo(int number);
+
+/**
+ * A custom item's row of ITEM_LIST, or null.
+ */
+game::ITEM_DATA *CustomItemData(int number);
+
+/**
+ * A custom item's prices, or null.
+ */
+const game::ITEM_MONEY_ENTRY *CustomPrice(int number);
+
+/**
+ * A custom item's model name, as ITEM_NAME_TBL_NEW holds retail's; null for none or not a custom item.
+ */
+const char *CustomModel(int number);
+
+/**
+ * The model in dun/item/main_data of a bag item or attachment, retail's (ITEM_NAME_TBL_NEW) or a custom
+ * item's; null where it has none.
+ */
+const char *ModelName(int number);
+
+/**
+ * A custom item's text in a language (its language file, such as fr_fr), else in English, else the
+ * first it has; null for a number that is not a custom item.
+ */
+const ItemText *CustomText(int number, std::string_view language);
+
+/**
+ * A message the game looks up that a custom item answers, for when the message file lacks it: the
+ * item's name at its number + 100 in the system messages (system true), else its description at its
+ * number + 500, in the current language. The codes end with MES_CODE_END and last until the next Load;
+ * null for any other id.
+ */
+short *CustomMessage(int id, bool system);
 
 } // namespace dc::item

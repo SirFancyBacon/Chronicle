@@ -15,16 +15,20 @@
 #include <vector>
 
 #include "btitem.hpp"
+#include "btmisc.hpp"
+#include "clsmes.hpp"
 #include "data/data_read.hpp"
 #include "data_fixture.hpp"
 #include "fishing.hpp"
 #include "item/framework.hpp"
 #include "item/host.hpp"
 #include "itemdata.hpp"
+#include "mainselect.hpp"
 #include "platform/datapacks.hpp"
 #include "platform/paths.hpp"
 #include "shop.hpp"
 #include "tests/platform_fixture.hpp"
+#include "text/gametext.hpp"
 
 namespace dc::test {
 
@@ -271,6 +275,139 @@ TEST_F(ItemDocuments, TheDatasOwnDocumentIsReadUnderThePacks) {
     Pack("bakery", "prices.json", prices);
     Order(R"("bakery")");
     EXPECT_EQ(PriceList[ITEM_PRICKLY - ITEM_ATTACH_START].buy_price, 30);
+    data::DataReadReset();
+}
+
+// A custom bag item's document, as a pack ships it.
+nlohmann::json CustomItem(const std::string &id) {
+    return {
+        {"schema_version", 2                                                                                                                       },
+        {"kind",           "item"                                                                                                                  },
+        {"id",             id                                                                                                                      },
+        {"sort_key",       ITEM_SORT_GOODS                                                                                                         },
+        {"stack_kind",     ITEM_STACK_SINGLE                                                                                                       },
+        {"buy_price",      120                                                                                                                     },
+        {"sell_price",     60                                                                                                                      },
+        {"icon",           56                                                                                                                      },
+        {"model",          "turisao"                                                                                                               },
+        {"text",           {{"en_gb", {{"name", "Rod"}, {"description", "A rod."}}}, {"fr_fr", {{"name", "Canne"}, {"description", "Une canne."}}}}}
+    };
+}
+
+TEST_F(ItemDocuments, ACustomItemGetsANumberAboveRetailsAndRowsOfItsOwn) {
+    Pack("rods", "custom/chronicle.rod_2.json", CustomItem("chronicle:rod_2"));
+    Order(R"("rods")");
+    const item::Def *rod = item::Find("chronicle:rod_2");
+    ASSERT_NE(rod, nullptr);
+    EXPECT_EQ(rod->number, item::kCustomFirst);
+    EXPECT_EQ(item::Find(item::kCustomFirst), rod);
+    ASSERT_NE(rod->Get<item::Sellable>(), nullptr);
+    EXPECT_EQ(rod->Get<item::Sellable>()->buy, 120);
+    ASSERT_NE(rod->Get<item::QuickSlot>(), nullptr);
+
+    const COM_ITEM_INFO *info = GetCommonItemInfo(rod->number);
+    ASSERT_NE(info, nullptr);
+    EXPECT_EQ(info->kind, ITEMKIND_ITEM);
+    EXPECT_EQ(info->icon_index, 56);
+    EXPECT_EQ(info->msg, rod->number);
+    ASSERT_NE(GetItemData(rod->number), nullptr);
+    EXPECT_EQ(GetItemData(rod->number)->sort_key, ITEM_SORT_GOODS);
+    EXPECT_STREQ(item::CustomModel(rod->number), "turisao");
+    EXPECT_EQ(item::CustomText(rod->number, "fr_fr")->name, "Canne");
+    EXPECT_EQ(item::CustomText(rod->number, "de_de")->name, "Rod");
+    EXPECT_EQ(GetCommonItemInfo(rod->number + 1), nullptr);
+
+    Order("");
+    EXPECT_EQ(item::Find("chronicle:rod_2"), nullptr);
+    EXPECT_EQ(GetCommonItemInfo(item::kCustomFirst), nullptr);
+    EXPECT_EQ(Tables(), compiled);
+}
+
+TEST_F(ItemDocuments, ACustomItemsNameAndDescriptionAnswerTheGamesLookups) {
+    Pack("rods", "custom/chronicle.rod_2.json", CustomItem("chronicle:rod_2"));
+    Order(R"("rods")");
+    const int number = item::kCustomFirst;
+    const int language = LanguageCode;
+    LanguageCode = 3; // fr_fr
+
+    // Names come from the system messages, descriptions from the menus' own; the files' own messages win.
+    text::GameTextFile system;
+    system.Set(1, "System");
+    text::GameTextFile menu;
+    menu.Set(number + 500, "Retail's");
+    ClsMes mes;
+    mes.SetBuff(menu.Data());
+    mes.SetBuff_system(system.Data());
+    EXPECT_EQ(text::GameTextDecode(mes.GetTextLineDataTop_system(number + 100)), "Canne");
+    EXPECT_EQ(text::GameTextDecode(mes.GetTextLineDataTop(number + 500)), "Retail's");
+    menu.Set(1, "Menu");
+    mes.SetBuff(menu.Data());
+    EXPECT_EQ(mes.GetTextLineDataTop(number + 500 + 1), nullptr);
+    EXPECT_EQ(text::GameTextDecode(item::CustomMessage(number + 500, false)), "Une canne.");
+    LanguageCode = 4; // de_de, which the item has no text for
+    EXPECT_EQ(text::GameTextDecode(mes.GetTextLineDataTop_system(number + 100)), "Rod");
+    EXPECT_EQ(mes.GetTextLineDataTop_system(number + 101), nullptr);
+    LanguageCode = language;
+
+    char model[64] = {};
+    char texture[64] = {};
+    BtGetItemNamePath(model, texture, number);
+    EXPECT_STREQ(model, "dun/item/main_data/turisao.mds");
+    EXPECT_STREQ(item::ModelName(ITEM_PRICKLY), ITEM_NAME_TBL_NEW[ITEM_PRICKLY - ITEM_ATTACH_START]);
+    EXPECT_EQ(item::ModelName(ITEM_WEAPON_START + 1), nullptr);
+}
+
+TEST_F(ItemDocuments, CustomItemsFromEveryPackAreHeardAndNumberedByID) {
+    Pack("first", "custom/chronicle.rod_3.json", CustomItem("chronicle:rod_3"));
+    Pack("second", "custom/chronicle.rod_2.json", CustomItem("chronicle:rod_2"));
+    auto changed = CustomItem("chronicle:rod_3");
+    changed["buy_price"] = 999;
+    Pack("second", "custom/chronicle.rod_3.json", changed);
+    Order(R"("first", "second")");
+    ASSERT_NE(item::Find("chronicle:rod_2"), nullptr);
+    ASSERT_NE(item::Find("chronicle:rod_3"), nullptr);
+    EXPECT_EQ(item::Find("chronicle:rod_2")->number, item::kCustomFirst);
+    EXPECT_EQ(item::Find("chronicle:rod_3")->number, item::kCustomFirst + 1);
+    EXPECT_EQ(item::Find("chronicle:rod_3")->Get<item::Sellable>()->buy, 999);
+}
+
+TEST_F(ItemDocuments, ACustomItemThatCannotBeReadIsLeftOutAndTold) {
+    Pack("bad", "custom/chronicle.wrong_name.json", CustomItem("chronicle:rod_2"));
+    Pack("bad", "custom/vanilla.bread.json", CustomItem("vanilla:bread"));
+    auto price = CustomItem("chronicle:pricey");
+    price["buy_price"] = 1 << 20;
+    Pack("bad", "custom/chronicle.pricey.json", price);
+    testing::internal::CaptureStderr();
+    Order(R"("bad")");
+    const std::string told = testing::internal::GetCapturedStderr();
+    EXPECT_EQ(item::Find("chronicle:rod_2"), nullptr);
+    EXPECT_EQ(item::Find("chronicle:pricey"), nullptr);
+    EXPECT_EQ(item::Find("vanilla:bread")->number, ITEM_BREAD);
+    EXPECT_NE(told.find("chronicle.wrong_name.json"), std::string::npos) << told;
+    EXPECT_NE(told.find("vanilla namespace"), std::string::npos) << told;
+    EXPECT_NE(told.find("buy_price"), std::string::npos) << told;
+}
+
+TEST_F(ItemDocuments, ACustomItemInTheDataIsReadUnderThePacks) {
+    const datafix::Disc disc = datafix::MakeDisc({
+        {"dun/pack/maindat.pac", datafix::Pattern(64, 1)}
+    });
+    datafix::WriteBytes(data / "data.hd2", disc.hd2);
+    datafix::WriteBytes(data / "dun/pack/maindat.pac", disc.files[0].data);
+    fs::create_directories(data / "gameplay/items/custom");
+    std::ofstream(data / "gameplay/items/custom/chronicle.rod_2.json") << CustomItem("chronicle:rod_2").dump();
+    PathsSetDataRoot(data);
+    PathsSetSaveRoot(directory / "save");
+    data::DataReadIndex();
+    Order("");
+    ASSERT_NE(item::Find("chronicle:rod_2"), nullptr);
+    EXPECT_EQ(item::Find("chronicle:rod_2")->Get<item::Sellable>()->buy, 120);
+
+    auto changed = CustomItem("chronicle:rod_2");
+    changed["buy_price"] = 7;
+    Pack("cheap", "custom/chronicle.rod_2.json", changed);
+    Order(R"("cheap")");
+    EXPECT_EQ(item::Find("chronicle:rod_2")->Get<item::Sellable>()->buy, 7);
     data::DataReadReset();
 }
 

@@ -17,6 +17,7 @@
 #include "dataread.hpp"
 #include "editloop.hpp"
 #include "gamepad.hpp"
+#include "item/host.hpp"
 #include "itemdata.hpp"
 #include "mainselect.hpp"
 #include "mathutil.hpp"
@@ -622,11 +623,18 @@ namespace {
  * Returns an item's price, buying or selling, from the item table.
  */
 s16 GetItemMoney(int item_no, int sell) {
-    if (sell != 0) {
-        return PriceList[item_no - ITEM_ATTACH_START].sell_price;
+    const ITEM_MONEY_ENTRY *price =
+        item_no >= item::kCustomFirst ? item::CustomPrice(item_no) : &PriceList[item_no - ITEM_ATTACH_START];
+
+    if (price == nullptr) {
+        return 0;
     }
 
-    return PriceList[item_no - ITEM_ATTACH_START].buy_price;
+    if (sell != 0) {
+        return price->sell_price;
+    }
+
+    return price->buy_price;
 }
 
 } // namespace
