@@ -11,6 +11,14 @@ void Session::Reset() {
     wait_ = 0;
 }
 
+// The bite: which fish, and the bait it took, kept for the catch or the loss.
+void Session::Hook(Angler &angler, const Input &input) {
+    step_ = Step::Hooked;
+    hooked_ = angler.FishSpecies(input.fish_no);
+    bait_ = std::string(angler.Bait().bait);
+    angler.BiteCue();
+}
+
 void Session::Tick(Angler &angler, const Input &input) {
     const Place &place = angler.CurrentPlace();
     bool         follow = false;
@@ -92,8 +100,7 @@ void Session::Tick(Angler &angler, const Input &input) {
                     step_ = Step::BiteCheck;
                 }
                 if (input.fish_status == 8) {
-                    step_ = Step::Hooked;
-                    angler.BiteCue();
+                    Hook(angler, input);
                 }
             }
             wait_++;
@@ -116,8 +123,7 @@ void Session::Tick(Angler &angler, const Input &input) {
         case Step::BiteCheck: {
             angler.Help(true);
             if (input.fish_status == 8) {
-                step_ = Step::Hooked;
-                angler.BiteCue();
+                Hook(angler, input);
             } else if (input.fish_status != 7) {
                 step_ = Step::WaitBite;
                 ticks_ = 0;
@@ -128,9 +134,13 @@ void Session::Tick(Angler &angler, const Input &input) {
                 angler.Motion(6, 6);
                 ticks_ = 0;
                 angler.Play(Sound::Sink);
-                if (place.bite->LosesBait(LossCause::PressedEarly, angler.Bait())) {
+                const BiteContext bait = angler.Bait();
+                const std::string bait_id(bait.bait);
+                const bool        lost = place.bite->LosesBait(LossCause::PressedEarly, bait);
+                if (lost) {
                     angler.LoseBait();
                 }
+                Publish(Lost{.species = angler.NibblingSpecies(), .place = &place, .bait = bait_id, .why = LossCause::PressedEarly, .bait_lost = lost});
             }
             // The nibble: the float bobs, now and then hard enough to ring the water and rumble.
             const float pull = -0.15f * static_cast<float>(angler.Random());
@@ -147,9 +157,11 @@ void Session::Tick(Angler &angler, const Input &input) {
             if (input.fish_status != 8) {
                 step_ = Step::WaitBite;
                 wait_ = 0;
-                if (place.bite->LosesBait(LossCause::LetGo, angler.Bait())) {
+                const bool lost = place.bite->LosesBait(LossCause::LetGo, angler.Bait());
+                if (lost) {
                     angler.LoseBait();
                 }
+                Publish(Lost{.species = hooked_, .place = &place, .bait = bait_, .why = LossCause::LetGo, .bait_lost = lost});
                 ticks_ = 0;
             } else {
                 if (input.cross || input.debug) {
@@ -213,8 +225,12 @@ void Session::Tick(Angler &angler, const Input &input) {
             } else {
                 switch (message_) {
                     case Message::Evaluate:
-                        if (const std::optional<Catch> fish = angler.Caught()) {
+                        if (std::optional<Catch> fish = angler.Caught()) {
+                            fish->place = &place;
+                            fish->bait = bait_;
+                            fish->time = angler.Time();
                             place.outcome->Apply(*fish, angler.Outcome());
+                            Publish(*fish);
                             message_ = Message::Wait;
                         } else {
                             message_ = Message::Done;

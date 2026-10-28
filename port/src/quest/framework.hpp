@@ -455,6 +455,12 @@ const Definition *Find(std::string_view id);
 const Progress   *FindProgress(std::string_view id);
 
 /**
+ * Sets a registered quest's number to change(its value), from outside its rules and choices (what it
+ * counts as it happens: fishing's catches). False for a quest that isn't registered.
+ */
+bool ChangeVar(std::string_view quest, std::string_view name, const std::function<int(int)> &change);
+
+/**
  * The game quests act on; until it is set, rules and choices do nothing.
  */
 void   SetGame(IGame *game);

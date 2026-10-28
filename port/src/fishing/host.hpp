@@ -19,6 +19,7 @@ class CCameraFollow;
 namespace dc::fishing {
 
 struct Place;
+enum class TimeOfDay;
 
 /**
  * Fills the species, places and prizes from the highest-priority usable document, then the data's own,
@@ -65,6 +66,11 @@ struct Spawning {
  * becomes the current place. A spot no place is has five empty places, as retail.
  */
 Spawning SpawnAt(int spot, int time_of_day);
+
+/**
+ * The time of day now, as the spawn's intervals know it.
+ */
+TimeOfDay TimeOfDayNow();
 
 /**
  * The place fishing last started at (SpawnAt), or for a spot no place is, retail's stages.

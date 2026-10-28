@@ -114,3 +114,25 @@ which `angler.cpp` implements with the angler, the line, the fish, the camera, t
 messages, and tests implement with a record of what was asked (`FishingSession.*`). `EdMoveChara`
 calls `fishing::StepSession`, and `chara_fishing` still holds the step for the game's code that reads
 it.
+
+## Events and quests
+
+Every landed fish is published once, after its outcome, to listeners added with `fishing::OnCatch`:
+its species, size, points, place, bait, time of day and whether it was kept. A fish that got away is
+published to `fishing::OnLost` listeners with why (Cross on a nibble, or letting go of the hook) and
+whether the bait went with it. A listener can't change either; what a catch gives is the outcome
+stage's.
+
+Quests count catches in their own numbers, which `quest::VarAtLeast` reads and the save keeps with
+their progress (`port/src/fishing/quests.hpp`, through `quest::ChangeVar`), from when the helper is
+called, usually as the quest is registered:
+
+| Helper | Keeps in the quest's var |
+|---|---|
+| `CountCatches(quest, var, filter)` | how many catches match |
+| `CountFishPoints(quest, var)` | the points from fishing |
+| `KeepLargest(quest, var, filter)` | the size of the largest catch that matches |
+| `CountSpecies(quest, var, species)` | how many of the listed species have been caught, each once |
+
+A `CatchFilter` matches by species, place, bait and a least size, each left empty to match any. A kept
+fish is an item too, so "bring me a fish" is the quest framework's `HasItemWith<item::Fish>`.

@@ -25,6 +25,7 @@
 #include "item/host.hpp"
 #include "platform/native_config.hpp"
 #include "platform/paths.hpp"
+#include "savedata.hpp"
 #include "shop.hpp"
 
 namespace dc::fishing {
@@ -525,6 +526,10 @@ Spawning SpawnAt(int spot, int time_of_day) {
         spawning.kinds.push_back(species != nullptr ? species->kind : -1);
     }
     return spawning;
+}
+
+TimeOfDay TimeOfDayNow() {
+    return TimeFrom(EdGetTime(SaveData->GetNowTime()));
 }
 
 const Place &CurrentPlace() {

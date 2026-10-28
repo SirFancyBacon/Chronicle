@@ -270,6 +270,21 @@ public:
         return true;
     }
 
+    const Species *FishSpecies(int fish_no) override {
+        return Fish != nullptr && fish_no >= 0 && fish_no < kMaxFish ? SpeciesOfKind(Fish[fish_no].fish_kind) : nullptr;
+    }
+
+    const Species *NibblingSpecies() override {
+        for (int fish_no = 0; Fish != nullptr && fish_no < kMaxFish; fish_no++) {
+            if (Fish[fish_no].action == FISH_ACTION_EAT_FOOD) {
+                return SpeciesOfKind(Fish[fish_no].fish_kind);
+            }
+        }
+        return nullptr;
+    }
+
+    TimeOfDay Time() override { return TimeOfDayNow(); }
+
     const Place &CurrentPlace() override { return fishing::CurrentPlace(); }
 
     BiteContext Bait() override { return HookBait(); }

@@ -12,7 +12,9 @@
 
 #include "fishing/framework.hpp"
 #include "fishing/host.hpp"
+#include "fishing/quests.hpp"
 #include "item/host.hpp"
+#include "quest/framework.hpp"
 
 namespace dc::test {
 
@@ -66,6 +68,9 @@ public:
     void PutAwayFish() override { Record("put away"); }
     std::optional<fishing::Catch> Caught() override { return caught; }
     bool                          MessageDone() override { return message_done; }
+    const fishing::Species       *FishSpecies(int fish_no) override { return fishing::SpeciesOfKind(fish_no == 3 ? 5 : 2); }
+    const fishing::Species       *NibblingSpecies() override { return fishing::SpeciesOfKind(6); }
+    fishing::TimeOfDay            Time() override { return fishing::TimeOfDay::Evening; }
     const fishing::Place         &CurrentPlace() override { return *place; }
     fishing::BiteContext          Bait() override {
         return {.bait = "vanilla:carrot", .radius = 25.0f, .random = [this] { return Random(); }};
@@ -97,6 +102,9 @@ private:
 };
 
 class FishingSession : public ::testing::Test {
+public:
+    void Tick(const fishing::Input &input = {}) { session.Tick(angler, input); }
+
 protected:
     fishing::Session session;
     FakeAngler       angler;
@@ -105,8 +113,6 @@ protected:
         item::Load();
         fishing::Load();
     }
-
-    void Tick(const fishing::Input &input = {}) { session.Tick(angler, input); }
 
     // Stands, casts, and waits for a bite with the float out.
     void CastAndWait() {
@@ -172,6 +178,89 @@ TEST_F(FishingSession, ACatchGoesThroughEveryStepAsRetail) {
     Tick();
     EXPECT_EQ(session.CurrentStep(), Step::Init);
     EXPECT_FALSE(angler.Did("bait lost"));
+}
+
+// Hooks fish 3 (a Mardan Garayan, kind 5, as FakeAngler says) and lands it.
+void LandFish(FishingSession &test, fishing::Session &session, FakeAngler &angler) {
+    angler.model_ready = true;
+    angler.message_done = true;
+    test.Tick({.fish_status = 8, .fish_no = 3});
+    test.Tick({.cross = true, .fish_status = 8, .fish_no = 3});
+    for (int tick = 0; tick < 300 && session.CurrentStep() != Step::Init; tick++) {
+        angler.motion_done = session.CurrentStep() == Step::Finish || angler.motion == 10;
+        test.Tick({.fish_status = 11});
+    }
+    angler.motion_done = false;
+}
+
+TEST_F(FishingSession, ACatchIsPublishedOnceWithWhereAndWhatItTook) {
+    std::vector<fishing::Catch> catches;
+    std::string                 bait;
+    const int id = fishing::OnCatch([&](const fishing::Catch &fish) {
+        catches.push_back(fish);
+        bait = std::string(fish.bait);
+    });
+    CastAndWait();
+    LandFish(*this, session, angler);
+    fishing::Unsubscribe(id);
+    ASSERT_EQ(catches.size(), 1u);
+    EXPECT_EQ(catches[0].species->id, "vanilla:fish_5");
+    EXPECT_EQ(catches[0].size, 142);
+    EXPECT_EQ(catches[0].points, 300);
+    EXPECT_EQ(catches[0].place->id, "vanilla:matataki_2");
+    EXPECT_EQ(bait, "vanilla:carrot");
+    EXPECT_EQ(catches[0].time, fishing::TimeOfDay::Evening);
+    EXPECT_FALSE(catches[0].kept);
+}
+
+TEST_F(FishingSession, AFishThatGetsAwayIsPublishedWithWhy) {
+    std::vector<fishing::Lost> lost;
+    const int id = fishing::OnLost([&](const fishing::Lost &fish) { lost.push_back(fish); });
+    CastAndWait();
+    Tick({.fish_status = 7});
+    angler.rolls = {0.1};
+    Tick({.cross = true, .fish_status = 7});
+    angler.motion_done = true;
+    Tick();
+    angler.motion_done = false;
+    Tick({.cross = true});
+    Tick();
+    angler.motion_done = true;
+    Tick();
+    angler.motion_done = false;
+    ASSERT_EQ(session.CurrentStep(), Step::WaitBite);
+    Tick({.fish_status = 8, .fish_no = 3});
+    angler.rolls = {0.9};
+    Tick({.fish_status = -1});
+    fishing::Unsubscribe(id);
+    ASSERT_EQ(lost.size(), 2u);
+    EXPECT_EQ(lost[0].why, fishing::LossCause::PressedEarly);
+    EXPECT_EQ(lost[0].species->kind, 6); // the nibbling fish, not FishingFishStatus's fish_no
+    EXPECT_TRUE(lost[0].bait_lost);
+    EXPECT_EQ(lost[1].why, fishing::LossCause::LetGo);
+    EXPECT_EQ(lost[1].species->kind, 5);
+    EXPECT_FALSE(lost[1].bait_lost);
+}
+
+TEST_F(FishingSession, QuestHelpersCountTheCatchesIntoTheQuestsNumbers) {
+    quest::Clear();
+    quest::Register(quest::Builder("chronicle:ruty").Stages({"fishing", "done"}).Build());
+    fishing::CountCatches("chronicle:ruty", "mardan", {.species = "vanilla:fish_5"});
+    fishing::CountCatches("chronicle:ruty", "big", {.min_size = 150});
+    fishing::CountFishPoints("chronicle:ruty", "points");
+    fishing::KeepLargest("chronicle:ruty", "largest");
+    fishing::CountSpecies("chronicle:ruty", "matataki", {"vanilla:fish_2", "vanilla:fish_4", "vanilla:fish_5", "vanilla:fish_6"});
+    for (int fish = 0; fish < 2; fish++) {
+        CastAndWait();
+        LandFish(*this, session, angler);
+    }
+    const quest::Progress &progress = *quest::FindProgress("chronicle:ruty");
+    EXPECT_EQ(progress.vars.at("mardan"), 2);
+    EXPECT_FALSE(progress.vars.contains("big")); // 142 is under 150
+    EXPECT_EQ(progress.vars.at("points"), 600);
+    EXPECT_EQ(progress.vars.at("largest"), 142);
+    EXPECT_EQ(progress.vars.at("matataki"), 1); // the same species twice counts once
+    quest::Clear();
 }
 
 TEST_F(FishingSession, CrossOnANibbleSinksTheFloatAndLosesTheBaitOneTimeInFive) {

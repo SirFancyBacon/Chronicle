@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <string>
 
 #include "fishing/framework.hpp"
 
@@ -82,6 +83,9 @@ public:
     virtual void PutAwayFish() = 0;
     virtual std::optional<Catch> Caught() = 0;
     virtual bool                 MessageDone() = 0;
+    virtual const Species       *FishSpecies(int fish_no) = 0;
+    virtual const Species       *NibblingSpecies() = 0; /**< FishingFishStatus's fish_no isn't the nibbling fish's. */
+    virtual TimeOfDay            Time() = 0;
 
     virtual const Place   &CurrentPlace() = 0;
     virtual BiteContext    Bait() = 0;
@@ -102,6 +106,8 @@ public:
     [[nodiscard]] float HookWeight() const { return hook_weight_; }
 
 private:
+    void Hook(Angler &angler, const Input &input);
+
     enum class Message {
         Evaluate,
         Wait,
@@ -112,6 +118,8 @@ private:
     Message message_ = Message::Evaluate;
     int     ticks_ = 0; /**< In the step. */
     int     wait_ = 0;  /**< Waiting for a bite, for the idle motions. */
+    const Species *hooked_ = nullptr; /**< The fish on the hook. */
+    std::string    bait_;             /**< The bait it took, for the catch. */
     float   float_weight_ = -1.0f;
     float   hook_weight_ = -1.0f;
 };

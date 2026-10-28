@@ -107,7 +107,7 @@ struct ActionStep {
 };
 
 /**
- * Why the bait may be lost.
+ * Why the bait may be lost, and a fish got away.
  */
 enum class LossCause {
     PressedEarly, /**< Cross while the fish only nibbled. */
@@ -161,10 +161,35 @@ public:
  * A landed fish.
  */
 struct Catch {
-    const Species *species = nullptr;
-    int            size = 0;   /**< In tenths of a size unit, as the records keep it. */
-    int            points = 0;
+    const Species   *species = nullptr;
+    int              size = 0; /**< In tenths of a size unit, as the records keep it. */
+    int              points = 0;
+    const Place     *place = nullptr;
+    std::string_view bait; /**< The bait's item ID; empty for a bare hook. */
+    TimeOfDay        time = TimeOfDay::Day;
+    bool             kept = false; /**< Given as an item by the outcome. */
 };
+
+/**
+ * A fish that got away.
+ */
+struct Lost {
+    const Species   *species = nullptr; /**< Null when it can't be told which fish it was. */
+    const Place     *place = nullptr;
+    std::string_view bait;
+    LossCause        why = LossCause::LetGo;
+    bool             bait_lost = false;
+};
+
+/**
+ * Follows every landed or lost fish, after its outcome; a listener can't change it. Returns an id
+ * for Unsubscribe.
+ */
+int  OnCatch(std::function<void(const Catch &)> listener);
+int  OnLost(std::function<void(const Lost &)> listener);
+void Unsubscribe(int id);
+void Publish(const Catch &fish);
+void Publish(const Lost &fish);
 
 /**
  * What an outcome stage can give the player; the host's.
