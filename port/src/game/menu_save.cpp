@@ -12,6 +12,7 @@
 #include "dataread.hpp"
 #include "dun/gameloop.hpp"
 #include "editatra.hpp"
+#include "fishing/host.hpp"
 #include "gamepad.hpp"
 #include "itemdata.hpp"
 #include "localize/localize.hpp"
@@ -1259,9 +1260,14 @@ int EventItemSelectKey(int *result) {
                     }
                 }
 
-                int accepted = 0;
+                // The bait picker takes every bait the fishing framework knows, more than usable holds.
+                int accepted = slot != nullptr && MiniMenu.fish_mode != 0 && fishing::BaitIndex(*result) >= 0 ? 1 : 0;
 
-                for (int i = 0; slot != nullptr && MiniMenu.usable[i] >= ITEM_DUNGEON_START && i < 13; i++) {
+                if (accepted != 0 && MiniMenu.vanish != 0 && 0 <= pack_index && pack_index < EventItemPackPt->num) {
+                    EventItemPackPt->item[pack_index] = 0;
+                }
+
+                for (int i = 0; accepted == 0 && slot != nullptr && MiniMenu.usable[i] >= ITEM_DUNGEON_START && i < 13; i++) {
                     if (MiniMenu.usable[i] == *result) {
                         accepted = 1;
 

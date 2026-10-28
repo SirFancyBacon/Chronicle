@@ -41,6 +41,7 @@
 #include "editpartsinfo.hpp"
 #include "effect.hpp"
 #include "fishing.hpp"
+#include "fishing/host.hpp"
 #include "frame.hpp"
 #include "framevu1.hpp"
 #include "gamemode.hpp"
@@ -3771,7 +3772,12 @@ int _GOTO_CHANGE_ESA(RS_STACKDATA *stack, int argument_count) {
     }
 
     p_use_item = stack->s;
-    int items[32] = {ITEM_EVY, ITEM_MIMI, ITEM_PRICKLY, ITEM_THROBBING_CHERRY, ITEM_GOOEY_PEACH, ITEM_BOMB_NUTS, ITEM_POISONOUS_APPLE, ITEM_MELLOW_BANANA, ITEM_CARROT, ITEM_POTATO_CAKE, ITEM_MINON, ITEM_BATTAN, ITEM_PETITE_FISH, -1};
+    // Every bait the fishing framework knows, custom ones included; the picker takes any of them.
+    int        items[32];
+    const auto baits = fishing::BaitItems();
+    const auto count = std::min<std::size_t>(baits.size(), std::size(items) - 1);
+    std::ranges::copy_n(baits.begin(), static_cast<std::ptrdiff_t>(count), items);
+    items[count] = -1;
     EdUseItemInit();
     EdSetUseItem(items);
     menu_mode = ED_MENU_CHANGE_ESA;

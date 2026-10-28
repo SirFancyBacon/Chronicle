@@ -42,9 +42,10 @@ double Uniform() {
 // The bait on the hook, as FishingStepFish gives it to the fish.
 BiteContext HookBait() {
     BiteContext context{.random = Uniform};
-    if (esa_type >= 0 && EsaFrame != nullptr) {
-        context.bait = BaitId(esa_type);
-        context.radius = esa_info[static_cast<std::size_t>(esa_type)].radius;
+    if (const BaitInfo *bait = BaitAt(esa_type); bait != nullptr && EsaFrame != nullptr) {
+        context.bait = bait->id;
+        context.radius = bait->radius;
+        context.default_affinity = bait->default_affinity;
         // Debug builds let every fish notice the bait from anywhere.
         if (DebugMode) {
             context.radius = 100000000.0f;
@@ -199,11 +200,21 @@ public:
     }
 
     void LoseBait() override {
+        if (const BaitInfo *bait = BaitAt(esa_type); bait != nullptr && bait->lure) {
+            return;
+        }
         EdFishingLostEsaMes();
         FishingDeleteEsa();
     }
 
-    void UseBait() override { FishingDeleteEsa(); }
+    // Even a lure comes off the hook: the landed fish's model goes where the script built the bait's
+    // (_CLEAR_EVENT_BUFF puts the event buffer at the villagers' buffer's free end, as LandFish does).
+    void UseBait() override {
+        if (const BaitInfo *bait = BaitAt(esa_type); bait != nullptr && bait->lure) {
+            EdGetItem(bait->item, 1, -1);
+        }
+        FishingDeleteEsa();
+    }
 
     void ResetFish() override { FishingInitFishStatus(); }
 
@@ -332,9 +343,10 @@ void UpdateFishAction(CFish &fish) {
     sceVu0FVECTOR position;
     fish.GetPosition(position);
     BiteContext context{.random = Uniform};
-    if (fish.food_kind >= 0) {
-        context.bait = BaitId(fish.food_kind);
+    if (const BaitInfo *bait = BaitAt(fish.food_kind)) {
+        context.bait = bait->id;
         context.radius = fish.food_radius;
+        context.default_affinity = bait->default_affinity;
     }
     const FishView   view{.species = SpeciesOfKind(fish.fish_kind),
                           .action = ActionOf(fish.action),

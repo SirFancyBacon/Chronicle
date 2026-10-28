@@ -502,6 +502,26 @@ TEST_F(ItemDocuments, ACustomItemThatCannotBeReadIsLeftOutAndTold) {
     EXPECT_NE(told.find("buy_price"), std::string::npos) << told;
 }
 
+TEST_F(ItemDocuments, ACustomItemsBaitAndFieldsItDoesNotReadAreTold) {
+    auto lure = CustomItem("chronicle:lure");
+    lure["bait"] = {
+        {"radius",           40.0},
+        {"lure",             true},
+        {"default_affinity", 0.5 },
+        {"uses",             0   }
+    };
+    lure["colour"] = "red";
+    Pack("lures", "custom/chronicle.lure.json", lure);
+    testing::internal::CaptureStderr();
+    Order(R"("lures")");
+    const std::string told = testing::internal::GetCapturedStderr();
+    const item::Bait *bait = item::Find("chronicle:lure")->Get<item::Bait>();
+    ASSERT_NE(bait, nullptr);
+    EXPECT_TRUE(bait->lure);
+    EXPECT_EQ(bait->default_affinity, 0.5f);
+    EXPECT_NE(told.find("fields this version does not read: bait.uses, colour"), std::string::npos) << told;
+}
+
 TEST_F(ItemDocuments, ACustomItemInTheDataIsReadUnderThePacks) {
     const datafix::Disc disc = datafix::MakeDisc({
         {"dun/pack/maindat.pac", datafix::Pattern(64, 1)}

@@ -154,6 +154,8 @@ void Session::Tick(Angler &angler, const Input &input) {
             } else {
                 if (input.cross || input.debug) {
                     angler.Play(Sound::Cast);
+                    // Retail deleted the bait every tick of the fight; it is taken once.
+                    angler.UseBait();
                     step_ = Step::Battle;
                     angler.Motion(12, 2);
                     angler.HookFish(input.fish_no);
@@ -168,7 +170,6 @@ void Session::Tick(Angler &angler, const Input &input) {
             }
             break;
         case Step::Battle: {
-            angler.UseBait();
             const FightContext context{.ticks = ticks_,
                                        .model_ready = [&] { return angler.ModelReady(); },
                                        .random = [&] { return angler.Random(); },

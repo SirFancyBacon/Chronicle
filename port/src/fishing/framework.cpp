@@ -40,9 +40,9 @@ std::map<int, Place> &BySpot() {
 
 } // namespace
 
-float Species::Affinity(std::string_view bait) const {
+float Species::Affinity(std::string_view bait, float fallback) const {
     const auto found = food_affinity.find(std::string(bait));
-    return found != food_affinity.end() ? found->second : 0.0f;
+    return found != food_affinity.end() ? found->second : fallback;
 }
 
 void RegisterSpawnStage(std::string_view name, StageFactory<SpawnStage> factory) {

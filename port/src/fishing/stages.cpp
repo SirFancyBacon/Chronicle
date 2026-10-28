@@ -146,7 +146,7 @@ public:
         int        timer = 20 + static_cast<int>(context.random() * 30.0);
         const bool bait = !context.bait.empty() && context.radius > 0.0f;
         const auto chance = [&](double probability) { return context.random() < probability; };
-        const double liking = bait && fish.species != nullptr ? fish.species->Affinity(context.bait) : 0.0;
+        const double liking = bait && fish.species != nullptr ? fish.species->Affinity(context.bait, context.default_affinity) : 0.0;
         const bool   at_bait = bait && fish.distance <= 1.0f;
 
         switch (fish.action) {

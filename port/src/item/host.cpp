@@ -582,6 +582,35 @@ void PutOptional(unsigned char *row, const Field &field, const Json &document, s
     }
 }
 
+// Names a custom item document's fields this version does not read, which would otherwise be
+// ignored without a word (a field renamed since the document was written).
+void ReportUnknown(std::string_view file, const Json &document) {
+    std::set<std::string> unknown;
+    for (const auto &[key, value] : document.items()) {
+        const bool known = key == "schema_version" || key == "kind" || key == "id" || key == "icon" || key == "model" ||
+                           key == "text" || key == "bait" || key == "state" || key == "state_version" ||
+                           std::ranges::any_of(kItemFields, [&key](const Field &field) { return key == field.name; }) ||
+                           std::ranges::any_of(kPriceFields, [&key](const Field &field) { return key == field.name; });
+        if (!known) {
+            unknown.insert(key);
+        }
+    }
+    if (const auto bait = document.find("bait"); bait != document.end() && bait->is_object()) {
+        for (const auto &[key, value] : bait->items()) {
+            if (key != "radius" && key != "lure" && key != "default_affinity") {
+                unknown.insert("bait." + key);
+            }
+        }
+    }
+    if (!unknown.empty()) {
+        std::string names;
+        for (const std::string &name : unknown) {
+            names += names.empty() ? name : ", " + name;
+        }
+        native_config::Report(std::format("gameplay/items/custom/{}", file), "fields this version does not read: " + names);
+    }
+}
+
 Custom ParseCustom(std::string_view file, const Json &document) {
     Custom      custom;
     const Json &id = native_config::At(document, "id");
@@ -636,6 +665,19 @@ Custom ParseCustom(std::string_view file, const Json &document) {
         if (!(custom.bait->radius > 0.0f)) {
             throw std::runtime_error("bait radius must be above 0");
         }
+        if (bait->contains("lure")) {
+            if (!(*bait)["lure"].is_boolean()) {
+                throw std::runtime_error("bait lure must be true or false");
+            }
+            custom.bait->lure = (*bait)["lure"].get<bool>();
+        }
+        if (bait->contains("default_affinity")) {
+            // A fish takes the bait at half its liking a check, so 2 is the most that means anything.
+            custom.bait->default_affinity = native_config::Float(native_config::At(*bait, "default_affinity"));
+            if (custom.bait->default_affinity < 0.0f || custom.bait->default_affinity > 2.0f) {
+                throw std::runtime_error("bait default_affinity must be from 0 to 2");
+            }
+        }
     }
     if (const auto state = document.find("state"); state != document.end()) {
         if (!state->is_object()) {
@@ -652,6 +694,7 @@ Custom ParseCustom(std::string_view file, const Json &document) {
             throw std::runtime_error("state_version must be 0 or more");
         }
     }
+    ReportUnknown(file, document);
     return custom;
 }
 

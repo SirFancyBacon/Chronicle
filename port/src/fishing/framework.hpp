@@ -32,7 +32,10 @@ struct Species {
     std::map<std::string, float> food_affinity; /**< Liking by bait item ID; a bait left out is not liked. */
     bool                         mardan_garayan = false; /**< Counted toward the Mardan Garayan. */
 
-    [[nodiscard]] float Affinity(std::string_view bait) const;
+    /**
+     * The liking for a bait, or fallback (the bait's default_affinity) for one it doesn't name.
+     */
+    [[nodiscard]] float Affinity(std::string_view bait, float fallback = 0.0f) const;
 };
 
 enum class TimeOfDay {
@@ -89,9 +92,10 @@ struct FishView {
  * What a bite stage is given besides the fish.
  */
 struct BiteContext {
-    std::string_view        bait;          /**< The bait's item ID; empty for a bare hook. */
-    float                   radius = 0.0f; /**< How far fish notice it. */
-    std::function<double()> random;        /**< Uniform in [0, 1). */
+    std::string_view        bait;                    /**< The bait's item ID; empty for a bare hook. */
+    float                   radius = 0.0f;           /**< How far fish notice it. */
+    float                   default_affinity = 0.0f; /**< The liking of a species that doesn't name it. */
+    std::function<double()> random;                  /**< Uniform in [0, 1). */
 };
 
 /**

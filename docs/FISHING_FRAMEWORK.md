@@ -76,6 +76,21 @@ prints `config: <path>: <reason>` and the next is tried.
 any item by ID, and its price in fish points. The exchange screen draws a fixed list, so a document
 changes prizes and prices, not how many there are.
 
+## Baits
+
+Any item with the `Bait` trait is a bait: retail's thirteen, and custom items whose document has a
+`bait` (docs/ITEM_FRAMEWORK.md, "Custom items"). The bait picker offers every one the player carries,
+and the town's script attaches the one chosen with its own code, the port putting a bait its list
+lacks on it (`ListBaitForScript`, which fixed PAL's five baits that were eaten and never attached).
+`esa_type` and a fish's `food_kind` index the framework's list of baits (`fishing::BaitAt`): retail's
+in `esa_info`'s order, then the custom ones.
+
+A fish that takes the hook eats the bait, as retail. A lure (`"lure": true`) comes back to the bag
+instead and is never lost to a nibble or a fish that lets go; it has to come off the hook as the fish
+is landed, because the landed fish's model is put where the town's script built the bait's (the
+event buffer starts at the villagers' buffer's free end), so it is put on again from the picker. A species that doesn't name a bait in its `food_affinity` likes it at the bait's
+`default_affinity`. Leaving fishing or changing the bait gives back the one on the hook, as retail.
+
 ## Stages
 
 What happens at a place is decided by four stages, each chosen by name in its row with its settings
@@ -85,7 +100,7 @@ beside the name (`port/src/fishing/framework.hpp`; a new one is a class and a li
 | Stage | Decides | `retail` |
 |---|---|---|
 | spawn | the fish in the water when fishing starts | each fish drawn by weight, the rare table one time in `interval` |
-| bite | what each fish does about the bait, asked by `CFish::Step` when its last action has run out, and when the bait is lost | notices at its liking x 0.3, takes the bait and the hook at x 0.5, loses interest at 0.1, every 21 to 50 ticks; holds the hook `hook_ticks`; loses the bait at `lose_bait_early` for Cross on a nibble and `lose_bait_escaped` for a fish that lets go |
+| bite | what each fish does about the bait, asked by `CFish::Step` when its last action has run out, and when the bait is lost (never a lure) | notices at its liking x 0.3, takes the bait and the hook at x 0.5, loses interest at 0.1, every 21 to 50 ticks; holds the hook `hook_ticks`; loses the bait at `lose_bait_early` for Cross on a nibble and `lose_bait_escaped` for a fish that lets go |
 | fight | from the hook set to the fish landed | none: the controller rumbles for `ticks` while the fish's model loads |
 | outcome | what a landed fish gives | the Mardan Garayan count, the points, the records and the evaluation message |
 

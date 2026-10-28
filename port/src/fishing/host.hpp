@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -71,9 +72,32 @@ Spawning SpawnAt(int spot, int time_of_day);
 const Place &CurrentPlace();
 
 /**
- * The item ID of a bait by its index in esa_info.
+ * A bait the hook takes: retail's thirteen in esa_info's order, then each custom item with the Bait
+ * trait. esa_type and CFish's food_kind are its index.
  */
-std::string_view BaitId(int index);
+struct BaitInfo {
+    int         item;
+    std::string id;
+    float       radius;
+    bool        lure; /**< Back to the bag after a catch, never lost. */
+    float       default_affinity;
+};
+
+/**
+ * The bait at an index, or null.
+ */
+const BaitInfo *BaitAt(int index);
+
+/**
+ * The index of the bait an item (or a copy of it) is, or -1.
+ */
+int BaitIndex(int item);
+
+/**
+ * Every bait's item, for the bait picker.
+ */
+std::vector<int> BaitItems();
+
 
 /**
  * One tick of the angler's session (fishing/angler.cpp), in place of retail's EdMoveChara block:

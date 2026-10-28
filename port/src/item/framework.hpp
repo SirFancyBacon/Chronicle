@@ -80,7 +80,9 @@ struct Weapon {
  * Fish notice the bait from radius away.
  */
 struct Bait {
-    float radius = 0.0f; /**< Distance from which fish notice the bait. */
+    float radius = 0.0f;           /**< Distance from which fish notice the bait. */
+    bool  lure = false;            /**< Back to the bag after a catch rather than eaten, and never lost. */
+    float default_affinity = 0.0f; /**< The liking of a species that doesn't name it. */
 };
 
 /**

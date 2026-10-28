@@ -406,7 +406,7 @@ T Read(std::string_view path, std::string_view kind, Parsed<T> (*parse)(const Js
 }
 
 std::map<int, FishInfo> g_info;
-std::vector<std::string> g_bait_ids;
+std::vector<BaitInfo>    g_baits;
 const Place             *g_current = nullptr;
 Place                    g_fallback; // retail's bite, fight and outcome for a spot no place is
 
@@ -437,10 +437,20 @@ void Load() {
                   .bite = MakeBiteStage(retail["bite"]),
                   .fight = MakeFightStage(retail["fight"]),
                   .outcome = MakeOutcomeStage(retail["outcome"])};
-    g_bait_ids.clear();
+    g_baits.clear();
+    const auto add_bait = [](const item::Def &def) {
+        const item::Bait &bait = *def.Get<item::Bait>();
+        g_baits.push_back({.item = def.number, .id = def.id, .radius = bait.radius, .lure = bait.lure, .default_affinity = bait.default_affinity});
+    };
     for (const EsaInfo &bait : esa_info) {
-        const item::Def *def = item::Find(bait.item_no);
-        g_bait_ids.push_back(def != nullptr ? def->id : item::VanillaItemId(bait.item_no));
+        if (const item::Def *def = item::Find(bait.item_no); def != nullptr && def->Has<item::Bait>()) {
+            add_bait(*def);
+        }
+    }
+    for (const item::Def *def : item::With<item::Bait>()) {
+        if (def->number >= item::kCustomFirst) {
+            add_bait(*def);
+        }
     }
     for (Species &species : Read<std::vector<Species>>("fishing/fish.json", "fish", ParseSpecies, SpeciesDocument())) {
         FishInfo info{.model_size = species.model_size,
@@ -521,8 +531,22 @@ const Place &CurrentPlace() {
     return g_current != nullptr ? *g_current : g_fallback;
 }
 
-std::string_view BaitId(int index) {
-    return index >= 0 && std::cmp_less(index, g_bait_ids.size()) ? std::string_view(g_bait_ids[static_cast<std::size_t>(index)]) : std::string_view();
+const BaitInfo *BaitAt(int index) {
+    return index >= 0 && std::cmp_less(index, g_baits.size()) ? &g_baits[static_cast<std::size_t>(index)] : nullptr;
+}
+
+int BaitIndex(int item) {
+    const int  number = item::Definition(item);
+    const auto found = std::ranges::find(g_baits, number, &BaitInfo::item);
+    return found != g_baits.end() ? static_cast<int>(found - g_baits.begin()) : -1;
+}
+
+std::vector<int> BaitItems() {
+    std::vector<int> items;
+    for (const BaitInfo &bait : g_baits) {
+        items.push_back(bait.item);
+    }
+    return items;
 }
 
 } // namespace dc::fishing

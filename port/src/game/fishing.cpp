@@ -178,21 +178,15 @@ CFish::CFish() {
     Initialize();
 }
 
+// esa_type indexes the fishing framework's baits (fishing/host.hpp), custom ones after retail's.
 void FishingLoadEsa(int item_no, CFrameVu1 *frame, int slot) {
-    if (esa_type >= 0) {
-        EdGetItem(esa_info[esa_type].item_no, 1, -1);
+    if (const fishing::BaitInfo *bait = fishing::BaitAt(esa_type)) {
+        EdGetItem(bait->item, 1, -1);
     }
 
     EsaFrame = frame;
     esa_texb = slot;
-    esa_type = 0;
-
-    for (int i = 0; i < std::ssize(esa_info); i++) {
-        if (item_no == esa_info[i].item_no) {
-            esa_type = i;
-            return;
-        }
-    }
+    esa_type = fishing::BaitIndex(item_no);
 }
 
 void FishingDeleteEsa() {
@@ -201,11 +195,8 @@ void FishingDeleteEsa() {
 }
 
 int FishingGetEsaItemNo() {
-    if (esa_type < 0) {
-        return -1;
-    }
-
-    return esa_info[esa_type].item_no;
+    const fishing::BaitInfo *bait = fishing::BaitAt(esa_type);
+    return bait != nullptr ? bait->item : -1;
 }
 
 void FishingInit() {
@@ -229,8 +220,8 @@ void FishingInit() {
 }
 
 void FishingExit() {
-    if (esa_type >= 0) {
-        EdGetItem(esa_info[esa_type].item_no, 1, -1);
+    if (const fishing::BaitInfo *bait = fishing::BaitAt(esa_type)) {
+        EdGetItem(bait->item, 1, -1);
     }
 
     for (int i = 0; i < 6; i++) {
@@ -456,7 +447,7 @@ void FishingStepFish() {
             float radius = 0.0f;
             Fish[i].SetFoodPos(-1, hook, radius);
         } else {
-            float radius = esa_info[esa_type].radius;
+            float radius = fishing::BaitAt(esa_type)->radius;
 
             // Debug builds let every fish notice the bait from anywhere.
             if (DebugMode) {
@@ -1012,17 +1003,11 @@ void FishLineDraw(int above_water) {
 
 namespace {
 
-// The baits the picker offers (_GOTO_CHANGE_ESA) and esa_info knows.
-constexpr std::array<int, 13> kBaits = {ITEM_EVY, ITEM_MIMI, ITEM_PRICKLY, ITEM_THROBBING_CHERRY,
-                                        ITEM_GOOEY_PEACH, ITEM_BOMB_NUTS, ITEM_POISONOUS_APPLE, ITEM_MELLOW_BANANA,
-                                        ITEM_CARROT, ITEM_POTATO_CAKE, ITEM_MINON, ITEM_BATTAN,
-                                        ITEM_PETITE_FISH};
-
 // How many baits the towns' scripts list after the variable the picker writes to.
 constexpr int kScriptBaitList = 8;
 
 bool IsBait(int item) {
-    return std::ranges::find(kBaits, item) != kBaits.end();
+    return fishing::BaitIndex(item) >= 0;
 }
 
 } // namespace

@@ -72,8 +72,8 @@ public:
     virtual bool FloatCaught() = 0; /**< The float snagged on something. */
     virtual bool HookLow() = 0;     /**< The hook near the water. */
 
-    virtual void LoseBait() = 0; /**< Says so and takes it off the hook. */
-    virtual void UseBait() = 0;  /**< The fish has it. */
+    virtual void LoseBait() = 0; /**< Says so and takes it off the hook, unless it is a lure. */
+    virtual void UseBait() = 0;  /**< Off the hook as the fish takes it: eaten, or a lure back to the bag. */
     virtual void ResetFish() = 0;
     virtual void WatchFish(int fish_no) = 0;
     virtual void HookFish(int fish_no) = 0; /**< Sets the hook and starts loading the fish's model. */
