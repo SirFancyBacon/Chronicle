@@ -144,7 +144,9 @@ bool Holds(CDngStatusData &status, int item) {
         }
         return false;
     }
-    return status.SearchItemIndexNo(item) >= 0;
+    // A copy with state of its own is in the bag under a handle, not its item's number.
+    return status.SearchItemIndexNo(item) >= 0 ||
+           std::ranges::any_of(status.item_pack.item, [&](s16 held) { return item::Definition(held) == item; });
 }
 
 void GiveOnArrival() {
@@ -167,7 +169,13 @@ void GiveOnArrival() {
             }
             item = def->number;
         }
-        if (!Holds(status, item)) {
+        if (Holds(status, item)) {
+            continue;
+        }
+        if (const item::Def *def = item::Find(item); def != nullptr && !def->state.empty()) {
+            item = item::NewCopy(*def);
+        }
+        if (item >= 0) {
             status.GetItem(item, 0);
         }
     }
@@ -875,6 +883,8 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
         GameLoadTraceCheckpoint("mode_begin");
         // A language chosen on the Options screen takes hold here, where the next area is about to load.
         LocalizeApplyPendingLanguage();
+        // No menu holds an item between areas, so a copy in none of the save's slots is gone.
+        item::ReclaimHeldCopies();
         if (mode != GAME_MODE_UNUSED_12 && !data_loaded) {
             initialize_data();
             data_loaded = true;

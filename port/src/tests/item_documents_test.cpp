@@ -383,6 +383,96 @@ TEST_F(ItemDocuments, ACustomItemIsABagItemWhereRetailTellsKindsByNumber) {
     EXPECT_EQ(status.SearchItemIndexNo(number), slot);
 }
 
+nlohmann::json KeptFish(const std::string &id) {
+    nlohmann::json fish = CustomItem(id);
+    fish["state"] = {
+        {"size", 31.5}
+    };
+    fish["state_version"] = 1;
+    return fish;
+}
+
+TEST_F(ItemDocuments, ACopyWithStateTravelsUnderAHandleThatAnswersAsItsItem) {
+    item::ClearCopies();
+    Pack("fish", "custom/chronicle.rod_2.json", CustomItem("chronicle:rod_2"));
+    Pack("fish", "custom/chronicle.bass.json", KeptFish("chronicle:bass"));
+    Order(R"("fish")");
+    const item::Def *bass = item::Find("chronicle:bass");
+    const item::Def *rod = item::Find("chronicle:rod_2");
+    ASSERT_NE(bass, nullptr);
+    ASSERT_NE(rod, nullptr);
+    EXPECT_EQ(bass->state_version, 1);
+    EXPECT_EQ(item::NewCopy(*rod), -1);
+
+    const int first = item::NewCopy(*bass);
+    const int second = item::NewCopy(*bass);
+    EXPECT_EQ(first, item::kHandleFirst);
+    EXPECT_EQ(second, item::kHandleFirst + 1);
+    ASSERT_NE(item::FindCopy(first), nullptr);
+    EXPECT_EQ(item::FindCopy(first)->state.at("size"), 31.5);
+    EXPECT_NE(item::FindCopy(first)->instance, item::FindCopy(second)->instance);
+    item::FindCopy(second)->state["size"] = 40.0;
+    EXPECT_EQ(item::FindCopy(first)->state.at("size"), 31.5);
+
+    // Retail's lookups see the item behind the handle.
+    EXPECT_EQ(item::Definition(first), bass->number);
+    EXPECT_EQ(item::KindOf(first), item::Kind::Item);
+    EXPECT_EQ(GetCommonItemInfo(first), GetCommonItemInfo(bass->number));
+    EXPECT_EQ(GetItemData(first), GetItemData(bass->number));
+    EXPECT_EQ(text::GameTextDecode(item::CustomMessage(first + 100, true)), "Rod");
+    EXPECT_EQ(item::Definition(first + 2), -1);
+    EXPECT_EQ(item::KindOf(first + 2), item::Kind::None);
+
+    // A copy that left every slot gives its handle back, to be used again.
+    g_custom_save.Initialize();
+    SaveData = &g_custom_save;
+    CDngStatusData &status = *g_custom_save.GetDngStatus();
+    ASSERT_GE(status.GetItem(second, 0), 0);
+    item::ReclaimHeldCopies();
+    EXPECT_EQ(item::FindCopy(first), nullptr);
+    ASSERT_NE(item::FindCopy(second), nullptr);
+    EXPECT_EQ(item::NewCopy(*bass), first);
+    EXPECT_EQ(item::CopyCount(), 2);
+
+    // A copy whose item is gone keeps its ID and state, and is nothing to retail's code.
+    Order("");
+    EXPECT_EQ(item::Definition(second), -1);
+    EXPECT_EQ(item::KindOf(second), item::Kind::None);
+    EXPECT_EQ(GetCommonItemInfo(second), nullptr);
+    EXPECT_EQ(item::FindCopy(second)->id, "chronicle:bass");
+    Order(R"("fish")");
+    EXPECT_EQ(item::Definition(second), item::Find("chronicle:bass")->number);
+    EXPECT_EQ(item::FindCopy(second)->state.at("size"), 40.0);
+    SaveData = nullptr;
+}
+
+TEST_F(ItemDocuments, ACopyKeptInASaveComesBackUnderAFreeHandle) {
+    item::ClearCopies(7);
+    const int handle = item::RestoreCopy("chronicle:bass", 3, {
+                                                                  {"size", 12.0}
+    });
+    EXPECT_EQ(handle, item::kHandleFirst);
+    EXPECT_EQ(item::FindCopy(handle)->instance, 3U);
+    EXPECT_EQ(item::FindCopy(handle)->number, -1);
+    EXPECT_EQ(item::NextInstance(), 7U);
+    Pack("fish", "custom/chronicle.bass.json", KeptFish("chronicle:bass"));
+    Order(R"("fish")");
+    EXPECT_EQ(item::Definition(handle), item::Find("chronicle:bass")->number);
+    const int made = item::NewCopy(*item::Find("chronicle:bass"));
+    EXPECT_EQ(item::FindCopy(made)->instance, 7U);
+    EXPECT_EQ(item::NextInstance(), 8U);
+}
+
+TEST_F(ItemDocuments, StateThatIsNotNumbersIsRefused) {
+    nlohmann::json fish = KeptFish("chronicle:bass");
+    fish["state"] = {
+        {"species", "bass"}
+    };
+    Pack("fish", "custom/chronicle.bass.json", fish);
+    Order(R"("fish")");
+    EXPECT_EQ(item::Find("chronicle:bass"), nullptr);
+}
+
 TEST_F(ItemDocuments, CustomItemsFromEveryPackAreHeardAndNumberedByID) {
     Pack("first", "custom/chronicle.rod_3.json", CustomItem("chronicle:rod_3"));
     Pack("second", "custom/chronicle.rod_2.json", CustomItem("chronicle:rod_2"));

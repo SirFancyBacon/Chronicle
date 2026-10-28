@@ -5,7 +5,9 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <ranges>
 #include <stdexcept>
+#include <utility>
 
 namespace dc::item {
 
@@ -22,6 +24,31 @@ struct Registry {
 Registry &Items() {
     static Registry registry;
     return registry;
+}
+
+/**
+ * The copies by handle, and the instance the next new copy gets.
+ */
+struct Copies {
+    std::map<int, Copy> by_handle;
+    std::uint64_t       next_instance = 1;
+};
+
+Copies &TheCopies() {
+    static Copies copies;
+    return copies;
+}
+
+int FreeHandle() {
+    const Copies &copies = TheCopies();
+    int           handle = kHandleFirst;
+    for (const int taken : std::views::keys(copies.by_handle)) {
+        if (taken != handle) {
+            break;
+        }
+        handle++;
+    }
+    return handle < kHandleEnd ? handle : -1;
 }
 
 bool ValidPart(std::string_view part) {
@@ -82,6 +109,72 @@ std::vector<const Def *> All() {
         items.push_back(item.get());
     }
     return items;
+}
+
+int NewCopy(const Def &item) {
+    if (item.state.empty()) {
+        return -1;
+    }
+    const int handle = FreeHandle();
+    if (handle < 0) {
+        return -1;
+    }
+    Copies &copies = TheCopies();
+    copies.by_handle.emplace(handle,
+                             Copy{.id = item.id, .number = item.number, .instance = copies.next_instance++, .state = item.state});
+    return handle;
+}
+
+int RestoreCopy(std::string_view id, std::uint64_t instance, State state) {
+    const int handle = FreeHandle();
+    if (handle < 0) {
+        return -1;
+    }
+    const Def *item = Find(id);
+    TheCopies().by_handle.emplace(handle, Copy{.id = std::string(id),
+                                               .number = item != nullptr ? item->number : -1,
+                                               .instance = instance,
+                                               .state = std::move(state)});
+    return handle;
+}
+
+Copy *FindCopy(int handle) {
+    auto      &copies = TheCopies().by_handle;
+    const auto found = copies.find(handle);
+    return found != copies.end() ? &found->second : nullptr;
+}
+
+int Definition(int number) {
+    if (number < kHandleFirst || number >= kHandleEnd) {
+        return number;
+    }
+    const Copy *copy = FindCopy(number);
+    return copy != nullptr ? copy->number : -1;
+}
+
+void ReclaimCopies(const std::function<bool(int handle)> &held) {
+    std::erase_if(TheCopies().by_handle, [&](const auto &entry) { return !held(entry.first); });
+}
+
+int CopyCount() {
+    return static_cast<int>(TheCopies().by_handle.size());
+}
+
+void RebindCopies() {
+    for (Copy &copy : std::views::values(TheCopies().by_handle)) {
+        const Def *item = Find(copy.id);
+        copy.number = item != nullptr ? item->number : -1;
+    }
+}
+
+void ClearCopies(std::uint64_t next) {
+    Copies &copies = TheCopies();
+    copies.by_handle.clear();
+    copies.next_instance = next;
+}
+
+std::uint64_t NextInstance() {
+    return TheCopies().next_instance;
 }
 
 } // namespace dc::item

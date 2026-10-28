@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 
+#include "item/framework.hpp"
 #include "itemdata.hpp"
 #include "shop.hpp"
 
@@ -28,8 +29,8 @@ bool Export(const std::filesystem::path &directory);
 
 // The game finds an item's name at its number + 100 in the system messages, which use ids up to 2080,
 // so custom numbers start past them.
-inline constexpr int kCustomFirst = 0x800; /**< Custom items' numbers start here... */
-inline constexpr int kCustomEnd = 0x1000;  /**< ...and stop before the copies' handles. */
+inline constexpr int kCustomFirst = 0x800;      /**< Custom items' numbers start here... */
+inline constexpr int kCustomEnd = kHandleFirst; /**< ...and stop before the copies' handles. */
 
 /**
  * What retail's number ranges make an item.
@@ -46,6 +47,12 @@ enum class Kind {
  * ITEM_WEAPON_START up for a weapon; the code that would take a custom item for one asks this instead.
  */
 Kind KindOf(int number);
+
+/**
+ * Frees the handles of copies no longer in the bag, its quick slots or storage. Only where no menu
+ * holds an item: between areas, and when saving.
+ */
+void ReclaimHeldCopies();
 
 /**
  * A custom item's name and description in one language.

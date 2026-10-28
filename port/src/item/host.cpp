@@ -28,6 +28,7 @@
 
 #include "btitem.hpp"
 #include "data/data_read.hpp"
+#include "dngstatusdata.hpp"
 #include "fishing.hpp"
 #include "item/framework.hpp"
 #include "itemdata.hpp"
@@ -35,7 +36,9 @@
 #include "platform/datapacks.hpp"
 #include "platform/native_config.hpp"
 #include "platform/paths.hpp"
+#include "savedata.hpp"
 #include "shop.hpp"
+#include "stockitem.hpp"
 #include "text/gametext.hpp"
 
 namespace dc::item {
@@ -543,6 +546,8 @@ struct Custom {
     std::string                     model; /**< Empty for none. */
     std::map<std::string, ItemText> text;  /**< By language file, en_gb and so on. */
     std::optional<Bait>             bait;
+    State                           state; /**< A new copy's state; empty for none. */
+    int                             state_version = 0;
 };
 
 /**
@@ -551,6 +556,7 @@ struct Custom {
 std::vector<Custom> customs;
 
 const Custom *CustomAt(int number) {
+    number = Definition(number);
     if (number < kCustomFirst || number - kCustomFirst >= static_cast<int>(customs.size())) {
         return nullptr;
     }
@@ -558,7 +564,7 @@ const Custom *CustomAt(int number) {
 }
 
 /**
- * CustomMessage's codes by language file, message id and whether it is a name.
+ * CustomMessage's codes by language file, item number and whether it is a name.
  */
 std::map<std::tuple<std::string, int, bool>, std::vector<s16>> messages;
 
@@ -625,6 +631,21 @@ Custom ParseCustom(std::string_view file, const Json &document) {
             throw std::runtime_error("bait radius must be above 0");
         }
     }
+    if (const auto state = document.find("state"); state != document.end()) {
+        if (!state->is_object()) {
+            throw std::runtime_error("state must map each name a copy keeps to the number it starts with");
+        }
+        for (const auto &[name, value] : state->items()) {
+            if (!value.is_number()) {
+                throw std::runtime_error(std::format("state {} must be a number", name));
+            }
+            custom.state[name] = value.get<double>();
+        }
+        custom.state_version = native_config::Int(document, "state_version");
+        if (custom.state_version < 0) {
+            throw std::runtime_error("state_version must be 0 or more");
+        }
+    }
     return custom;
 }
 
@@ -666,7 +687,7 @@ void LoadCustom() {
 }
 
 Def CustomDef(int number, const Custom &custom) {
-    Def def{.id = custom.id, .number = number};
+    Def def{.id = custom.id, .number = number, .state = custom.state, .state_version = custom.state_version};
     def.With(Sellable{.buy = custom.price.buy_price, .sell = custom.price.sell_price});
     ItemTraits(def, custom.data);
     if (custom.bait) {
@@ -699,6 +720,7 @@ void Load() {
     for (std::size_t index = 0; index < customs.size(); index++) {
         Register(CustomDef(kCustomFirst + static_cast<int>(index), customs[index]));
     }
+    RebindCopies();
 }
 
 COM_ITEM_INFO *CustomCommonInfo(int number) {
@@ -722,6 +744,7 @@ const char *CustomModel(int number) {
 }
 
 Kind KindOf(int number) {
+    number = Definition(number);
     if (number >= kCustomFirst) {
         return CustomAt(number) != nullptr ? Kind::Item : Kind::None;
     }
@@ -732,6 +755,19 @@ Kind KindOf(int number) {
         return Kind::Item;
     }
     return number >= ITEM_ATTACH_START ? Kind::Attachment : Kind::None;
+}
+
+void ReclaimHeldCopies() {
+    if (SaveData == nullptr) {
+        return;
+    }
+    std::set<int>    held;
+    const ITEM_PACK &pack = SaveData->GetDngStatus()->item_pack;
+    held.insert(std::begin(pack.item), std::end(pack.item));
+    held.insert(std::begin(pack.quick_item_slot), std::end(pack.quick_item_slot));
+    const CStockItem &stock = *SaveData->GetStockItem();
+    held.insert(std::begin(stock.dungeon_items), std::end(stock.dungeon_items));
+    ReclaimCopies([&](int handle) { return held.contains(handle); });
 }
 
 const char *ModelName(int number) {
@@ -759,11 +795,13 @@ const ItemText *CustomText(int number, std::string_view language) {
 
 short *CustomMessage(int id, bool system) {
     const std::string language = localize::LocalizeLanguageFile();
-    const ItemText   *text = CustomText(id - (system ? 100 : 500), language);
+    const int         number = Definition(id - (system ? 100 : 500));
+    const ItemText   *text = CustomText(number, language);
     if (text == nullptr) {
         return nullptr;
     }
-    auto [codes, made] = messages.try_emplace(std::tuple(language, id, system));
+    // By the item, not the id: a handle's id names another item once the handle is reused.
+    auto [codes, made] = messages.try_emplace(std::tuple(language, number, system));
     if (made) {
         text::GameTextEncode(system ? text->name : text->description, codes->second);
         // The game reads whole quadwords off a message's end, as it does off a file's.
