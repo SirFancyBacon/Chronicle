@@ -25,6 +25,7 @@
 #include "effectmacro.hpp"
 #include "fish.hpp"
 #include "fishing.hpp"
+#include "fishing/host.hpp"
 #include "gamepad.hpp"
 #include "gameutil.hpp"
 #include "input/mouse_look.hpp"
@@ -2368,7 +2369,7 @@ void EdMoveChara() {
                             if (fish_kind < 0) {
                                 fishing_mes = ED_FISHING_MES_DONE;
                             } else {
-                                if (fish_kind == 5 || fish_kind == 17) {
+                                if (fishing::CountsAsMardanGarayan(fish_kind)) {
                                     int *caught = &SaveData->mardan_garayan_caught;
                                     (*caught)++;
                                     SetFishMardanGarayanNum(1);

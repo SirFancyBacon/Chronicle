@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <utility>
 #include <vector>
 
 #include "boxvu0.hpp"
@@ -14,6 +15,7 @@
 #include "edit.hpp"
 #include "editloop3.hpp"
 #include "fish.hpp"
+#include "fishing/host.hpp"
 #include "framevu1.hpp"
 #include "itemdata.hpp"
 #include "mainselect.hpp"
@@ -138,156 +140,25 @@ void FishingLoad(CDataAlloc2<1> *alloc, int slot) {
     SndSPSeLoad(0x2F);
 }
 
+// The fish come from the spot's place (fishing/host.cpp); debug mode's fill stays retail's.
 void FishingLoadFish(int spot, CDataAlloc2<1> *alloc, int slot) {
-    draw_under_water = 1;
-
-    if (spot == 3) {
-        draw_under_water = 0;
-    }
-
+    const fishing::Spawning spawning = fishing::SpawnAt(spot, EdGetTime(SaveData->GetNowTime()));
+    draw_under_water = spawning.draw_under_water ? 1 : 0;
     Fish = new (reinterpret_cast<u_long128 *>(alloc->Alloc(0xD8C))) CFish[6];
     fish_texb = slot;
-    FishNum = 5;
-
-    if (spot == 0) {
-        FishNum = 4;
-    }
-
-    if (spot == 4) {
-        FishNum = 4;
-    }
+    FishNum = static_cast<int>(spawning.kinds.size());
 
     if (DebugMode) {
         FishNum = 5;
-    }
-
-    int rare_interval = 30;
-
-    switch (EdGetTime(SaveData->GetNowTime())) {
-        case ED_TIME_DAY:
-            rare_interval = 50;
-            break;
-        case ED_TIME_EVENING:
-            rare_interval = 20;
-            break;
-        case ED_TIME_NIGHT:
-            rare_interval = 35;
-            break;
-        case ED_TIME_MORNING:
-            rare_interval = 25;
-            break;
-        default:
-            break;
     }
 
     bool loaded = false;
     LoadFile("chara/f00s.chr", read_buffer, nullptr);
 
     for (int i = 0; i < FishNum; i++) {
-        int kind = -1;
-        int rand_value = rand();
+        int kind = std::cmp_less(i, spawning.kinds.size()) ? spawning.kinds[static_cast<std::size_t>(i)] : -1;
 
-        switch (spot) {
-            case 0:
-                switch (static_cast<int>(3.99999f * rnd())) {
-                    case 0:
-                        kind = 1;
-                        break;
-                    case 1:
-                        kind = 2;
-                        break;
-                    case 2:
-                        kind = 6;
-                        break;
-                    case 3:
-                        kind = 7;
-                        break;
-                    default:
-                        break;
-                }
-
-                break;
-            case 1: {
-                auto roll = static_cast<int>(100.0f * rnd());
-
-                if (roll < 35) {
-                    kind = 1;
-                } else if (roll < 70) {
-                    kind = 4;
-                } else if (roll < 80) {
-                    kind = 9;
-                } else if (roll < 100) {
-                    kind = 10;
-                }
-
-                break;
-            }
-            case 2:
-                if (rand_value % rare_interval == 0) {
-                    if (rand() % 5 == 0) {
-                        kind = 17;
-                    } else {
-                        kind = 5;
-                    }
-                } else {
-                    rand_value %= 3;
-
-                    if (rand_value == 0) {
-                        kind = 2;
-                    }
-
-                    if (rand_value == 1) {
-                        kind = 4;
-                    }
-
-                    if (rand_value == 2) {
-                        kind = 6;
-                    }
-                }
-
-                break;
-            case 3: {
-                int roll = rand_value % 100;
-
-                if (roll < 20) {
-                    kind = 0;
-                } else if (roll < 40) {
-                    kind = 3;
-                } else if (roll < 60) {
-                    kind = 11;
-                } else if (roll < 80) {
-                    kind = 12;
-                } else {
-                    kind = 13;
-                }
-
-                break;
-            }
-            case 4:
-                if (rand_value % rare_interval == 0) {
-                    if (rand() % 5 == 0) {
-                        kind = 17;
-                    } else {
-                        kind = 5;
-                    }
-                } else {
-                    int roll = rand_value % 100;
-
-                    if (roll < 40) {
-                        kind = 14;
-                    } else if (roll < 70) {
-                        kind = 15;
-                    } else if (roll < 100) {
-                        kind = 16;
-                    }
-                }
-
-                break;
-            default:
-                break;
-        }
-
-        if (DebugMode) {
+        if (DebugMode && spot >= 0 && spot < 5) {
             static constexpr std::array<std::array<int, 8>, 5> fish_type = {
                 {{1, 2, 6, 7, 1, 2, 6, 7},
                  {1, 4, 9, 10, 1, 4, 9, 10},

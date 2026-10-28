@@ -11,6 +11,7 @@
 
 #include "collision.hpp"
 #include "dataread.hpp"
+#include "fishing/host.hpp"
 #include "gameutil.hpp"
 #include "mathutil.hpp"
 
@@ -18,51 +19,7 @@ namespace dc::game {
 
 namespace {
 
-constexpr std::array<FishInfo, 18> fish_info = {
-    {
-     {17.0f, 10.0f, 20.0f, 20, 50, {1.0f, 0.0f, 0.0f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}},
-     {19.5f, 8.0f, 16.0f, 10, 30, {0.0f, 0.5f, 0.5f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.0f, 0.5f, 0.5f, 1.0f}},
-     {25.5f, 8.0f, 19.0f, 8, 25, {0.0f, 0.5f, 0.5f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 1.0f, 0.5f, 0.5f, 0.0f}},
-     {35.4f, 12.0f, 24.0f, 30, 60, {0.5f, 0.0f, 0.0f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f}},
-     {28.0f, 8.0f, 16.0f, 10, 40, {0.0f, 0.5f, 0.5f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.0f, 0.5f, 0.5f, 1.0f}},
-     {21.0f, 10.0f, 16.0f, 200, 400, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}},
-     {20.0f, 6.0f, 12.0f, 15, 40, {0.0f, 1.0f, 0.5f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.5f, 0.5f, 0.5f, 0.0f}},
-     {20.0f, 6.0f, 10.0f, 20, 50, {0.0f, 0.5f, 1.0f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.5f, 0.5f, 0.5f, 0.0f}},
-     {1.0f, 1.0f, 2.0f, 1, 2, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}},
-     {21.0f, 8.0f, 16.0f, 100, 200, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f}},
-     {20.0f, 8.0f, 16.0f, 40, 80, {0.0f, 0.5f, 0.5f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.5f, 1.0f, 0.5f, 0.5f}},
-     {20.0f, 6.0f, 12.0f, 20, 40, {1.0f, 0.5f, 0.5f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.0f, 0.5f, 0.5f, 0.0f}},
-     {15.0f, 6.0f, 12.0f, 10, 30, {1.0f, 0.5f, 0.5f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.0f, 0.5f, 0.5f, 0.0f}},
-     {21.0f, 10.0f, 20.0f, 35, 70, {0.0f, 0.0f, 0.0f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f}},
-     {21.0f, 8.0f, 16.0f, 15, 40, {0.0f, 0.0f, 0.0f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 1.0f, 0.5f, 0.5f, 0.0f}},
-     {20.0f, 8.0f, 20.0f, 20, 40, {0.0f, 0.0f, 0.0f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f}},
-     {20.0f, 8.0f, 14.0f, 20, 40, {0.0f, 0.0f, 0.0f, 0.2f, 0.2f, 0.2f, 0.0f, 0.2f, 0.0f, 0.5f, 0.5f, 1.0f, 1.0f}},
-     {21.0f, 10.0f, 30.0f, 600, 1000, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f}},
-     }
-};
-
 constexpr int kMaxNearbyPolys = 256;
-
-constexpr std::array<char *, 18> fish_file_names = {
-    "chara/f01a.chr",
-    "chara/f02a.chr",
-    "chara/f03a.chr",
-    "chara/f04a.chr",
-    "chara/f05a.chr",
-    "chara/f06a.chr",
-    "chara/f07a.chr",
-    "chara/f08a.chr",
-    "chara/f09a.chr",
-    "chara/f10a.chr",
-    "chara/f11a.chr",
-    "chara/f12a.chr",
-    "chara/f13a.chr",
-    "chara/f14a.chr",
-    "chara/f15a.chr",
-    "chara/f16a.chr",
-    "chara/f17a.chr",
-    "chara/f18a.chr",
-};
 
 int rand_check(float probability) {
     int   roll = rand();
@@ -506,25 +463,23 @@ void CFish::Initialize() {
     food_radius = -1.0f;
 }
 
+// A kind's row comes from its species (fishing/host.cpp).
 void LoadFish(CFish *fish, int fish_kind, int texture_slot, CDataAlloc2<1> *alloc, int loaded_before) {
-    if (fish_kind < 0 || std::cmp_greater_equal(fish_kind, fish_info.size())) {
+    const FishInfo *info = fishing::Info(fish_kind);
+    if (info == nullptr) {
         return;
     }
 
     LoadFile("chara/f00s.chr", read_buffer, nullptr);
     fish->Initialize();
     fish->model.LoadPackData3(read_buffer, "info.cfg", alloc, texture_slot, alloc, loaded_before, 0);
-    fish->info = fish_info[fish_kind];
+    fish->info = *info;
     fish->SetScale();
     fish->fish_kind = fish_kind;
 }
 
 char *GetFishFileName(int fish_kind) {
-    if (fish_kind < 0 || std::cmp_greater_equal(fish_kind, fish_file_names.size())) {
-        return nullptr;
-    }
-
-    return fish_file_names[fish_kind];
+    return fishing::ModelPath(fish_kind);
 }
 
 } // namespace dc::game

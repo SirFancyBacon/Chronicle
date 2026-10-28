@@ -17,6 +17,7 @@
 #include "dataread.hpp"
 #include "editloop.hpp"
 #include "gamepad.hpp"
+#include "fishing/host.hpp"
 #include "item/host.hpp"
 #include "itemdata.hpp"
 #include "mainselect.hpp"
@@ -5921,12 +5922,9 @@ int FishingExchangeLoop() {
 
 s8 FishMsg[18] = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 0, 1, 2, 3, 4, 5, 6, 7};
 
+// FishMsg is the compiled species' names (fishing/host.cpp); the species answer.
 int GetFishMsgNo(int fish_no) {
-    if (fish_no < 0 || fish_no >= 18) {
-        return 0;
-    }
-
-    return FishMsg[fish_no] + 30;
+    return fishing::NameMessage(fish_no);
 }
 
 SV_FISH_DATA *GetFishingRankData(int rank_index) {

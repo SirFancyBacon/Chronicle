@@ -751,6 +751,10 @@ int OrphanNumber(std::string_view id) {
     return number;
 }
 
+std::string VanillaItemId(int number) {
+    return VanillaId(number);
+}
+
 bool IsOrphan(int number) {
     const Custom *custom = CustomAt(number);
     return custom != nullptr && custom->orphan;

@@ -1987,7 +1987,7 @@ converted originals (`docs/MODEL_FRAMEWORK.md`).
 `extract` and `publish-gameplay` write the gameplay documents tracked in
 `port/gameplay` into the data under `gameplay/`, from the seed the build
 seals beside `dcdata` (`assets/data.zip`), so a package ships that folder with
-it (`docs/ITEM_FRAMEWORK.md`).
+it (`docs/ITEM_FRAMEWORK.md`, `docs/FISHING_FRAMEWORK.md`).
 
 The layout of `data/` or the root of `data.zip` is the disc archive's own: `dun/pack/maindat.pac`,
 `commenu/a_eng/savetex.pak`, `sound/bgm/...` and so on. Lookups fold case,

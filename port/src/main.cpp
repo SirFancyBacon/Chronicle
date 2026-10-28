@@ -37,6 +37,7 @@
 #include "dun/gameloop.hpp"
 #include "gamemode.hpp"
 #include "gfx/gfx.hpp"
+#include "fishing/host.hpp"
 #include "item/host.hpp"
 #include "langset.hpp"
 #include "localize/localize.hpp"
@@ -138,7 +139,7 @@ float g_switch_render_scale = 0.0f;
                  "  --display-per-tick N  headless: also render N interpolated display frames per tick\n"
 #endif
                  "  --export-text DIR  write the game's message files to DIR as language JSON (docs/LOCALIZATION.md)\n"
-                 "  --export-gameplay DIR  write the item tables to DIR as gameplay documents, a starting point\n"
+                 "  --export-gameplay DIR  write the item and fishing tables to DIR as gameplay documents, a starting point\n"
                  "                     for a datapack (docs/ITEM_FRAMEWORK.md)\n"
                  "  --font FILE        draw message text from this TrueType font (else lang/font.ttf)\n"
                  "  --show-fps         draw the FPS counter on presented frames when headless too\n"
@@ -554,7 +555,8 @@ int Run(int argc, const char **argv) {
     }
     if (options.export_gameplay != nullptr) {
         // The tables are compiled in, so this needs no disc data, no window and no game.
-        return item::Export(PathsFromUtf8(options.export_gameplay)) ? kExitOk : kExitFailure;
+        const std::filesystem::path directory = PathsFromUtf8(options.export_gameplay);
+        return item::Export(directory) && fishing::Export(directory) ? kExitOk : kExitFailure;
     }
     FirstRunIfNoData(options.headless);
     DC_ANDROID_TRACE("Run: first-run check passed");

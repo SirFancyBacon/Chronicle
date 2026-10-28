@@ -109,6 +109,12 @@ game::ITEM_DATA *CustomItemData(int number);
 const game::ITEM_MONEY_ENTRY *CustomPrice(int number);
 
 /**
+ * A vanilla item's ID from its number, whether or not the registry is loaded: vanilla:item_<number>
+ * for a number the decomp has not named.
+ */
+std::string VanillaItemId(int number);
+
+/**
  * A custom item's model name, as ITEM_NAME_TBL_NEW holds retail's; null for none or not a custom item.
  */
 const char *CustomModel(int number);

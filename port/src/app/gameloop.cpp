@@ -33,6 +33,7 @@
 #include "gamemode.hpp"
 #include "gamepad.hpp"
 #include "item/framework.hpp"
+#include "fishing/host.hpp"
 #include "item/host.hpp"
 #include "langset.hpp"
 #include "localize/localize.hpp"
@@ -816,6 +817,7 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
     // The items read their documents from the data as well as the packs, so they load once it is indexed.
     datapacks::Load(PathsDataRoot());
     item::Load();
+    fishing::Load();
     // With one language there is nothing to choose: the game starts in it, past the language
     // select, as retail NTSC does. With several the select offers retail's five.
     std::vector<s32> languages = SupportedLanguages();

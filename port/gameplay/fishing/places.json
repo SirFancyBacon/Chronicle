@@ -1,0 +1,173 @@
+{
+  "kind": "fishing_places",
+  "places": [
+    {
+      "draw_under_water": true,
+      "fish_count": 4,
+      "id": "vanilla:norune",
+      "spawn": {
+        "fish": [
+          {
+            "fish": "vanilla:fish_1",
+            "weight": 1
+          },
+          {
+            "fish": "vanilla:fish_2",
+            "weight": 1
+          },
+          {
+            "fish": "vanilla:fish_6",
+            "weight": 1
+          },
+          {
+            "fish": "vanilla:fish_7",
+            "weight": 1
+          }
+        ],
+        "stage": "retail"
+      },
+      "spot": 0
+    },
+    {
+      "draw_under_water": true,
+      "fish_count": 5,
+      "id": "vanilla:matataki_1",
+      "spawn": {
+        "fish": [
+          {
+            "fish": "vanilla:fish_1",
+            "weight": 35
+          },
+          {
+            "fish": "vanilla:fish_4",
+            "weight": 35
+          },
+          {
+            "fish": "vanilla:fish_9",
+            "weight": 10
+          },
+          {
+            "fish": "vanilla:fish_10",
+            "weight": 20
+          }
+        ],
+        "stage": "retail"
+      },
+      "spot": 1
+    },
+    {
+      "draw_under_water": true,
+      "fish_count": 5,
+      "id": "vanilla:matataki_2",
+      "spawn": {
+        "fish": [
+          {
+            "fish": "vanilla:fish_2",
+            "weight": 1
+          },
+          {
+            "fish": "vanilla:fish_4",
+            "weight": 1
+          },
+          {
+            "fish": "vanilla:fish_6",
+            "weight": 1
+          }
+        ],
+        "rare": {
+          "fish": [
+            {
+              "fish": "vanilla:fish_17",
+              "weight": 1
+            },
+            {
+              "fish": "vanilla:fish_5",
+              "weight": 4
+            }
+          ],
+          "interval": {
+            "day": 50,
+            "evening": 20,
+            "morning": 25,
+            "night": 35
+          }
+        },
+        "stage": "retail"
+      },
+      "spot": 2
+    },
+    {
+      "draw_under_water": false,
+      "fish_count": 5,
+      "id": "vanilla:queens",
+      "spawn": {
+        "fish": [
+          {
+            "fish": "vanilla:fish_0",
+            "weight": 1
+          },
+          {
+            "fish": "vanilla:fish_3",
+            "weight": 1
+          },
+          {
+            "fish": "vanilla:fish_11",
+            "weight": 1
+          },
+          {
+            "fish": "vanilla:fish_12",
+            "weight": 1
+          },
+          {
+            "fish": "vanilla:fish_13",
+            "weight": 1
+          }
+        ],
+        "stage": "retail"
+      },
+      "spot": 3
+    },
+    {
+      "draw_under_water": true,
+      "fish_count": 4,
+      "id": "vanilla:muska_lacka",
+      "spawn": {
+        "fish": [
+          {
+            "fish": "vanilla:fish_14",
+            "weight": 40
+          },
+          {
+            "fish": "vanilla:fish_15",
+            "weight": 30
+          },
+          {
+            "fish": "vanilla:fish_16",
+            "weight": 30
+          }
+        ],
+        "rare": {
+          "fish": [
+            {
+              "fish": "vanilla:fish_17",
+              "weight": 1
+            },
+            {
+              "fish": "vanilla:fish_5",
+              "weight": 4
+            }
+          ],
+          "interval": {
+            "day": 50,
+            "evening": 20,
+            "morning": 25,
+            "night": 35
+          }
+        },
+        "stage": "retail"
+      },
+      "spot": 4
+    }
+  ],
+  "schema_version": 2
+}

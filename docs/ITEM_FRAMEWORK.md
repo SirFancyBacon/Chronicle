@@ -72,8 +72,9 @@ are. The build checks them and seals them into Kazarov's gameplay seed (`assets/
 data extracted before, writes them into the data under `gameplay/`. They hold the tables as compiled
 (`ItemDocuments.TheTrackedDocumentsHoldTheCompiledTables`).
 
-`darkcloud --export-gameplay <directory>` writes the documents as compiled, so changing one item
-means copying its table's document into a pack and editing a line.
+`darkcloud --export-gameplay <directory>` writes the documents as compiled (the fishing ones too,
+docs/FISHING_FRAMEWORK.md), so changing one item means copying its table's document into a pack and
+editing a line.
 
 What a change reaches:
 
