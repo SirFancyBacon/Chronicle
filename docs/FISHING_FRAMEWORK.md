@@ -5,7 +5,14 @@ datapacks can replace, as the item tables are (docs/ITEM_FRAMEWORK.md), and keep
 places in registries (`dc::fishing`, `port/src/fishing/`) that retail's fishing code asks.
 
 With no datapacks fishing plays as retail: the same fish at the same places with the same odds,
-points, names and prizes.
+points, names and prizes, except where the port makes the bite readable and fixes a size roll:
+
+- A fish that takes the hook holds it for half a second to a second (`kHookHoldFirst`,
+  `kHookHoldLast` in `port/include/game/fish.hpp`); retail's third of a second to five sixths left
+  too little time to press Cross.
+- The moment it takes the hook is marked by a splash, rings at the float and a strong rumble
+  (`FishingBiteCue`, `ebattle.cpp`), where retail's tug and rumble were much like a nibble's.
+- Sizes near a kind's largest are ramped into it rather than piling onto it (`SmoothFishSize`).
 
 ## Documents
 

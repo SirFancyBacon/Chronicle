@@ -210,6 +210,14 @@ char *GetFishFileName(int fish_kind);
 // Port additions.
 
 /**
+ * How many ticks a fish holds the hook before letting go, from the fewest to the most. Retail's 21 to
+ * 50 (a third of a second to five sixths) left too little time to press Cross once the float went
+ * under; the port gives half a second to a second.
+ */
+inline constexpr int kHookHoldFirst = 30;
+inline constexpr int kHookHoldLast = 60;
+
+/**
  * Exponent of the size lift that fixes retail's size roll (CFish::SetScale). Retail clamps every
  * roll past a kind's largest size to the largest, so the top display centimetre holds the whole
  * tail of the roll (8.5 fish in a million) and stands out against the centimetre below it, where a

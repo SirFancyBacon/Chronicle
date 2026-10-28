@@ -1380,6 +1380,23 @@ int PortEdMoveCheck(float *pos, float *velocity, float *out_pos, MoveCheckInfo *
     return result;
 }
 
+namespace {
+
+// Marks the moment a fish takes the hook, which retail let pass with a tug and a rumble much like a
+// nibble's: a splash, rings at the float and a strong rumble.
+void FishingBiteCue(float *float_pos) {
+    sceVu0FVECTOR ripple;
+    sceVu0CopyVector(ripple, float_pos);
+    ripple[1] = FishingGetWaterLevel();
+    SndSePlay(SE_FISHING_SPLASH, ripple, -1.0f, -1.0f);
+    EffectHamon(&EdEffectGroup, ripple, 10.0f);
+    EffectHamon(&EdEffectGroup, ripple, 15.0f);
+    EffectHamon(&EdEffectGroup, ripple, 20.0f);
+    GamePad.SetVibration(1, 255, 20);
+}
+
+} // namespace
+
 void EdMoveChara() {
     static sceVu0FVECTOR reference = {0.0f, 0.0f, 0.0f, 0.0f};
 
@@ -2191,6 +2208,7 @@ void EdMoveChara() {
 
                     if (fish_status == 8) {
                         chara_fishing = ED_FISHING_HOOKED;
+                        FishingBiteCue(float_pos);
                     }
                 }
 
@@ -2226,6 +2244,7 @@ void EdMoveChara() {
 
                 if (fish_status == 8) {
                     chara_fishing = ED_FISHING_HOOKED;
+                    FishingBiteCue(float_pos);
                 } else if (fish_status != 7) {
                     chara_fishing = ED_FISHING_WAIT_BITE;
                     st_cnt = 0;

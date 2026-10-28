@@ -159,6 +159,11 @@ void CFish::Step() {
                     action = FISH_ACTION_LEAVE;
                 }
 
+                // The tick it takes the hook counts down too.
+                if (action == FISH_ACTION_BITE_HOOK) {
+                    action_timer = kHookHoldFirst - 1 + rand() % (kHookHoldLast - kHookHoldFirst + 1);
+                }
+
                 break;
             case FISH_ACTION_BITE_HOOK:
                 action = FISH_ACTION_LEAVE;
