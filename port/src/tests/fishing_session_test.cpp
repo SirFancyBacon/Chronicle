@@ -77,7 +77,7 @@ public:
     }
     fishing::OutcomeContext Outcome() override {
         return {.add_points = [this](int added) { points += added; },
-                .record = [this](int kind, int size) { records.insert(records.end(), {kind, size}); },
+                .record = [this](const fishing::Catch &fish) { records.insert(records.end(), {fish.species->kind, fish.size}); },
                 .count_mardan_garayan = [this] { mardan_garayan++; },
                 .show = [this](const fishing::Catch &) { shown++; }};
     }

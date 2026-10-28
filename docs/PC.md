@@ -1214,7 +1214,8 @@ turns it off; headless and `--jump` runs never write it.
 
 `chronicle.dat`, beside a save's `save.dat`, holds what the save has that
 retail's image cannot: custom items and copies with state of their own
-(docs/ITEM_FRAMEWORK.md). Before the image's checksums are made, each
+(docs/ITEM_FRAMEWORK.md), and custom fish species' records
+(docs/FISHING_FRAMEWORK.md, `FISH`). Before the image's checksums are made, each
 framework takes its part out of the image (`ExtensionPrepare`), leaving what
 retail would hold there, so `save.dat` stays retail's and a save without
 custom items writes no `chronicle.dat` at all. The file is a set of chunks,

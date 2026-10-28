@@ -40,6 +40,10 @@ std::map<int, Place> &BySpot() {
 
 } // namespace
 
+bool Species::IsCustom() const {
+    return kind >= kCustomKindFirst;
+}
+
 float Species::Affinity(std::string_view bait, float fallback) const {
     const auto found = food_affinity.find(std::string(bait));
     return found != food_affinity.end() ? found->second : fallback;

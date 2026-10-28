@@ -1,10 +1,13 @@
 #pragma once
 
 #include <array>
+#include <bit>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -99,5 +102,66 @@ std::optional<ExtensionSets> ExtensionDecode(std::span<const std::uint8_t> bytes
  * The hash an image's chunks are kept under.
  */
 std::uint64_t ExtensionHash(std::span<const char> image);
+
+/**
+ * Builds a chunk's payload: numbers little-endian, text as a u16 length and its bytes.
+ */
+class ChunkWriter {
+public:
+    template <class T>
+    void Put(T value) {
+        if constexpr (std::endian::native == std::endian::big) {
+            value = std::byteswap(value);
+        }
+        const auto *bytes = reinterpret_cast<const std::uint8_t *>(&value);
+        bytes_.insert(bytes_.end(), bytes, bytes + sizeof(T));
+    }
+
+    void PutText(std::string_view text) {
+        Put(static_cast<std::uint16_t>(text.size()));
+        bytes_.insert(bytes_.end(), text.begin(), text.end());
+    }
+
+    std::vector<std::uint8_t> Take() { return std::move(bytes_); }
+
+private:
+    std::vector<std::uint8_t> bytes_;
+};
+
+/**
+ * Reads what ChunkWriter wrote; each Get is false once the payload runs short.
+ */
+class ChunkReader {
+public:
+    explicit ChunkReader(std::span<const std::uint8_t> bytes) : bytes_(bytes) {}
+
+    template <class T>
+    bool Get(T &value) {
+        if (bytes_.size() < sizeof(T)) {
+            return false;
+        }
+        std::memcpy(&value, bytes_.data(), sizeof(T));
+        if constexpr (std::endian::native == std::endian::big) {
+            value = std::byteswap(value);
+        }
+        bytes_ = bytes_.subspan(sizeof(T));
+        return true;
+    }
+
+    bool GetText(std::string &text) {
+        std::uint16_t size = 0;
+        if (!Get(size) || bytes_.size() < size) {
+            return false;
+        }
+        text.assign(reinterpret_cast<const char *>(bytes_.data()), size);
+        bytes_ = bytes_.subspan(size);
+        return true;
+    }
+
+    [[nodiscard]] bool Done() const { return bytes_.empty(); }
+
+private:
+    std::span<const std::uint8_t> bytes_;
+};
 
 } // namespace dc::save

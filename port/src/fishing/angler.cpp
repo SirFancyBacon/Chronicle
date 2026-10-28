@@ -23,17 +23,23 @@
 #include "mainselect.hpp"
 #include "item/framework.hpp"
 #include "item/host.hpp"
+#include "localize/localize.hpp"
 #include "mathutil.hpp"
 #include "savedata.hpp"
 #include "shop.hpp"
 #include "snd.hpp"
 #include "sound_effect.h"
+#include "text/gametext.hpp"
 
 namespace dc::fishing {
 
 using namespace dc::game;
 
 namespace {
+
+// The message a custom species' name is laid over the evaluation window as; the town's files stop
+// far below it.
+constexpr int kCustomNameMessage = 0x7F00;
 
 double Uniform() {
     return static_cast<double>(std::rand()) / (static_cast<double>(RAND_MAX) + 1.0);
@@ -266,6 +272,7 @@ public:
             return false;
         }
         EditMes1.auto_pos = MES_POS_TOP_LEFT;
+        ClsMesSetMessageOverlay(nullptr, nullptr);
         message_shown = false;
         return true;
     }
@@ -291,7 +298,15 @@ public:
 
     OutcomeContext Outcome() override {
         return {.add_points = [](int points) { SaveData->AddFishingPoint(points); },
-                .record = [](int kind, int size) { SaveData->SetFishingRank(kind, static_cast<float>(size)); },
+                .record =
+                    [](const Catch &fish) {
+                        // fish_data names a retail kind; a custom species' records are chronicle.dat's.
+                        if (fish.species != nullptr && fish.species->IsCustom()) {
+                            RecordCatch(fish);
+                        } else if (fish.species != nullptr) {
+                            SaveData->SetFishingRank(fish.species->kind, static_cast<float>(fish.size));
+                        }
+                    },
                 .count_mardan_garayan =
                     [] {
                         SaveData->CountMardanGarayan();
@@ -300,6 +315,13 @@ public:
                 .show =
                     [](const Catch &fish) {
                         EditMes1.mes_no[0] = GetFishMsgNo(fish.species != nullptr ? fish.species->kind : -1);
+                        // A custom species' name has no message of the town's: it is laid over the window.
+                        if (fish.species != nullptr && fish.species->IsCustom()) {
+                            static text::GameTextFile names;
+                            names.Set(kCustomNameMessage, SpeciesName(*fish.species, localize::LocalizeLanguageFile()));
+                            ClsMesSetMessageOverlay(&EditMes1, names.Data());
+                            EditMes1.mes_no[0] = kCustomNameMessage;
+                        }
                         EditMes1.values[0] = fish.size;
                         EditMes1.values[1] = fish.points;
                         EditMes1.values[2] = SaveData->GetFishingPoint();

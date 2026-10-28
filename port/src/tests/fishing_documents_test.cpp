@@ -225,6 +225,65 @@ TEST_F(FishingDocuments, ADocumentThatCannotBeUsedFallsBackWhole) {
     EXPECT_EQ(Tables(), compiled);
 }
 
+// A custom species, as a pack's document gives it.
+nlohmann::json Species(const std::string &id) {
+    return {
+        {"schema_version", 2                                                                },
+        {"kind",           "fish_species"                                                   },
+        {"id",             id                                                               },
+        {"model",          "chara/f06a.chr"                                                 },
+        {"model_size",     21.0                                                             },
+        {"min_size",       12.0                                                             },
+        {"max_size",       24.0                                                             },
+        {"min_fp",         50                                                               },
+        {"max_fp",         90                                                               },
+        {"food_affinity",  {{{"bait", "vanilla:carrot"}, {"affinity", 1.0}}}                },
+        {"text",           {{"en_gb", {{"name", "Moon Trout"}}}, {"fr_fr", {{"name", "Truite"}}}}}
+    };
+}
+
+TEST_F(FishingDocuments, ACustomSpeciesComesFromItsOwnDocumentWithAKindOfItsOwn) {
+    Pack("trout", "species/chronicle.moon_trout.json", Species("chronicle:moon_trout"));
+    Pack("trout", "species/chronicle.char.json", Species("chronicle:char"));
+    auto places = Document("places.json");
+    Row(places, "places", "spot", 0)["spawn"]["fish"] = nlohmann::json::array({
+        {{"fish", "chronicle:moon_trout"}, {"weight", 1}}
+    });
+    Pack("trout", "places.json", places);
+    Order(R"("trout")");
+    const fishing::Species *trout = fishing::FindSpecies("chronicle:moon_trout");
+    ASSERT_NE(trout, nullptr);
+    EXPECT_EQ(fishing::FindSpecies("chronicle:char")->kind, fishing::kCustomKindFirst); // ID order
+    EXPECT_EQ(trout->kind, fishing::kCustomKindFirst + 1);
+    EXPECT_TRUE(trout->IsCustom());
+    EXPECT_EQ(fishing::Info(trout->kind)->max_fp, 90);
+    EXPECT_STREQ(GetFishFileName(trout->kind), "chara/f06a.chr");
+    EXPECT_EQ(fishing::SpeciesName(*trout, "fr_fr"), "Truite");
+    EXPECT_EQ(fishing::SpeciesName(*trout, "de_de"), "Moon Trout");
+    EXPECT_FALSE(fishing::CountsAsMardanGarayan(trout->kind));
+    EXPECT_EQ(fishing::SpawnAt(0, ED_TIME_DAY).kinds, std::vector<int>(4, trout->kind));
+}
+
+TEST_F(FishingDocuments, ACustomSpeciesThatCannotBeReadIsLeftOutAndTold) {
+    Pack("bad", "species/chronicle.wrong_name.json", Species("chronicle:moon_trout"));
+    Pack("bad", "species/vanilla.fish_3.json", Species("vanilla:fish_3"));
+    auto nameless = Species("chronicle:nameless");
+    nameless.erase("text");
+    Pack("bad", "species/chronicle.nameless.json", nameless);
+    auto odd = Species("chronicle:odd");
+    odd["colour"] = "silver";
+    Pack("bad", "species/chronicle.odd.json", odd);
+    testing::internal::CaptureStderr();
+    Order(R"("bad")");
+    const std::string told = testing::internal::GetCapturedStderr();
+    EXPECT_EQ(fishing::FindSpecies("chronicle:moon_trout"), nullptr);
+    EXPECT_EQ(fishing::FindSpecies("chronicle:nameless"), nullptr);
+    EXPECT_NE(fishing::FindSpecies("chronicle:odd"), nullptr);
+    EXPECT_NE(told.find("chronicle.wrong_name.json"), std::string::npos) << told;
+    EXPECT_NE(told.find("vanilla namespace"), std::string::npos) << told;
+    EXPECT_NE(told.find("fields this version does not read: colour"), std::string::npos) << told;
+}
+
 TEST_F(FishingDocuments, EachPlaceSpawnsWithRetailsOdds) {
     using enum fishing::TimeOfDay;
     const auto expect = [](int spot, fishing::TimeOfDay time, const std::map<int, double> &odds) {

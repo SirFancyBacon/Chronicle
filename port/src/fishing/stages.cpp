@@ -228,9 +228,7 @@ public:
             context.count_mardan_garayan();
         }
         context.add_points(fish.points);
-        if (fish.species != nullptr) {
-            context.record(fish.species->kind, fish.size);
-        }
+        context.record(fish);
         context.show(fish);
     }
 };

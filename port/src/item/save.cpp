@@ -48,80 +48,31 @@ struct Record {
     State         state;
 };
 
-template <typename T>
-void Put(std::vector<std::uint8_t> &out, T value) {
-    if constexpr (std::endian::native == std::endian::big) {
-        value = std::byteswap(value);
-    }
-    const auto *bytes = reinterpret_cast<const std::uint8_t *>(&value);
-    out.insert(out.end(), bytes, bytes + sizeof(T));
-}
-
-void PutText(std::vector<std::uint8_t> &out, std::string_view text) {
-    Put(out, static_cast<std::uint16_t>(text.size()));
-    out.insert(out.end(), text.begin(), text.end());
-}
-
-class Reader {
-public:
-    explicit Reader(std::span<const std::uint8_t> bytes) : bytes_(bytes) {}
-
-    template <typename T>
-    bool Get(T &value) {
-        if (bytes_.size() < sizeof(T)) {
-            return false;
-        }
-        std::memcpy(&value, bytes_.data(), sizeof(T));
-        if constexpr (std::endian::native == std::endian::big) {
-            value = std::byteswap(value);
-        }
-        bytes_ = bytes_.subspan(sizeof(T));
-        return true;
-    }
-
-    bool GetText(std::string &text) {
-        std::uint16_t size = 0;
-        if (!Get(size) || bytes_.size() < size) {
-            return false;
-        }
-        text.assign(reinterpret_cast<const char *>(bytes_.data()), size);
-        bytes_ = bytes_.subspan(size);
-        return true;
-    }
-
-    bool Done() const {
-        return bytes_.empty();
-    }
-
-private:
-    std::span<const std::uint8_t> bytes_;
-};
-
 std::vector<std::uint8_t> Encode(std::uint64_t next_instance, const std::vector<Record> &records) {
-    std::vector<std::uint8_t> out;
-    Put(out, next_instance);
-    Put(out, static_cast<std::uint32_t>(records.size()));
+    save::ChunkWriter out;
+    out.Put(next_instance);
+    out.Put(static_cast<std::uint32_t>(records.size()));
     for (const Record &record : records) {
-        PutText(out, record.id);
-        Put(out, static_cast<std::uint8_t>(record.place));
-        Put(out, static_cast<std::uint16_t>(record.slot));
-        Put(out, record.vol);
-        Put(out, record.qty);
-        Put(out, record.instance);
+        out.PutText(record.id);
+        out.Put(static_cast<std::uint8_t>(record.place));
+        out.Put(static_cast<std::uint16_t>(record.slot));
+        out.Put(record.vol);
+        out.Put(record.qty);
+        out.Put(record.instance);
         if (record.instance != 0) {
-            Put(out, static_cast<std::int32_t>(record.state_version));
-            Put(out, static_cast<std::uint16_t>(record.state.size()));
+            out.Put(static_cast<std::int32_t>(record.state_version));
+            out.Put(static_cast<std::uint16_t>(record.state.size()));
             for (const auto &[name, value] : record.state) {
-                PutText(out, name);
-                Put(out, std::bit_cast<std::uint64_t>(value));
+                out.PutText(name);
+                out.Put(std::bit_cast<std::uint64_t>(value));
             }
         }
     }
-    return out;
+    return out.Take();
 }
 
 std::optional<std::vector<Record>> Decode(std::span<const std::uint8_t> bytes, std::uint64_t &next_instance) {
-    Reader        reader(bytes);
+    save::ChunkReader reader(bytes);
     std::uint32_t count = 0;
     if (!reader.Get(next_instance) || !reader.Get(count)) {
         return std::nullopt;

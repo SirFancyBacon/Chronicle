@@ -12,6 +12,7 @@
 #include <map>
 #include <optional>
 #include <print>
+#include <ranges>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -23,8 +24,12 @@
 #include "fishing/framework.hpp"
 #include "item/framework.hpp"
 #include "item/host.hpp"
+#include "data/data_read.hpp"
+#include "platform/datapacks.hpp"
 #include "platform/native_config.hpp"
 #include "platform/paths.hpp"
+#include "platform/vfs.hpp"
+#include "save/extension.hpp"
 #include "savedata.hpp"
 #include "shop.hpp"
 
@@ -249,6 +254,40 @@ bool ValidModel(std::string_view path) {
            std::ranges::all_of(path, [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '/' || c == '.'; });
 }
 
+// What a species row and a custom species' document share: the model, sizes, points and likings.
+void ParseFish(Species &species, const Json &row, std::string_view where) {
+    species.model = native_config::At(row, "model").get<std::string>();
+    if (!ValidModel(species.model)) {
+        throw std::runtime_error(std::format("{} model \"{}\" is not a path in the data", where, species.model));
+    }
+    species.model_size = Positive(row, "model_size", where);
+    species.min_size = Positive(row, "min_size", where);
+    species.max_size = Positive(row, "max_size", where);
+    if (species.max_size <= species.min_size) {
+        throw std::runtime_error(std::format("{} max_size must be above min_size", where));
+    }
+    species.min_fp = native_config::Int(row, "min_fp");
+    species.max_fp = native_config::Int(row, "max_fp");
+    if (species.min_fp < 0 || species.max_fp < 0) {
+        throw std::runtime_error(std::format("{} points cannot be negative", where));
+    }
+    for (const Json &liking : native_config::Array(row, "food_affinity")) {
+        const std::string bait = native_config::At(liking, "bait").get<std::string>();
+        const item::Def  *def = item::Find(bait);
+        if (def == nullptr || !def->Has<item::Bait>()) {
+            throw std::runtime_error(std::format("{} likes {}, which is not a bait", where, bait));
+        }
+        // 2 makes a fish take the bait at every check: retail takes it at half its liking.
+        const float affinity = native_config::Float(native_config::At(liking, "affinity"));
+        if (affinity < 0.0f || affinity > 2.0f) {
+            throw std::runtime_error(std::format("{} affinity for {} must be from 0 to 2", where, bait));
+        }
+        if (!species.food_affinity.emplace(bait, affinity).second) {
+            throw std::runtime_error(std::format("{} names {} twice", where, bait));
+        }
+    }
+}
+
 Parsed<std::vector<Species>> ParseSpecies(const Json &document) {
     Parsed<std::vector<Species>> parsed;
     std::map<int, Species>       by_kind;
@@ -262,40 +301,11 @@ Parsed<std::vector<Species>> ParseSpecies(const Json &document) {
         if (species.id != VanillaSpeciesId(kind)) {
             throw std::runtime_error(std::format("{} is {}, not {}", where, VanillaSpeciesId(kind), species.id));
         }
-        species.model = native_config::At(row, "model").get<std::string>();
-        if (!ValidModel(species.model)) {
-            throw std::runtime_error(std::format("{} model \"{}\" is not a path in the data", where, species.model));
-        }
         species.name_msg = native_config::Int(row, "name_msg");
         if (species.name_msg < 0 || species.name_msg > 0x7FFF) {
             throw std::runtime_error(std::format("{} name_msg {} is not a message number", where, species.name_msg));
         }
-        species.model_size = Positive(row, "model_size", where);
-        species.min_size = Positive(row, "min_size", where);
-        species.max_size = Positive(row, "max_size", where);
-        if (species.max_size <= species.min_size) {
-            throw std::runtime_error(std::format("{} max_size must be above min_size", where));
-        }
-        species.min_fp = native_config::Int(row, "min_fp");
-        species.max_fp = native_config::Int(row, "max_fp");
-        if (species.min_fp < 0 || species.max_fp < 0) {
-            throw std::runtime_error(std::format("{} points cannot be negative", where));
-        }
-        for (const Json &liking : native_config::Array(row, "food_affinity")) {
-            const std::string bait = native_config::At(liking, "bait").get<std::string>();
-            const item::Def  *def = item::Find(bait);
-            if (def == nullptr || !def->Has<item::Bait>()) {
-                throw std::runtime_error(std::format("{} likes {}, which is not a bait", where, bait));
-            }
-            // 2 makes a fish take the bait at every check: retail takes it at half its liking.
-            const float affinity = native_config::Float(native_config::At(liking, "affinity"));
-            if (affinity < 0.0f || affinity > 2.0f) {
-                throw std::runtime_error(std::format("{} affinity for {} must be from 0 to 2", where, bait));
-            }
-            if (!species.food_affinity.emplace(bait, affinity).second) {
-                throw std::runtime_error(std::format("{} names {} twice", where, bait));
-            }
-        }
+        ParseFish(species, row, where);
         species.mardan_garayan = Bool(row, "mardan_garayan", where);
         NoteUnknown(row, {"fish_kind", "id", "model", "name_msg", "model_size", "min_size", "max_size", "min_fp", "max_fp", "food_affinity", "mardan_garayan"},
                     parsed.unknown);
@@ -323,6 +333,76 @@ void MakeStages(Place &place, const Json &row, std::string_view where) {
     } catch (const std::exception &error) {
         throw std::runtime_error(std::format("{} {}", where, error.what()));
     }
+}
+
+// A custom species, from its own document, gameplay/fishing/species/<namespace>.<name>.json.
+Species ParseCustomSpecies(std::string_view file, const Json &document) {
+    const Json &id = native_config::At(document, "id");
+    if (!id.is_string() || !item::ValidId(id.get_ref<const std::string &>())) {
+        throw std::runtime_error("id must be namespace:name in lower-case letters, digits and underscores");
+    }
+    Species species{.id = id.get<std::string>(), .kind = -1};
+    if (species.id.starts_with("vanilla:")) {
+        throw std::runtime_error("the vanilla namespace is retail's fish, in fish.json");
+    }
+    std::string expected = species.id;
+    std::ranges::replace(expected, ':', '.');
+    if (vfs::FoldKey(file) != vfs::FoldKey(expected + ".json")) {
+        throw std::runtime_error(std::format("a species with id {} belongs in {}.json", species.id, expected));
+    }
+    ParseFish(species, document, species.id);
+    species.mardan_garayan = document.contains("mardan_garayan") && Bool(document, "mardan_garayan", species.id);
+    for (const auto &[language, entry] : native_config::At(document, "text").items()) {
+        const Json &name = native_config::At(entry, "name");
+        if (!name.is_string() || name.get_ref<const std::string &>().empty()) {
+            throw std::runtime_error(std::format("text {}: name must be a string", language));
+        }
+        species.names[language] = name.get<std::string>();
+    }
+    if (species.names.empty()) {
+        throw std::runtime_error("text needs a name in at least one language");
+    }
+    std::set<std::string> unknown;
+    NoteUnknown(document, {"schema_version", "kind", "id", "model", "model_size", "min_size", "max_size", "min_fp", "max_fp", "food_affinity", "mardan_garayan", "text"},
+                unknown);
+    if (!unknown.empty()) {
+        std::string names;
+        for (const std::string &name : unknown) {
+            names += names.empty() ? name : ", " + name;
+        }
+        native_config::Report(std::format("gameplay/fishing/species/{}", file), "fields this version does not read: " + names);
+    }
+    return species;
+}
+
+// The custom species from the packs and the data, each named file once, in ID order.
+std::vector<Species> LoadCustomSpecies() {
+    std::map<std::string, std::string> files;
+    for (const std::string &name : platform::datapacks::Members("gameplay/fishing/species")) {
+        files.try_emplace(vfs::FoldKey(name), name);
+    }
+    if (data::DataReadIndexed()) {
+        constexpr std::string_view kFolder = "gameplay/fishing/species/";
+        for (const std::string &path : data::DataReadListFiles()) {
+            if (path.size() > kFolder.size() && vfs::FoldKey(path.substr(0, kFolder.size())) == vfs::FoldKey(kFolder) &&
+                path.find('/', kFolder.size()) == std::string::npos) {
+                files.try_emplace(vfs::FoldKey(path.substr(kFolder.size())), path.substr(kFolder.size()));
+            }
+        }
+    }
+    std::map<std::string, Species> by_id;
+    for (const std::string &name : std::views::values(files)) {
+        native_config::Read(std::format("fishing/species/{}", name), "fish_species", [&](const Json &document) {
+            Species           species = ParseCustomSpecies(name, document);
+            const std::string id = species.id;
+            by_id.insert_or_assign(id, std::move(species));
+        });
+    }
+    std::vector<Species> species;
+    for (auto &[id, one] : by_id) {
+        species.push_back(std::move(one));
+    }
+    return species;
 }
 
 Parsed<std::vector<Place>> ParsePlaces(const Json &document) {
@@ -406,7 +486,77 @@ T Read(std::string_view path, std::string_view kind, Parsed<T> (*parse)(const Js
     return std::move(parsed->value);
 }
 
-std::map<int, FishInfo> g_info;
+std::map<int, FishInfo>                            g_info;
+std::map<std::string, SpeciesRecord, std::less<>> g_records;
+
+constexpr std::uint32_t kRecordsVersion = 1;
+
+std::optional<save::ExtensionChunk> RecordsChunk(CSaveData & /*image*/) {
+    if (g_records.empty()) {
+        return std::nullopt;
+    }
+    save::ChunkWriter out;
+    out.Put(static_cast<std::uint32_t>(g_records.size()));
+    for (const auto &[id, record] : g_records) {
+        out.PutText(id);
+        out.Put(static_cast<std::uint32_t>(record.caught));
+        out.Put(static_cast<std::int32_t>(record.largest));
+        out.Put(static_cast<std::uint16_t>(record.baits.size()));
+        for (const std::string &bait : record.baits) {
+            out.PutText(bait);
+        }
+    }
+    save::ExtensionChunk chunk;
+    chunk.tag = {'F', 'I', 'S', 'H'};
+    chunk.version = kRecordsVersion;
+    chunk.payload = out.Take();
+    return chunk;
+}
+
+std::optional<std::map<std::string, SpeciesRecord, std::less<>>> DecodeRecords(std::span<const std::uint8_t> bytes) {
+    save::ChunkReader                                 reader(bytes);
+    std::map<std::string, SpeciesRecord, std::less<>> records;
+    std::uint32_t                                     count = 0;
+    if (!reader.Get(count)) {
+        return std::nullopt;
+    }
+    for (std::uint32_t index = 0; index < count; index++) {
+        std::string   id;
+        std::uint32_t caught = 0;
+        std::int32_t  largest = 0;
+        std::uint16_t baits = 0;
+        if (!reader.GetText(id) || !reader.Get(caught) || !reader.Get(largest) || !reader.Get(baits)) {
+            return std::nullopt;
+        }
+        SpeciesRecord record{.caught = static_cast<int>(caught), .largest = largest};
+        for (std::uint16_t bait = 0; bait < baits; bait++) {
+            if (!reader.GetText(record.baits.emplace_back())) {
+                return std::nullopt;
+            }
+        }
+        records.insert_or_assign(std::move(id), std::move(record));
+    }
+    if (!reader.Done()) {
+        return std::nullopt;
+    }
+    return records;
+}
+
+void RestoreRecords(const save::ExtensionChunk *chunk) {
+    g_records.clear();
+    if (chunk == nullptr) {
+        return;
+    }
+    std::optional<std::map<std::string, SpeciesRecord, std::less<>>> records;
+    if (chunk->version == kRecordsVersion) {
+        records = DecodeRecords(chunk->payload);
+    }
+    if (!records) {
+        std::println(stderr, "fishing: the save's records of custom fish cannot be read (version {}); they are left out", chunk->version);
+        return;
+    }
+    g_records = std::move(*records);
+}
 std::vector<BaitInfo>    g_baits;
 const Place             *g_current = nullptr;
 Place                    g_fallback; // retail's bite, fight and outcome for a spot no place is
@@ -453,7 +603,13 @@ void Load() {
             add_bait(*def);
         }
     }
-    for (Species &species : Read<std::vector<Species>>("fishing/fish.json", "fish", ParseSpecies, SpeciesDocument())) {
+    std::vector<Species> all = Read<std::vector<Species>>("fishing/fish.json", "fish", ParseSpecies, SpeciesDocument());
+    int                  next_kind = kCustomKindFirst;
+    for (Species &custom : LoadCustomSpecies()) {
+        custom.kind = next_kind++;
+        all.push_back(std::move(custom));
+    }
+    for (Species &species : all) {
         FishInfo info{.model_size = species.model_size,
                       .min_size = species.min_size,
                       .max_size = species.max_size,
@@ -471,6 +627,7 @@ void Load() {
     }
     std::ranges::copy(Read<std::array<FISH_EXCHANGE_ITEM, kPrizeRows>>("fishing/prizes.json", "fish_prizes", ParsePrizes, PrizesDocument()),
                       exitemlst);
+    save::ExtensionRegister("FISH", RecordsChunk, RestoreRecords);
 }
 
 bool Export(const std::filesystem::path &directory) {
@@ -526,6 +683,33 @@ Spawning SpawnAt(int spot, int time_of_day) {
         spawning.kinds.push_back(species != nullptr ? species->kind : -1);
     }
     return spawning;
+}
+
+const SpeciesRecord *RecordOf(std::string_view species) {
+    const auto found = g_records.find(species);
+    return found != g_records.end() ? &found->second : nullptr;
+}
+
+void RecordCatch(const Catch &fish) {
+    if (fish.species == nullptr) {
+        return;
+    }
+    SpeciesRecord &record = g_records[fish.species->id];
+    record.caught++;
+    record.largest = std::max(record.largest, fish.size);
+    if (!fish.bait.empty() && std::ranges::find(record.baits, fish.bait) == record.baits.end()) {
+        record.baits.emplace_back(fish.bait);
+    }
+}
+
+const std::string &SpeciesName(const Species &species, std::string_view language) {
+    static const std::string none;
+    for (const std::string_view wanted : {language, std::string_view("en_gb"), std::string_view("en_us")}) {
+        if (const auto found = species.names.find(std::string(wanted)); found != species.names.end()) {
+            return found->second;
+        }
+    }
+    return species.names.empty() ? none : species.names.begin()->second;
 }
 
 TimeOfDay TimeOfDayNow() {

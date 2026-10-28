@@ -19,6 +19,8 @@ class CCameraFollow;
 namespace dc::fishing {
 
 struct Place;
+struct Species;
+struct Catch;
 enum class TimeOfDay;
 
 /**
@@ -66,6 +68,31 @@ struct Spawning {
  * becomes the current place. A spot no place is has five empty places, as retail.
  */
 Spawning SpawnAt(int spot, int time_of_day);
+
+/**
+ * A custom species' catches, kept in chronicle.dat's FISH chunk: retail's kinds are in save.dat's
+ * fish_data. Records of a species whose document is gone are kept and written back.
+ */
+struct SpeciesRecord {
+    int                      caught = 0;
+    int                      largest = 0; /**< In the records' units, tenths of a size unit. */
+    std::vector<std::string> baits;       /**< Item IDs of the baits it has been caught with. */
+};
+
+/**
+ * A custom species' record, or null for one never caught.
+ */
+const SpeciesRecord *RecordOf(std::string_view species);
+
+/**
+ * Adds a catch of a custom species to its record.
+ */
+void RecordCatch(const Catch &fish);
+
+/**
+ * A custom species' name in a language file (fr_fr), else English, else the first it has.
+ */
+const std::string &SpeciesName(const Species &species, std::string_view language);
 
 /**
  * The time of day now, as the spawn's intervals know it.

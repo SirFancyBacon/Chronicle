@@ -1,3 +1,7 @@
+// nlohmann/json (through the fishing framework) before the game headers, whose one-letter macros it
+// cannot stand.
+#include "fishing/framework.hpp"
+
 #include <gtest/gtest.h>
 #include <libpad.h>
 
@@ -16,6 +20,7 @@
 #include "app/gameloop.hpp"
 #include "dngstatusdata.hpp"
 #include "dun/gameloop.hpp"
+#include "fishing/host.hpp"
 #include "gamepad.hpp"
 #include "item/framework.hpp"
 #include "item/host.hpp"
@@ -608,6 +613,41 @@ std::vector<char> BuildImage() {
 
 ITEM_PACK &PackOf(CSaveData &save) {
     return save.GetDngStatus()->item_pack;
+}
+
+TEST(SaveSlots, ACustomFishsRecordGoesToChronicleDatAndOutlivesItsDefinition) {
+    fs::path root = UseTempSaveRoot();
+    PrepareSave();
+    item::Load();
+    fishing::Load();
+    fishing::RegisterSpecies(fishing::Species{.id = "chronicle:moon_trout", .kind = fishing::kCustomKindFirst});
+    const fishing::Species *trout = fishing::FindSpecies("chronicle:moon_trout");
+    const std::vector<char> retail = BuildImage();
+    fishing::RecordCatch({.species = trout, .size = 150, .bait = "vanilla:carrot"});
+    fishing::RecordCatch({.species = trout, .size = 182, .bait = "vanilla:minon"});
+    fishing::RecordCatch({.species = trout, .size = 120, .bait = "vanilla:carrot"});
+
+    ASSERT_EQ(BuildImage(), retail); // fish_data never sees a custom kind
+    ASSERT_EQ(SaveNew(0), 1);
+    ASSERT_TRUE(fs::exists(SlotOf(root, 0) / "chronicle.dat"));
+
+    // Loaded with the species' pack gone, the record waits for it and is saved again as it was.
+    save::ExtensionNewGame();
+    EXPECT_EQ(fishing::RecordOf("chronicle:moon_trout"), nullptr);
+    fishing::Load();
+    EXPECT_EQ(fishing::FindSpecies("chronicle:moon_trout"), nullptr);
+    g_mc.file_no = 0;
+    ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_LOAD), 1);
+    ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_SAVE), 1);
+    save::ExtensionNewGame();
+    ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_LOAD), 1);
+    const fishing::SpeciesRecord *record = fishing::RecordOf("chronicle:moon_trout");
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->caught, 3);
+    EXPECT_EQ(record->largest, 182);
+    EXPECT_EQ(record->baits, (std::vector<std::string>{"vanilla:carrot", "vanilla:minon"}));
+    save::ExtensionNewGame();
+    fs::remove_all(root);
 }
 
 TEST(SaveSlots, CustomItemsGoToChronicleDatAndSaveDatStaysRetails) {

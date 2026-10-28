@@ -31,12 +31,20 @@ struct Species {
     int                          max_fp = 0;
     std::map<std::string, float> food_affinity; /**< Liking by bait item ID; a bait left out is not liked. */
     bool                         mardan_garayan = false; /**< Counted toward the Mardan Garayan. */
+    std::map<std::string, std::string> names; /**< A custom species' name by language file; retail's are name_msg. */
+
+    [[nodiscard]] bool IsCustom() const;
 
     /**
      * The liking for a bait, or fallback (the bait's default_affinity) for one it doesn't name.
      */
     [[nodiscard]] float Affinity(std::string_view bait, float fallback = 0.0f) const;
 };
+
+/**
+ * Custom species' kinds start here, in ID order; retail's are 0 to 17, which the save's records keep.
+ */
+inline constexpr int kCustomKindFirst = 256;
 
 enum class TimeOfDay {
     Day,
@@ -196,7 +204,7 @@ void Publish(const Lost &fish);
  */
 struct OutcomeContext {
     std::function<void(int points)>              add_points;
-    std::function<void(int kind, int size)>      record;
+    std::function<void(const Catch &)>           record; /**< Into the records: the save's for retail's kinds, chronicle.dat's for custom ones. */
     std::function<void()>                        count_mardan_garayan;
     std::function<void(const Catch &)>           show; /**< The evaluation message. */
 };

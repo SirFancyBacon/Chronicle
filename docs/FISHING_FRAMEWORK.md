@@ -76,6 +76,38 @@ prints `config: <path>: <reason>` and the next is tried.
 any item by ID, and its price in fish points. The exchange screen draws a fixed list, so a document
 changes prizes and prices, not how many there are.
 
+## Custom species
+
+A pack adds a species with a document of its own, `gameplay/fishing/species/<namespace>.<name>.json`
+(the data may hold some too, read under the packs), as custom items are added:
+
+```json
+{
+  "schema_version": 2,
+  "kind": "fish_species",
+  "id": "chronicle:moon_trout",
+  "model": "chara/f06a.chr",
+  "model_size": 21.0, "min_size": 12.0, "max_size": 24.0,
+  "min_fp": 50, "max_fp": 90,
+  "food_affinity": [ { "bait": "vanilla:carrot", "affinity": 1.0 } ],
+  "mardan_garayan": false,
+  "text": { "en_gb": { "name": "Moon Trout" }, "fr_fr": { "name": "Truite de lune" } }
+}
+```
+
+The fields are a `fish.json` row's, with the name by language file (falling back to English, then
+the first given) in place of `name_msg`, and `mardan_garayan` false if left out. The file's name must
+be the ID with `.` for `:`, and `vanilla:` is retail's. Custom species get kinds from 256
+(`fishing::kCustomKindFirst`) in ID order, and a place's spawn names them like any species. The catch
+message gives the name by laying it over the evaluation window (`ClsMesSetMessageOverlay`), since the
+towns' message files have none.
+
+**Records.** `save.dat`'s `fish_data` names retail kinds, so a custom species' catches go instead into
+`chronicle.dat`'s `FISH` chunk (docs/PC.md, "Saves"): for each species, by ID, how many have been
+caught, the largest and the baits it has been caught with (`fishing::RecordOf`). Records of a species
+whose document is gone are kept and written back until it returns. Its points still go to the save's
+fish points, which are only a number.
+
 ## Baits
 
 Any item with the `Bait` trait is a bait: retail's thirteen, and custom items whose document has a
