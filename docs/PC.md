@@ -588,7 +588,8 @@ For tests and debugging only; nothing the game does depends on them.
   one tick, its fades to two or four ticks and its holds (PAL 120, 183 and 83
   ticks) to two. The modes' own fades are untouched.
 - `--give ITEM,...` (or `DC_GIVE`) gives the party the items and weapons it
-  lacks, by their numbers in `ps2/include/itemdata.hpp` (`ITEM_*`), each time a
+  lacks, by their numbers in `ps2/include/itemdata.hpp` (`ITEM_*`) or a custom
+  item's ID (`chronicle:rod_2`; one no pack defines is told and skipped), each time a
   town or dungeon starts, through `CDngStatusData::GetItem` as an event's gift
   would: an item into the dungeon inventory, a weapon to the character it
   belongs to. One already held is skipped. `--give 210,211` gives the Sun and

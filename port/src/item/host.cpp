@@ -721,6 +721,19 @@ const char *CustomModel(int number) {
     return custom != nullptr && !custom->model.empty() ? custom->model.c_str() : nullptr;
 }
 
+Kind KindOf(int number) {
+    if (number >= kCustomFirst) {
+        return CustomAt(number) != nullptr ? Kind::Item : Kind::None;
+    }
+    if (number >= ITEM_WEAPON_START) {
+        return Kind::Weapon;
+    }
+    if (number >= ITEM_DUNGEON_START) {
+        return Kind::Item;
+    }
+    return number >= ITEM_ATTACH_START ? Kind::Attachment : Kind::None;
+}
+
 const char *ModelName(int number) {
     if (number >= kCustomFirst) {
         return CustomModel(number);

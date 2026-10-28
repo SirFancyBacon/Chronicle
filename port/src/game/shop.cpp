@@ -962,7 +962,7 @@ void DrawShopIcon(int x, int y, int selected, int alpha) {
 int IsEnableCharge(int item_no) {
     int enable = false;
 
-    if (item_no >= ITEM_WEAPON_START) {
+    if (item::KindOf(item_no) == item::Kind::Weapon) {
         int          chara_no = WhoIsWeaponEquip(item_no);
         CUserStatus *status = ShopUserStatusPt;
         WEAPON_HAVE *weapons = status->chara_weapons[chara_no];
@@ -1860,7 +1860,7 @@ int ChargeShopKey() {
                             item = -1;
                         }
 
-                        if (item >= ITEM_WEAPON_START) {
+                        if (item::KindOf(item) == item::Kind::Weapon) {
                             value = ShopStockPt->weapons[cursor].level;
                         }
 
@@ -2581,7 +2581,7 @@ int SellMoneyCheck2() {
             if (item_no >= ITEM_ATTACH_START) {
                 int money = CalItemMoney(item_no, 1);
 
-                if (item_no >= ITEM_WEAPON_START) {
+                if (item::KindOf(item_no) == item::Kind::Weapon) {
                     money += WeaponCalMoney(&ShopListPt[i].data.weapon, 1);
                 }
 
@@ -4230,7 +4230,7 @@ int ItemShopKey2() {
 
                     money = CalItemMoney(item_no, 1);
 
-                    if (item_no >= ITEM_WEAPON_START) {
+                    if (item::KindOf(item_no) == item::Kind::Weapon) {
                         money += WeaponCalMoney(weapon, 1);
                         memset(weapon, 0, sizeof(WEAPON_HAVE));
                     }
@@ -4542,7 +4542,7 @@ int ItemShopKey2() {
                                 int enable = IsEnableCharge(target);
 
                                 if (enable != 0) {
-                                    if (target <= ITEM_WEAPON_START && target >= ITEM_DUNGEON_START) {
+                                    if (item::KindOf(target) == item::Kind::Item) {
                                         ITEM_DATA *data = GetItemData(target);
 
                                         if (data != nullptr && ((data->kind_flags & 0x10) || ShopHaveItemPt->item_no == ITEM_FISHING_ROD)) {
@@ -4551,7 +4551,7 @@ int ItemShopKey2() {
                                         }
                                     }
 
-                                    if (target >= ITEM_WEAPON_START) {
+                                    if (item::KindOf(target) == item::Kind::Weapon) {
                                         int chara = ShopMenu.board.cursor / 10;
 
                                         if (chara == IsDefaultWeapon(target)) {
@@ -4581,7 +4581,7 @@ int ItemShopKey2() {
                                 int wallet = ShopUserStatusPt->money;
                                 money = CalItemMoney(target, 1);
 
-                                if (target >= ITEM_WEAPON_START) {
+                                if (item::KindOf(target) == item::Kind::Weapon) {
                                     money += WeaponCalMoney(&ShopWeaponRow(ShopUserStatusPt, ShopMenu.board.cursor / 10)[ShopMenu.board.cursor % 10], 1);
                                 }
 
@@ -4798,7 +4798,7 @@ int ItemShopKey2() {
                     case SHOP_SIDE_STOCK:
                         item_no = ShopListPt[pos].item_no;
 
-                        if (item_no >= ITEM_WEAPON_START) {
+                        if (item::KindOf(item_no) == item::Kind::Weapon) {
                             value = ShopListPt[pos].data.weapon.level;
                         }
 
@@ -5005,7 +5005,7 @@ void ItemShopDraw2() {
 
                     int money = CalItemMoney(item_no, selling);
 
-                    if (item_no >= ITEM_WEAPON_START) {
+                    if (item::KindOf(item_no) == item::Kind::Weapon) {
                         money += WeaponCalMoney(&ShopListPt[cursor].data.weapon, selling);
                     }
 
@@ -5049,7 +5049,7 @@ void ItemShopDraw2() {
                     int ticket_y = static_cast<int>(6.0f + ShopMenu.board.y);
                     int money = CalItemMoney(item_no, 1);
 
-                    if (item_no >= ITEM_WEAPON_START) {
+                    if (item::KindOf(item_no) == item::Kind::Weapon) {
                         int          chara_no = ShopMenu.board.cursor / 10;
                         CUserStatus *status = ShopUserStatusPt;
                         WEAPON_HAVE *row = status->chara_weapons[chara_no];

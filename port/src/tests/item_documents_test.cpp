@@ -19,6 +19,7 @@
 #include "clsmes.hpp"
 #include "data/data_read.hpp"
 #include "data_fixture.hpp"
+#include "dngstatusdata.hpp"
 #include "fishing.hpp"
 #include "item/framework.hpp"
 #include "item/host.hpp"
@@ -26,6 +27,7 @@
 #include "mainselect.hpp"
 #include "platform/datapacks.hpp"
 #include "platform/paths.hpp"
+#include "savedata.hpp"
 #include "shop.hpp"
 #include "tests/platform_fixture.hpp"
 #include "text/gametext.hpp"
@@ -355,6 +357,30 @@ TEST_F(ItemDocuments, ACustomItemsNameAndDescriptionAnswerTheGamesLookups) {
     EXPECT_STREQ(model, "dun/item/main_data/turisao.mds");
     EXPECT_STREQ(item::ModelName(ITEM_PRICKLY), ITEM_NAME_TBL_NEW[ITEM_PRICKLY - ITEM_ATTACH_START]);
     EXPECT_EQ(item::ModelName(ITEM_WEAPON_START + 1), nullptr);
+}
+
+alignas(64) CSaveData g_custom_save;
+
+TEST_F(ItemDocuments, ACustomItemIsABagItemWhereRetailTellsKindsByNumber) {
+    Pack("rods", "custom/chronicle.rod_2.json", CustomItem("chronicle:rod_2"));
+    Order(R"("rods")");
+    const int number = item::kCustomFirst;
+    EXPECT_EQ(item::KindOf(number), item::Kind::Item);
+    EXPECT_EQ(item::KindOf(number + 1), item::Kind::None);
+    EXPECT_EQ(item::KindOf(0), item::Kind::None);
+    EXPECT_EQ(item::KindOf(ITEM_ATTACH_PERIDOT), item::Kind::Attachment);
+    EXPECT_EQ(item::KindOf(ITEM_PRICKLY), item::Kind::Item);
+    EXPECT_EQ(item::KindOf(ITEM_WEAPON_START), item::Kind::Weapon);
+    // Retail takes anything from ITEM_WEAPON_START up for a weapon; below the custom numbers it still does.
+    EXPECT_EQ(item::KindOf(ITEM_WEAPON_END), item::Kind::Weapon);
+
+    // Picked up in a dungeon, it goes into the bag; retail took it for a weapon and read past WeaponList.
+    g_custom_save.Initialize();
+    CDngStatusData &status = *g_custom_save.GetDngStatus();
+    const int       slot = status.GetItem(number, 0);
+    ASSERT_GE(slot, 0);
+    EXPECT_EQ(status.item_pack.item[slot], number);
+    EXPECT_EQ(status.SearchItemIndexNo(number), slot);
 }
 
 TEST_F(ItemDocuments, CustomItemsFromEveryPackAreHeardAndNumberedByID) {

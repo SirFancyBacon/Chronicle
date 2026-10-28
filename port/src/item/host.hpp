@@ -32,6 +32,22 @@ inline constexpr int kCustomFirst = 0x800; /**< Custom items' numbers start here
 inline constexpr int kCustomEnd = 0x1000;  /**< ...and stop before the copies' handles. */
 
 /**
+ * What retail's number ranges make an item.
+ */
+enum class Kind {
+    None,       /**< Not an item: below the attachments, or an unused custom number. */
+    Attachment, /**< ITEM_ATTACH_START up to ITEM_DUNGEON_START. */
+    Item,       /**< ITEM_DUNGEON_START up to ITEM_WEAPON_START, and every custom item. */
+    Weapon,     /**< ITEM_WEAPON_START up to the custom numbers. */
+};
+
+/**
+ * The kind of an item number. Retail tells kinds apart by ranges, often taking anything from
+ * ITEM_WEAPON_START up for a weapon; the code that would take a custom item for one asks this instead.
+ */
+Kind KindOf(int number);
+
+/**
  * A custom item's name and description in one language.
  */
 struct ItemText {

@@ -10,6 +10,7 @@
 #include <format>
 #include <memory>
 #include <print>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -31,6 +32,7 @@
 #include "editloop3.hpp"
 #include "gamemode.hpp"
 #include "gamepad.hpp"
+#include "item/framework.hpp"
 #include "item/host.hpp"
 #include "langset.hpp"
 #include "localize/localize.hpp"
@@ -128,10 +130,11 @@ void SetMainSelectParam(std::string_view text) {
 bool g_menu_chord_held = false;
 bool g_debug_r3_held = false;
 
-std::vector<int> g_give;
+// Retail's numbers, or custom items' IDs, which have numbers only once the items load.
+std::vector<std::string> g_give;
 
 bool Holds(CDngStatusData &status, int item) {
-    if (item >= ITEM_WEAPON_START) {
+    if (item::KindOf(item) == item::Kind::Weapon) {
         for (const auto &weapons : status.chara_weapons) {
             for (const WEAPON_HAVE &weapon : weapons) {
                 if (weapon.item_no == item) {
@@ -152,7 +155,18 @@ void GiveOnArrival() {
         return;
     }
     CDngStatusData &status = *SaveData->GetDngStatus();
-    for (int item : g_give) {
+    for (const std::string &given : g_give) {
+        int item = 0;
+        if (given.find(':') == std::string::npos) {
+            std::from_chars(given.data(), given.data() + given.size(), item);
+        } else {
+            const item::Def *def = item::Find(given);
+            if (def == nullptr) {
+                std::println(stderr, "--give: no item {}", given);
+                continue;
+            }
+            item = def->number;
+        }
         if (!Holds(status, item)) {
             status.GetItem(item, 0);
         }
@@ -606,18 +620,19 @@ void GameApplyLoopResult(int loop_mode, int result) {
 }
 
 bool GameSetGive(const char *list) {
-    std::vector<int> items;
-    std::string_view rest = list;
+    std::vector<std::string> items;
+    std::string_view         rest = list;
     for (bool more = true; more;) {
         std::string_view token = rest.substr(0, rest.find(','));
         more = token.size() < rest.size();
         rest.remove_prefix(std::min(rest.size(), token.size() + 1));
         int item = 0;
         auto [end, error] = std::from_chars(token.data(), token.data() + token.size(), item);
-        if (error != std::errc{} || end != token.data() + token.size() || item < 1 || item >= ITEM_WEAPON_END) {
+        const bool number = error == std::errc{} && end == token.data() + token.size() && item >= 1 && item < ITEM_WEAPON_END;
+        if (!number && token.find(':') == std::string_view::npos) {
             return false;
         }
-        items.push_back(item);
+        items.emplace_back(token);
     }
     g_give = std::move(items);
     return !g_give.empty();

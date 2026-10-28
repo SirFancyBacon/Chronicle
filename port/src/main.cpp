@@ -147,8 +147,8 @@ float g_switch_render_scale = 0.0f;
                  "  --jump MODE[:MAP]  start in edit:<map>, e01/e03/e04 (populated presets), dungeon:<0-6>, title, rush, opening or menu,\n"
                  "                     skipping the warm-up (DC_JUMP); see docs/PC.md\n"
                  "  --fast-load        loading-screen holds and fades of a few ticks (DC_FAST_LOAD=1)\n"
-                 "  --give ITEM,...    give the party these item and weapon numbers when a town or dungeon\n"
-                 "                     starts, unless it holds them (DC_GIVE); see docs/PC.md\n",
+                 "  --give ITEM,...    give the party these item and weapon numbers, or custom item IDs, when a\n"
+                 "                     town or dungeon starts, unless it holds them (DC_GIVE); see docs/PC.md\n",
                  program);
 #ifdef __SWITCH__
     std::fprintf(stderr, "  --switch-core-affinity separate|auto  pin game and render to separate cores "
