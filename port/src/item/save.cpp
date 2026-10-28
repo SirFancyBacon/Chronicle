@@ -298,10 +298,23 @@ void Restore(const save::ExtensionChunk *chunk) {
     }
 }
 
+// Whether the chunk names an item no loaded pack defines: one that would load as an orphan.
+bool Missing(const save::ExtensionChunk &chunk) {
+    std::uint64_t next_instance = 0;
+    if (chunk.version != kVersion) {
+        return false;
+    }
+    const std::optional<std::vector<Record>> records = Decode(chunk.payload, next_instance);
+    return records && std::ranges::any_of(*records, [](const Record &record) {
+        const Def *item = Find(record.id);
+        return item == nullptr || IsOrphan(item->number);
+    });
+}
+
 } // namespace
 
 void RegisterSaveChunk() {
-    save::ExtensionRegister("ITEM", Take, Restore);
+    save::ExtensionRegister("ITEM", Take, Restore, Missing);
 }
 
 } // namespace dc::item

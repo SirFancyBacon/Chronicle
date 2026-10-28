@@ -729,10 +729,16 @@ TEST(SaveSlots, AnItemWhoseDefinitionIsGoneWaitsAsAnOrphan) {
     pack.item[2] = static_cast<s16>(item::NewCopy(*item::Find("chronicle:bass")));
     BuildImage();
     ASSERT_EQ(SaveNew(0), 1);
+    ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_GET_ALL_SAVE_FILE_INFO), 1);
+    EXPECT_TRUE(SaveSlots.missing.empty());
 
     item::Unregister("chronicle:rod");
     item::Unregister("chronicle:bass");
     item::RebindCopies();
+
+    // The board marks the save before it loads.
+    ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_GET_ALL_SAVE_FILE_INFO), 1);
+    EXPECT_EQ(SaveSlots.missing, std::vector<int>{1});
     g_mc.file_no = 0;
     ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_LOAD), 1);
     const int rod = pack.item[1];
@@ -753,11 +759,16 @@ TEST(SaveSlots, AnItemWhoseDefinitionIsGoneWaitsAsAnOrphan) {
     // Saved again without their definitions, they keep their IDs and state...
     BuildImage();
     ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_SAVE), 1);
+    // ...still marked while they are orphans...
+    ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_GET_ALL_SAVE_FILE_INFO), 1);
+    EXPECT_EQ(SaveSlots.missing, std::vector<int>{1});
 
-    // ...and are themselves again once the definitions return.
+    // ...and they are themselves again once the definitions return.
     item::DropOrphans();
     item::Register(item::Def{.id = "chronicle:rod", .number = kRod});
     item::Register(item::Def{.id = "chronicle:bass", .number = kBass, .state = {{"size", 31.5}}, .state_version = 2});
+    ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_GET_ALL_SAVE_FILE_INFO), 1);
+    EXPECT_TRUE(SaveSlots.missing.empty());
     ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_LOAD), 1);
     EXPECT_EQ(pack.item[1], kRod);
     EXPECT_EQ(item::Definition(pack.item[2]), kBass);

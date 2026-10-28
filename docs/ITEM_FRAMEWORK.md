@@ -173,7 +173,8 @@ instance of its own.
 
 A saved item whose definition is missing, its pack turned off or removed, loads as an orphan: an
 "Unknown item" (`item.orphan.name`) that keeps its ID, instance and state, cannot be used or sold,
-and is saved again as it was. Once its definition returns it is itself again.
+and is saved again as it was. Once its definition returns it is itself again. The save and load
+screens show a "!" after the number of a save holding one.
 
 ## Quests
 

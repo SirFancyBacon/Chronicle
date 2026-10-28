@@ -391,6 +391,9 @@ int CMemoryCardAccess::GetSaveFileInfoFromMc(int file_no) {
 
     info.quest_total = std::min(info.quest_total, 9999);
 
+    if (ExtensionMissing(file_no, std::span(g_image, kImageSize))) {
+        SaveSlots.missing.push_back(info.file_no);
+    }
     SaveSlots.saves.push_back(info);
     return 1;
 }
@@ -400,6 +403,7 @@ int CMemoryCardAccess::GetAllSaveFileInfo() {
     std::memset(this->file_info, 0, sizeof(this->file_info));
     SaveSlots.files = SaveSlotFiles();
     SaveSlots.saves.clear();
+    SaveSlots.missing.clear();
 
     if (SaveMenu.mode == SAVE_MENU_MODE_LOAD) {
         this->GetSaveFileInfoFromMc(kSaveSlotAutosave);

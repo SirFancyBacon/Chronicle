@@ -33,8 +33,9 @@ constexpr std::string_view    kFileName = "chronicle.dat";
 constexpr std::size_t kMaxFile = 64 << 20;
 
 struct Registered {
-    ExtensionWriter writer;
-    ExtensionReader reader;
+    ExtensionWriter  writer;
+    ExtensionReader  reader;
+    ExtensionChecker missing;
 };
 
 std::map<std::array<char, 4>, Registered> &Frameworks() {
@@ -168,8 +169,8 @@ void ReadEvery(const std::vector<ExtensionChunk> *chunks) {
 
 } // namespace
 
-void ExtensionRegister(std::string_view tag, ExtensionWriter writer, ExtensionReader reader) {
-    Frameworks().insert_or_assign(Tag(tag), Registered{std::move(writer), std::move(reader)});
+void ExtensionRegister(std::string_view tag, ExtensionWriter writer, ExtensionReader reader, ExtensionChecker missing) {
+    Frameworks().insert_or_assign(Tag(tag), Registered{std::move(writer), std::move(reader), std::move(missing)});
 }
 
 void ExtensionPrepare(game::CSaveData &image) {
@@ -262,6 +263,25 @@ void ExtensionLoad(int file_no, std::span<const char> image) {
         SetAside(path, "has a damaged chunk");
     }
     ReadEvery(&set->second);
+}
+
+bool ExtensionMissing(int file_no, std::span<const char> image) {
+    const auto bytes = ReadFile(ExtensionPath(file_no));
+    if (!bytes) {
+        return false;
+    }
+    const std::optional<ExtensionSets> sets = ExtensionDecode(*bytes);
+    if (!sets) {
+        return false;
+    }
+    const auto set = std::ranges::find(*sets, ExtensionHash(image), &ExtensionSets::value_type::first);
+    if (set == sets->end()) {
+        return false;
+    }
+    return std::ranges::any_of(set->second, [](const ExtensionChunk &chunk) {
+        const auto framework = Frameworks().find(chunk.tag);
+        return chunk.intact && framework != Frameworks().end() && framework->second.missing && framework->second.missing(chunk);
+    });
 }
 
 void ExtensionNewGame() {

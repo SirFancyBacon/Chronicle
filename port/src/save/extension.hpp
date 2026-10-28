@@ -41,9 +41,14 @@ using ExtensionWriter = std::function<std::optional<ExtensionChunk>(game::CSaveD
 using ExtensionReader = std::function<void(const ExtensionChunk *chunk)>;
 
 /**
+ * Whether a saved chunk names something no loaded pack provides, which the save's board marks.
+ */
+using ExtensionChecker = std::function<bool(const ExtensionChunk &chunk)>;
+
+/**
  * Registers a framework's chunk under a four-letter tag, replacing any registered with it.
  */
-void ExtensionRegister(std::string_view tag, ExtensionWriter writer, ExtensionReader reader);
+void ExtensionRegister(std::string_view tag, ExtensionWriter writer, ExtensionReader reader, ExtensionChecker missing = {});
 
 /**
  * Runs every writer over an image about to have its checksums made.
@@ -65,6 +70,12 @@ bool ExtensionSave(int file_no, std::span<const char> image, const std::function
  * Gives every reader its chunk of file_no's chronicle.dat for the image just loaded.
  */
 void ExtensionLoad(int file_no, std::span<const char> image);
+
+/**
+ * Whether file_no's chronicle.dat, for the image just read, names something no loaded pack provides.
+ * Reads the file and nothing else: a damaged file is left for loading to report.
+ */
+bool ExtensionMissing(int file_no, std::span<const char> image);
 
 /**
  * Gives every reader no chunk, for a new game.
