@@ -135,6 +135,32 @@ Json Weights(std::initializer_list<std::pair<int, int>> fish) {
     return list;
 }
 
+// CFish's odds and EdMoveChara's bait losses, one in five for Cross on a nibble and three in ten for a
+// fish that lets go; the hook held half a second to a second, the port's own (retail's 21 to 50 ticks
+// left too little time to react).
+Json RetailBite() {
+    return {
+        {"stage",             "retail"                  },
+        {"hook_ticks",        Json::array({30, 60})     },
+        {"lose_bait_early",   0.2                       },
+        {"lose_bait_escaped", 0.3                       }
+    };
+}
+
+// EdMoveChara's battle: 120 ticks while the fish's model loads.
+Json RetailFight() {
+    return {
+        {"stage", "retail"},
+        {"ticks", 120     }
+    };
+}
+
+Json RetailOutcome() {
+    return {
+        {"stage", "retail"}
+    };
+}
+
 // FishingLoadFish's switch: the rare fish is kind 17 one time in five, else kind 5, one fish in 50 by
 // day, 20 in the evening, 35 at night and 25 in the morning.
 Json PlacesDocument() {
@@ -149,7 +175,10 @@ Json PlacesDocument() {
             {"id",               id              },
             {"fish_count",       count           },
             {"draw_under_water", draw            },
-            {"spawn",            std::move(spawn)}
+            {"spawn",            std::move(spawn)},
+            {"bite",             RetailBite()    },
+            {"fight",            RetailFight()   },
+            {"outcome",          RetailOutcome() }
         };
     };
     Json places = Json::array();
@@ -284,6 +313,17 @@ Parsed<std::vector<Species>> ParseSpecies(const Json &document) {
     return parsed;
 }
 
+void MakeStages(Place &place, const Json &row, std::string_view where) {
+    try {
+        place.spawn = MakeSpawnStage(native_config::At(row, "spawn"));
+        place.bite = MakeBiteStage(native_config::At(row, "bite"));
+        place.fight = MakeFightStage(native_config::At(row, "fight"));
+        place.outcome = MakeOutcomeStage(native_config::At(row, "outcome"));
+    } catch (const std::exception &error) {
+        throw std::runtime_error(std::format("{} {}", where, error.what()));
+    }
+}
+
 Parsed<std::vector<Place>> ParsePlaces(const Json &document) {
     const Json                 compiled = PlacesDocument();
     std::map<int, Place>       by_spot;
@@ -304,12 +344,8 @@ Parsed<std::vector<Place>> ParsePlaces(const Json &document) {
             throw std::runtime_error(std::format("{} fish_count must be from 1 to {}", where, kMaxFish));
         }
         place.draw_under_water = Bool(row, "draw_under_water", where);
-        try {
-            place.spawn = MakeSpawnStage(native_config::At(row, "spawn"));
-        } catch (const std::exception &error) {
-            throw std::runtime_error(std::format("{} {}", where, error.what()));
-        }
-        NoteUnknown(row, {"spot", "id", "fish_count", "draw_under_water", "spawn"}, parsed.unknown);
+        MakeStages(place, row, where);
+        NoteUnknown(row, {"spot", "id", "fish_count", "draw_under_water", "spawn", "bite", "fight", "outcome"}, parsed.unknown);
         if (!by_spot.emplace(spot, std::move(place)).second) {
             throw std::runtime_error(std::format("{} is listed twice", where));
         }
@@ -370,6 +406,9 @@ T Read(std::string_view path, std::string_view kind, Parsed<T> (*parse)(const Js
 }
 
 std::map<int, FishInfo> g_info;
+std::vector<std::string> g_bait_ids;
+const Place             *g_current = nullptr;
+Place                    g_fallback; // retail's bite, fight and outcome for a spot no place is
 
 TimeOfDay TimeFrom(int time_of_day) {
     switch (time_of_day) {
@@ -391,6 +430,18 @@ void Load() {
     RegisterBuiltinStages();
     Clear();
     g_info.clear();
+    g_current = nullptr;
+    const Json retail = PlacesDocument()["places"][0];
+    g_fallback = {.id = "vanilla:none",
+                  .spot = -1,
+                  .bite = MakeBiteStage(retail["bite"]),
+                  .fight = MakeFightStage(retail["fight"]),
+                  .outcome = MakeOutcomeStage(retail["outcome"])};
+    g_bait_ids.clear();
+    for (const EsaInfo &bait : esa_info) {
+        const item::Def *def = item::Find(bait.item_no);
+        g_bait_ids.push_back(def != nullptr ? def->id : item::VanillaItemId(bait.item_no));
+    }
     for (Species &species : Read<std::vector<Species>>("fishing/fish.json", "fish", ParseSpecies, SpeciesDocument())) {
         FishInfo info{.model_size = species.model_size,
                       .min_size = species.min_size,
@@ -452,6 +503,7 @@ bool CountsAsMardanGarayan(int kind) {
 
 Spawning SpawnAt(int spot, int time_of_day) {
     const Place *place = PlaceAtSpot(spot);
+    g_current = place;
     if (place == nullptr) {
         return {.kinds = std::vector<int>(5, -1)};
     }
@@ -463,6 +515,14 @@ Spawning SpawnAt(int spot, int time_of_day) {
         spawning.kinds.push_back(species != nullptr ? species->kind : -1);
     }
     return spawning;
+}
+
+const Place &CurrentPlace() {
+    return g_current != nullptr ? *g_current : g_fallback;
+}
+
+std::string_view BaitId(int index) {
+    return index >= 0 && std::cmp_less(index, g_bait_ids.size()) ? std::string_view(g_bait_ids[static_cast<std::size_t>(index)]) : std::string_view();
 }
 
 } // namespace dc::fishing

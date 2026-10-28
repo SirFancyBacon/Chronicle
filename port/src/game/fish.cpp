@@ -21,93 +21,13 @@ namespace {
 
 constexpr int kMaxNearbyPolys = 256;
 
-int rand_check(float probability) {
-    int   roll = rand();
-    float threshold = probability * 1000.0f;
-    return roll % 1000 < static_cast<int>(threshold) ? 1 : 0;
-}
-
 int GetActCnt() {
     int count = 20;
     count += rand() % 100;
     return count;
 }
 
-int GetActCnt2() {
-    int count = 20;
-    count += rand() % 30;
-    return count;
-}
-
 } // namespace
-
-int CFish::FindFood() {
-    float position[4];
-
-    if (food_kind < 0) {
-        return 0;
-    }
-
-    GetPosition(position);
-
-    if (food_radius <= 0.0f) {
-        return 0;
-    }
-
-    if (DistVector(food_position, position) > food_radius) {
-        return 0;
-    }
-
-    return rand_check(info.food_affinity[food_kind] * 0.3f) != 0 ? 1 : 0;
-}
-
-int CFish::EatFood() {
-    float position[4];
-
-    GetPosition(position);
-
-    if (food_radius <= 0.0f) {
-        return 0;
-    }
-
-    if (DistVector(food_position, position) > 1.0f) {
-        return 0;
-    }
-
-    return rand_check(info.food_affinity[food_kind] * 0.5f) != 0 ? 1 : 0;
-}
-
-int CFish::BiteHook() {
-    float position[4];
-
-    GetPosition(position);
-
-    if (food_radius <= 0.0f) {
-        return 0;
-    }
-
-    if (DistVector(food_position, position) > 1.0f) {
-        return 0;
-    }
-
-    return rand_check(info.food_affinity[food_kind] * 0.5f) != 0 ? 1 : 0;
-}
-
-int CFish::LeaveFood() {
-    if (food_kind < 0) {
-        return 1;
-    }
-
-    return rand_check(0.1f) != 0 ? 1 : 0;
-}
-
-int CFish::LeaveHook() {
-    if (food_kind < 0) {
-        return 1;
-    }
-
-    return rand_check(0.1f) != 0 ? 1 : 0;
-}
 
 void CFish::SetCPoly(CCPoly *polys, int count) {
     collision_polys = polys;
@@ -129,52 +49,9 @@ void CFish::Step() {
     float speed_step = 0.01f;
     GetPosition(position);
 
+    // What the fish does about the bait is the current place's bite stage's (fishing/angler.cpp).
     if (action_timer < 0 || action == FISH_ACTION_NONE) {
-        action_timer = GetActCnt2();
-
-        switch (action) {
-            case FISH_ACTION_NONE:
-                if (FindFood()) {
-                    action = FISH_ACTION_APPROACH_FOOD;
-                }
-
-                break;
-            case FISH_ACTION_APPROACH_FOOD:
-                if (EatFood()) {
-                    action = FISH_ACTION_EAT_FOOD;
-                }
-
-                if (LeaveFood()) {
-                    action = FISH_ACTION_LEAVE;
-                    action_timer >>= 1;
-                }
-
-                break;
-            case FISH_ACTION_EAT_FOOD:
-                if (BiteHook()) {
-                    action = FISH_ACTION_BITE_HOOK;
-                }
-
-                if (LeaveHook()) {
-                    action = FISH_ACTION_LEAVE;
-                }
-
-                // The tick it takes the hook counts down too.
-                if (action == FISH_ACTION_BITE_HOOK) {
-                    action_timer = kHookHoldFirst - 1 + rand() % (kHookHoldLast - kHookHoldFirst + 1);
-                }
-
-                break;
-            case FISH_ACTION_BITE_HOOK:
-                action = FISH_ACTION_LEAVE;
-                action_timer *= 2;
-                break;
-            case FISH_ACTION_LEAVE:
-                action = FISH_ACTION_NONE;
-                break;
-            default:
-                break;
-        }
+        fishing::UpdateFishAction(*this);
     }
 
     if (move_timer <= 0) {

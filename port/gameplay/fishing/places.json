@@ -2,9 +2,25 @@
   "kind": "fishing_places",
   "places": [
     {
+      "bite": {
+        "hook_ticks": [
+          30,
+          60
+        ],
+        "lose_bait_early": 0.2,
+        "lose_bait_escaped": 0.3,
+        "stage": "retail"
+      },
       "draw_under_water": true,
+      "fight": {
+        "stage": "retail",
+        "ticks": 120
+      },
       "fish_count": 4,
       "id": "vanilla:norune",
+      "outcome": {
+        "stage": "retail"
+      },
       "spawn": {
         "fish": [
           {
@@ -29,9 +45,25 @@
       "spot": 0
     },
     {
+      "bite": {
+        "hook_ticks": [
+          30,
+          60
+        ],
+        "lose_bait_early": 0.2,
+        "lose_bait_escaped": 0.3,
+        "stage": "retail"
+      },
       "draw_under_water": true,
+      "fight": {
+        "stage": "retail",
+        "ticks": 120
+      },
       "fish_count": 5,
       "id": "vanilla:matataki_1",
+      "outcome": {
+        "stage": "retail"
+      },
       "spawn": {
         "fish": [
           {
@@ -56,9 +88,25 @@
       "spot": 1
     },
     {
+      "bite": {
+        "hook_ticks": [
+          30,
+          60
+        ],
+        "lose_bait_early": 0.2,
+        "lose_bait_escaped": 0.3,
+        "stage": "retail"
+      },
       "draw_under_water": true,
+      "fight": {
+        "stage": "retail",
+        "ticks": 120
+      },
       "fish_count": 5,
       "id": "vanilla:matataki_2",
+      "outcome": {
+        "stage": "retail"
+      },
       "spawn": {
         "fish": [
           {
@@ -97,9 +145,25 @@
       "spot": 2
     },
     {
+      "bite": {
+        "hook_ticks": [
+          30,
+          60
+        ],
+        "lose_bait_early": 0.2,
+        "lose_bait_escaped": 0.3,
+        "stage": "retail"
+      },
       "draw_under_water": false,
+      "fight": {
+        "stage": "retail",
+        "ticks": 120
+      },
       "fish_count": 5,
       "id": "vanilla:queens",
+      "outcome": {
+        "stage": "retail"
+      },
       "spawn": {
         "fish": [
           {
@@ -128,9 +192,25 @@
       "spot": 3
     },
     {
+      "bite": {
+        "hook_ticks": [
+          30,
+          60
+        ],
+        "lose_bait_early": 0.2,
+        "lose_bait_escaped": 0.3,
+        "stage": "retail"
+      },
       "draw_under_water": true,
+      "fight": {
+        "stage": "retail",
+        "ticks": 120
+      },
       "fish_count": 4,
       "id": "vanilla:muska_lacka",
+      "outcome": {
+        "stage": "retail"
+      },
       "spawn": {
         "fish": [
           {

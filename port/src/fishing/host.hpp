@@ -1,17 +1,23 @@
 #pragma once
 
 #include <filesystem>
+#include <string_view>
 #include <vector>
 
 namespace dc::game {
 struct FishInfo;
-}
+class CFish;
+class CMainChara;
+class CCameraFollow;
+} // namespace dc::game
 
 /**
  * The fishing framework's tie to the game: its documents, gameplay/fishing/fish.json, places.json and
  * prizes.json, read as the item documents are, and what retail's fishing code asks of them.
  */
 namespace dc::fishing {
+
+struct Place;
 
 /**
  * Fills the species, places and prizes from the highest-priority usable document, then the data's own,
@@ -54,9 +60,31 @@ struct Spawning {
 };
 
 /**
- * The fish a spot starts with at a time of day (ED_TIME_*), drawn by its place's spawn stage. A spot no
- * place is has five empty places, as retail.
+ * The fish a spot starts with at a time of day (ED_TIME_*), drawn by its place's spawn stage, which
+ * becomes the current place. A spot no place is has five empty places, as retail.
  */
 Spawning SpawnAt(int spot, int time_of_day);
+
+/**
+ * The place fishing last started at (SpawnAt), or for a spot no place is, retail's stages.
+ */
+const Place &CurrentPlace();
+
+/**
+ * The item ID of a bait by its index in esa_info.
+ */
+std::string_view BaitId(int index);
+
+/**
+ * One tick of the angler's session (fishing/angler.cpp), in place of retail's EdMoveChara block:
+ * position is where the angler stands; float_weight and hook_weight are how hard the rod holds the
+ * float and hook this tick, below 0 for not at all.
+ */
+void StepSession(game::CMainChara &chara, game::CCameraFollow &camera, float *position, float &float_weight, float &hook_weight);
+
+/**
+ * A fish's next action about the bait, when CFish::Step asks: the current place's bite stage's.
+ */
+void UpdateFishAction(game::CFish &fish);
 
 } // namespace dc::fishing

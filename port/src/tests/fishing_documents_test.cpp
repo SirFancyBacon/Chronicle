@@ -176,6 +176,7 @@ TEST_F(FishingDocuments, APacksChangeReachesTheGameAndLeavesWithIt) {
     });
     auto places = Document("places.json");
     Row(places, "places", "spot", 0)["fish_count"] = 6;
+    Row(places, "places", "spot", 0)["bite"]["lose_bait_early"] = 1.0;
     Row(places, "places", "spot", 0)["spawn"]["fish"] = nlohmann::json::array({
         {{"fish", "vanilla:fish_8"}, {"weight", 1}}
     });
@@ -194,6 +195,9 @@ TEST_F(FishingDocuments, APacksChangeReachesTheGameAndLeavesWithIt) {
     EXPECT_EQ(fishing::Info(4)->food_affinity[1], 0.0f);
     EXPECT_TRUE(fishing::CountsAsMardanGarayan(4));
     EXPECT_EQ(fishing::SpawnAt(0, ED_TIME_DAY).kinds, std::vector<int>(6, 8));
+    const fishing::BiteContext always{.random = [] { return 0.99; }};
+    EXPECT_TRUE(fishing::PlaceAtSpot(0)->bite->LosesBait(fishing::LossCause::PressedEarly, always));
+    EXPECT_FALSE(fishing::PlaceAtSpot(1)->bite->LosesBait(fishing::LossCause::PressedEarly, always));
     EXPECT_EQ(exitemlst[0].item_no, ITEM_BREAD);
     EXPECT_EQ(exitemlst[0].price, 7);
 
@@ -208,6 +212,7 @@ TEST_F(FishingDocuments, ADocumentThatCannotBeUsedFallsBackWhole) {
     fish["fish"].erase(0); // every kind must be there
     auto places = Document("places.json");
     Row(places, "places", "spot", 1)["spawn"]["stage"] = "nonesuch";
+    Row(places, "places", "spot", 2)["bite"]["hook_ticks"] = nlohmann::json::array({60, 30});
     auto prizes = Document("prizes.json");
     prizes["prizes"][0]["item"] = "vanilla:no_such_item";
     auto liking = Document("fish.json");

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 
+#include "editloop3.hpp"
 #include "fish.hpp"
 #include "fishing/host.hpp"
 #include "item/host.hpp"
@@ -14,6 +15,7 @@ using namespace dc::game;
 TEST(FishHook, AFishHoldsTheHookHalfASecondToASecond) {
     item::Load();
     fishing::Load();
+    fishing::SpawnAt(1, ED_TIME_DAY); // Matataki, whose bite holds the hook 30 to 60 ticks
     int shortest = 1000;
     int longest = 0;
     for (unsigned int seed = 1; seed <= 400; seed++) {
@@ -42,8 +44,8 @@ TEST(FishHook, AFishHoldsTheHookHalfASecondToASecond) {
         shortest = std::min(shortest, held);
         longest = std::max(longest, held);
     }
-    EXPECT_EQ(shortest, kHookHoldFirst);
-    EXPECT_EQ(longest, kHookHoldLast);
+    EXPECT_EQ(shortest, 30);
+    EXPECT_EQ(longest, 60);
 }
 
 } // namespace dc::test

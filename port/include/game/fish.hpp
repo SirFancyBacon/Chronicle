@@ -90,31 +90,6 @@ public:
     CFish();
 
     /**
-     * Tests whether the fish notices the current bait.
-     */
-    int FindFood();
-
-    /**
-     * Tests whether the fish eats the bait it has reached.
-     */
-    int EatFood();
-
-    /**
-     * Tests whether the fish takes the hook it has reached.
-     */
-    int BiteHook();
-
-    /**
-     * Tests whether the fish abandons the bait.
-     */
-    int LeaveFood();
-
-    /**
-     * Tests whether the fish abandons the hook.
-     */
-    int LeaveHook();
-
-    /**
      * Sets the collision polygons that constrain the fish.
      */
     void SetCPoly(CCPoly *polys, int count);
@@ -208,14 +183,6 @@ void LoadFish(CFish *fish, int fish_kind, int texture_slot, CDataAlloc2<1> *allo
 char *GetFishFileName(int fish_kind);
 
 // Port additions.
-
-/**
- * How many ticks a fish holds the hook before letting go, from the fewest to the most. Retail's 21 to
- * 50 (a third of a second to five sixths) left too little time to press Cross once the float went
- * under; the port gives half a second to a second.
- */
-inline constexpr int kHookHoldFirst = 30;
-inline constexpr int kHookHoldLast = 60;
 
 /**
  * Exponent of the size lift that fixes retail's size roll (CFish::SetScale). Retail clamps every

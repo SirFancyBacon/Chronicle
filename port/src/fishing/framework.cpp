@@ -9,9 +9,23 @@ namespace dc::fishing {
 
 namespace {
 
-std::map<std::string, StageFactory<SpawnStage>, std::less<>> &SpawnStages() {
-    static std::map<std::string, StageFactory<SpawnStage>, std::less<>> stages;
+template <class Stage>
+std::map<std::string, StageFactory<Stage>, std::less<>> &Stages() {
+    static std::map<std::string, StageFactory<Stage>, std::less<>> stages;
     return stages;
+}
+
+template <class Stage>
+std::unique_ptr<Stage> Make(const nlohmann::json &config, std::string_view kind) {
+    if (!config.is_object() || !config.contains("stage") || !config["stage"].is_string()) {
+        throw std::runtime_error(std::format("{}: a stage needs its name in \"stage\"", kind));
+    }
+    const std::string name = config["stage"].get<std::string>();
+    const auto        found = Stages<Stage>().find(name);
+    if (found == Stages<Stage>().end()) {
+        throw std::runtime_error(std::format("no {} stage is called \"{}\"", kind, name));
+    }
+    return found->second(config);
 }
 
 std::map<int, Species> &ByKind() {
@@ -32,19 +46,35 @@ float Species::Affinity(std::string_view bait) const {
 }
 
 void RegisterSpawnStage(std::string_view name, StageFactory<SpawnStage> factory) {
-    SpawnStages().insert_or_assign(std::string(name), std::move(factory));
+    Stages<SpawnStage>().insert_or_assign(std::string(name), std::move(factory));
+}
+
+void RegisterBiteStage(std::string_view name, StageFactory<BiteStage> factory) {
+    Stages<BiteStage>().insert_or_assign(std::string(name), std::move(factory));
+}
+
+void RegisterFightStage(std::string_view name, StageFactory<FightStage> factory) {
+    Stages<FightStage>().insert_or_assign(std::string(name), std::move(factory));
+}
+
+void RegisterOutcomeStage(std::string_view name, StageFactory<OutcomeStage> factory) {
+    Stages<OutcomeStage>().insert_or_assign(std::string(name), std::move(factory));
 }
 
 std::unique_ptr<SpawnStage> MakeSpawnStage(const nlohmann::json &config) {
-    if (!config.is_object() || !config.contains("stage") || !config["stage"].is_string()) {
-        throw std::runtime_error("a stage needs its name in \"stage\"");
-    }
-    const std::string name = config["stage"].get<std::string>();
-    const auto        found = SpawnStages().find(name);
-    if (found == SpawnStages().end()) {
-        throw std::runtime_error(std::format("no spawn stage is called \"{}\"", name));
-    }
-    return found->second(config);
+    return Make<SpawnStage>(config, "spawn");
+}
+
+std::unique_ptr<BiteStage> MakeBiteStage(const nlohmann::json &config) {
+    return Make<BiteStage>(config, "bite");
+}
+
+std::unique_ptr<FightStage> MakeFightStage(const nlohmann::json &config) {
+    return Make<FightStage>(config, "fight");
+}
+
+std::unique_ptr<OutcomeStage> MakeOutcomeStage(const nlohmann::json &config) {
+    return Make<OutcomeStage>(config, "outcome");
 }
 
 void Clear() {
