@@ -1212,6 +1212,29 @@ screen lists it first, its board reading "Auto"; loading it leaves
 `last_save` on the last numbered save. `game.autosave` (Options, Game page)
 turns it off; headless and `--jump` runs never write it.
 
+`chronicle.dat`, beside a save's `save.dat`, holds what the save has that
+retail's image cannot: custom items and copies with state of their own
+(docs/ITEM_FRAMEWORK.md). Before the image's checksums are made, each
+framework takes its part out of the image (`ExtensionPrepare`), leaving what
+retail would hold there, so `save.dat` stays retail's and a save without
+custom items writes no `chronicle.dat` at all. The file is a set of chunks,
+one per framework, each with a tag, version, length and CRC, kept under a
+hash of the exact `save.dat` bytes they belong to: a `save.dat` copied,
+restored from a backup or taken from a card export without its own
+`chronicle.dat` loads without those items, never with another save's.
+Saving writes `chronicle.dat` with the chunks of both the `save.dat` on disk
+and the new one, then `save.dat`, then `chronicle.dat` with the new one's
+alone, so an interruption anywhere leaves the chunks of whichever `save.dat`
+is there. A chunk whose CRC fails is left out alone, and the file is copied
+to `chronicle.dat.damaged`; a chunk no framework of this port reads is
+written back unchanged. Deleting the save deletes both. The items' chunk
+(`port/src/item/save.cpp`) keeps each custom item in the bag, its quick
+slots and storage by ID, with what is left of it and, for a copy, its
+instance and state. One whose definition is missing loads as an orphan: an
+"Unknown item" that keeps its ID and state, cannot be used or sold, and is
+itself again once its definition returns. `port/src/save/extension.cpp`
+reads and writes the file.
+
 `port/src/game/memorycardaccess.cpp` replaces the operations of
 `CMemoryCardAccess` with plain reads and writes of these files
 (`port/src/save/save_slots.cpp` names and lists them, `port/src/save/save_state.cpp`

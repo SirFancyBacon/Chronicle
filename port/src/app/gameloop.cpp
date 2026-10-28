@@ -51,6 +51,7 @@
 #include "quest/host.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
+#include "save/extension.hpp"
 #include "save/save_slots.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
@@ -289,6 +290,7 @@ void StartNewGame() {
         std::memcpy(g_save_data.GetCharaName(i), names[i].data(), names[i].size());
     }
     QuestHostNewGame();
+    ExtensionNewGame();
     TrialStart();
 }
 

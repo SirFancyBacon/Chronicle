@@ -3,6 +3,8 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "item/framework.hpp"
 #include "itemdata.hpp"
@@ -16,10 +18,16 @@ namespace dc::item {
 
 /**
  * Fills every table from the highest-priority usable datapack document, then the data's own, or as
- * compiled where there is none, then registers every vanilla item as the tables now hold it.
- * datapacks::Load runs first.
+ * compiled where there is none, then registers every vanilla item as the tables now hold it, and the
+ * items' chunk of the save. datapacks::Load runs first.
  */
 void Load();
+
+/**
+ * Registers the items' chunk of the save's chronicle.dat: the custom items and copies in the bag, its
+ * quick slots and storage, taken out of save.dat as it is written and put back as it loads. Load does.
+ */
+void RegisterSaveChunk();
 
 /**
  * Writes the tables' documents as compiled under directory/gameplay/, pretty-printed, as a starting
@@ -53,6 +61,28 @@ Kind KindOf(int number);
  * holds an item: between areas, and when saving.
  */
 void ReclaimHeldCopies();
+
+/**
+ * The number standing for an item a loaded save holds whose definition is missing, an orphan: kept
+ * with its ID, so it is itself again once its definition returns, and inert meanwhile. The same ID
+ * gives the same number; -1 once the custom numbers are used up.
+ */
+int OrphanNumber(std::string_view id);
+
+/**
+ * Whether a number, or a handle's item, is an orphan.
+ */
+bool IsOrphan(int number);
+
+/**
+ * Forgets the orphans, as another save loads.
+ */
+void DropOrphans();
+
+/**
+ * Lists the items' localization keys and their English text.
+ */
+std::vector<std::pair<std::string, std::string>> Strings();
 
 /**
  * A custom item's name and description in one language.

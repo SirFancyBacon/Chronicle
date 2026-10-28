@@ -164,6 +164,11 @@ bool ValidId(std::string_view id);
 void Register(Def item);
 
 /**
+ * Forgets one item; nothing for an ID not registered.
+ */
+void Unregister(std::string_view id);
+
+/**
  * Forgets every item.
  */
 void Clear();
@@ -209,8 +214,9 @@ inline constexpr int kHandleEnd = 0x7E00;   /**< One past the last. */
 struct Copy {
     std::string   id;           /**< Its item's ID. */
     int           number = -1;  /**< Its item's number, or -1 while no item has the ID. */
-    std::uint64_t instance = 0; /**< Its identity for good, kept in the save; never 0. */
-    State         state;        /**< Its state. */
+    std::uint64_t instance = 0;      /**< Its identity for good, kept in the save; never 0. */
+    State         state;             /**< Its state. */
+    int           state_version = 0; /**< The state_version of the definition that wrote its state. */
 };
 
 /**
@@ -223,7 +229,7 @@ int NewCopy(const Def &item);
  * Puts back a copy kept in a save under a free handle. The item need not be registered. Returns the
  * handle, or -1 with every handle taken.
  */
-int RestoreCopy(std::string_view id, std::uint64_t instance, State state);
+int RestoreCopy(std::string_view id, std::uint64_t instance, State state, int state_version);
 
 /**
  * The copy under a handle, or null.
@@ -260,5 +266,10 @@ void ClearCopies(std::uint64_t next = 1);
  * The instance the next new copy gets, for the save to keep.
  */
 std::uint64_t NextInstance();
+
+/**
+ * Takes an instance no copy has, for a copy found twice in the save.
+ */
+std::uint64_t TakeInstance();
 
 } // namespace dc::item

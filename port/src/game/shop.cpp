@@ -987,7 +987,8 @@ int IsEnableCharge(int item_no) {
     } else {
         enable = true;
 
-        if (item_no == ITEM_MOON_ORB) {
+        // An orphan waits for its definition; selling it would lose it for nothing.
+        if (item_no == ITEM_MOON_ORB || item::IsOrphan(item_no)) {
             enable = false;
         }
     }

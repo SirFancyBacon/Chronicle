@@ -548,10 +548,11 @@ struct Custom {
     std::optional<Bait>             bait;
     State                           state; /**< A new copy's state; empty for none. */
     int                             state_version = 0;
+    bool                            orphan = false; /**< Stands for a loaded save's item with no definition. */
 };
 
 /**
- * The custom items, in number order from kCustomFirst.
+ * The custom items, in number order from kCustomFirst, then the orphans.
  */
 std::vector<Custom> customs;
 
@@ -562,6 +563,11 @@ const Custom *CustomAt(int number) {
     }
     return &customs[static_cast<std::size_t>(number - kCustomFirst)];
 }
+
+constexpr const char *kOrphanName = "item.orphan.name";
+constexpr const char *kOrphanNameText = "Unknown item";
+constexpr const char *kOrphanDescription = "item.orphan.description";
+constexpr const char *kOrphanDescriptionText = "From a mod that isn't loaded.";
 
 /**
  * CustomMessage's codes by language file, item number and whether it is a name.
@@ -721,6 +727,41 @@ void Load() {
         Register(CustomDef(kCustomFirst + static_cast<int>(index), customs[index]));
     }
     RebindCopies();
+    RegisterSaveChunk();
+}
+
+int OrphanNumber(std::string_view id) {
+    for (const Custom &custom : customs) {
+        if (custom.orphan && custom.id == id) {
+            return custom.common.msg;
+        }
+    }
+    const int number = kCustomFirst + static_cast<int>(customs.size());
+    if (number >= kCustomEnd || !ValidId(id) || Find(id) != nullptr) {
+        return -1;
+    }
+    Custom orphan{.id = std::string(id), .orphan = true};
+    orphan.common.kind = ITEMKIND_ITEM;
+    orphan.common.index = -1;
+    orphan.common.icon_index = -1;
+    orphan.common.msg = static_cast<s16>(number);
+    customs.push_back(std::move(orphan));
+    // Registered without traits: nothing reads it as bait, sellable or anything else.
+    Register(Def{.id = std::string(id), .number = number});
+    return number;
+}
+
+bool IsOrphan(int number) {
+    const Custom *custom = CustomAt(number);
+    return custom != nullptr && custom->orphan;
+}
+
+void DropOrphans() {
+    while (!customs.empty() && customs.back().orphan) {
+        Unregister(customs.back().id);
+        customs.pop_back();
+    }
+    RebindCopies();
 }
 
 COM_ITEM_INFO *CustomCommonInfo(int number) {
@@ -785,6 +826,16 @@ const ItemText *CustomText(int number, std::string_view language) {
     if (custom == nullptr) {
         return nullptr;
     }
+    if (custom->orphan) {
+        // By language, as CustomMessage caches what this returns.
+        static std::map<std::string, ItemText, std::less<>> orphan;
+        auto [text, made] = orphan.try_emplace(std::string(language));
+        if (made) {
+            text->second = {.name = localize::LocalizeText(kOrphanName, kOrphanNameText),
+                            .description = localize::LocalizeText(kOrphanDescription, kOrphanDescriptionText)};
+        }
+        return &text->second;
+    }
     for (const std::string_view wanted : {language, std::string_view("en_gb"), std::string_view("en_us")}) {
         if (const auto found = custom->text.find(std::string(wanted)); found != custom->text.end()) {
             return &found->second;
@@ -808,6 +859,13 @@ short *CustomMessage(int id, bool system) {
         codes->second.resize((codes->second.size() + 7) & ~std::size_t{7}, game::MES_CODE_END);
     }
     return codes->second.data();
+}
+
+std::vector<std::pair<std::string, std::string>> Strings() {
+    return {
+        {kOrphanName,        kOrphanNameText       },
+        {kOrphanDescription, kOrphanDescriptionText},
+    };
 }
 
 bool Export(const std::filesystem::path &directory) {

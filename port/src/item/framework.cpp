@@ -85,6 +85,17 @@ void Register(Def item) {
     registry.by_number.emplace(number, std::move(owned));
 }
 
+void Unregister(std::string_view id) {
+    Registry  &registry = Items();
+    const auto found = registry.by_id.find(id);
+    if (found == registry.by_id.end()) {
+        return;
+    }
+    const int number = found->second->number;
+    registry.by_id.erase(found);
+    registry.by_number.erase(number);
+}
+
 void Clear() {
     Registry &registry = Items();
     registry.by_id.clear();
@@ -120,12 +131,15 @@ int NewCopy(const Def &item) {
         return -1;
     }
     Copies &copies = TheCopies();
-    copies.by_handle.emplace(handle,
-                             Copy{.id = item.id, .number = item.number, .instance = copies.next_instance++, .state = item.state});
+    copies.by_handle.emplace(handle, Copy{.id = item.id,
+                                          .number = item.number,
+                                          .instance = copies.next_instance++,
+                                          .state = item.state,
+                                          .state_version = item.state_version});
     return handle;
 }
 
-int RestoreCopy(std::string_view id, std::uint64_t instance, State state) {
+int RestoreCopy(std::string_view id, std::uint64_t instance, State state, int state_version) {
     const int handle = FreeHandle();
     if (handle < 0) {
         return -1;
@@ -134,7 +148,8 @@ int RestoreCopy(std::string_view id, std::uint64_t instance, State state) {
     TheCopies().by_handle.emplace(handle, Copy{.id = std::string(id),
                                                .number = item != nullptr ? item->number : -1,
                                                .instance = instance,
-                                               .state = std::move(state)});
+                                               .state = std::move(state),
+                                               .state_version = state_version});
     return handle;
 }
 
@@ -175,6 +190,10 @@ void ClearCopies(std::uint64_t next) {
 
 std::uint64_t NextInstance() {
     return TheCopies().next_instance;
+}
+
+std::uint64_t TakeInstance() {
+    return TheCopies().next_instance++;
 }
 
 } // namespace dc::item

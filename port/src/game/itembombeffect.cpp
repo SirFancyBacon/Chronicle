@@ -41,7 +41,8 @@ int checkItemUsed(int slot) {
     const int   condition = UserStatus->ailments[character];
     const s16   item = UserStatus->item_pack.quick_item_slot[slot];
 
-    if (item == -1) {
+    // An orphan waits for its definition; using it would only use it up.
+    if (item == -1 || item::IsOrphan(item)) {
         return 0;
     }
 

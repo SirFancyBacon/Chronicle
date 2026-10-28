@@ -448,9 +448,7 @@ TEST_F(ItemDocuments, ACopyWithStateTravelsUnderAHandleThatAnswersAsItsItem) {
 
 TEST_F(ItemDocuments, ACopyKeptInASaveComesBackUnderAFreeHandle) {
     item::ClearCopies(7);
-    const int handle = item::RestoreCopy("chronicle:bass", 3, {
-                                                                  {"size", 12.0}
-    });
+    const int handle = item::RestoreCopy("chronicle:bass", 3, {{"size", 12.0}}, 1);
     EXPECT_EQ(handle, item::kHandleFirst);
     EXPECT_EQ(item::FindCopy(handle)->instance, 3U);
     EXPECT_EQ(item::FindCopy(handle)->number, -1);
