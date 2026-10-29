@@ -40,6 +40,14 @@ std::map<int, Place> &BySpot() {
 
 } // namespace
 
+RodEffect EffectOf(const item::Rod &rod) {
+    const float balance = 0.8f + 0.2f * rod.balance / 100.0f;
+    return {.size = 0.8f + 0.4f * rod.heft * balance / 100.0f,
+            .control = 3.0f * rod.control * balance / 100.0f,
+            .pull_divisor = 1.0f + 2.0f * std::max(rod.spring * balance - 10.0f, 0.0f) / 90.0f,
+            .lure = std::clamp(rod.lure / 100.0f, 0.0f, 1.0f)};
+}
+
 bool Species::IsCustom() const {
     return kind >= kCustomKindFirst;
 }

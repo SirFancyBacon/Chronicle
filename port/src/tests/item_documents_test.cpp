@@ -511,6 +511,11 @@ TEST_F(ItemDocuments, ACustomItemsBaitAndFieldsItDoesNotReadAreTold) {
         {"uses",             0   }
     };
     lure["colour"] = "red";
+    lure["rod"] = {
+        {"spring", 77.0},
+        {"lure",   20.0},
+        {"reach",  3.0 }
+    };
     Pack("lures", "custom/chronicle.lure.json", lure);
     testing::internal::CaptureStderr();
     Order(R"("lures")");
@@ -519,7 +524,12 @@ TEST_F(ItemDocuments, ACustomItemsBaitAndFieldsItDoesNotReadAreTold) {
     ASSERT_NE(bait, nullptr);
     EXPECT_TRUE(bait->lure);
     EXPECT_EQ(bait->default_affinity, 0.5f);
-    EXPECT_NE(told.find("fields this version does not read: bait.uses, colour"), std::string::npos) << told;
+    const item::Rod *rod = item::Find("chronicle:lure")->Get<item::Rod>();
+    ASSERT_NE(rod, nullptr);
+    EXPECT_EQ(rod->spring, 77.0f);
+    EXPECT_EQ(rod->lure, 20.0f);
+    EXPECT_EQ(rod->heft, item::Rod{}.heft); // left out: retail's
+    EXPECT_NE(told.find("fields this version does not read: bait.uses, colour, rod.reach"), std::string::npos) << told;
 }
 
 TEST_F(ItemDocuments, ACustomItemInTheDataIsReadUnderThePacks) {

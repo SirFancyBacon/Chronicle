@@ -1,6 +1,8 @@
 #pragma once
 
 #include <filesystem>
+
+#include "item/framework.hpp"
 #include <string>
 #include <string_view>
 #include <utility>
@@ -150,6 +152,11 @@ void UpdateFishAction(game::CFish &fish);
  * for the cast (BiteSession::speed).
  */
 float ApproachSpeed(const game::CFish &fish);
+
+/**
+ * The rod the angler fishes with: retail's until the fishing menu offers a choice (step 4).
+ */
+item::Rod RodInUse();
 
 /**
  * Whether the fight holds the hooked fish where it says (FightView::steers), and the way it faces.

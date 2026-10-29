@@ -86,6 +86,19 @@ struct Bait {
 };
 
 /**
+ * A fishing rod's five stats, Dark Cloud 2's rod numbers under names for what each does. Only the
+ * fishing stages that read rods (Enhanced's brisk and tension) use them; the defaults, retail's rod's,
+ * change nothing.
+ */
+struct Rod {
+    float heft = 50.0f;            /**< The fish caught run larger: 0.8 to 1.2 times. */
+    float control = 100.0f / 3.0f; /**< The stick held the fish's way tires it more. */
+    float spring = 10.0f;          /**< The fish pulls less, above 10. */
+    float balance = 100.0f;        /**< Scales heft, control and spring: 0.8 to 1 times. */
+    float lure = 0.0f;             /**< Fewer rolls of nothing biting, and less bait lost to a fish that gets away. */
+};
+
+/**
  * A fish the player keeps as an item.
  */
 struct Fish {};
@@ -123,7 +136,7 @@ struct Def {
     int         state_version = 0; /**< The version of state's keys, for migrating saved copies. */
 
     std::tuple<std::optional<Consumable>, std::optional<Throwable>, std::optional<QuickSlot>,
-               std::optional<Attachment>, std::optional<Weapon>, std::optional<Bait>, std::optional<Fish>,
+               std::optional<Attachment>, std::optional<Weapon>, std::optional<Bait>, std::optional<Rod>, std::optional<Fish>,
                std::optional<Sellable>, std::optional<KeyItem>, std::optional<QuestItem>>
         traits; /**< Every trait the item has. */
 

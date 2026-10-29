@@ -39,6 +39,7 @@ public:
     int                      mardan_garayan = 0;
     int                      shown = 0;
     float                    distance = 30.0f;
+    item::Rod                rod;
     int                      shown_points = -1;
     std::vector<std::string> kept;
     const fishing::Place    *place = fishing::PlaceAtSpot(2);
@@ -73,6 +74,8 @@ public:
     float HookedSize() override { return 16.0f; }
     float FishDistance() override { return distance; }
     void  ReleaseFish() override { Record("release fish"); }
+    void  GrowHooked(float factor) override { Record(std::format("grow {:.2f}", factor)); }
+    item::Rod RodInUse() override { return rod; }
     bool ModelReady() override { return model_ready; }
     void LandFish() override { Record("land fish"); }
     void PutAwayFish() override { Record("put away"); }
@@ -711,6 +714,96 @@ TEST_F(FishingSession, ASnappedLineLetsTheFishGoAndMayTakeTheBait) {
     ASSERT_EQ(lost.size(), 1u);
     EXPECT_EQ(lost[0].why, fishing::LossCause::Snapped);
     EXPECT_EQ(lost[0].species->kind, 5);
+}
+
+TEST_F(FishingSession, RetailsRodChangesNothingAndEachStatDoesWhatItSays) {
+    const fishing::RodEffect retail = fishing::EffectOf(item::Rod{});
+    EXPECT_FLOAT_EQ(retail.size, 1.0f);
+    EXPECT_FLOAT_EQ(retail.control, 1.0f);
+    EXPECT_FLOAT_EQ(retail.pull_divisor, 1.0f);
+    EXPECT_FLOAT_EQ(retail.lure, 0.0f);
+    EXPECT_EQ(item::Find("vanilla:fishing_rod")->Get<item::Rod>()->spring, item::Rod{}.spring);
+
+    const fishing::RodEffect best = fishing::EffectOf({.heft = 100.0f, .control = 100.0f, .spring = 100.0f, .balance = 100.0f, .lure = 100.0f});
+    EXPECT_FLOAT_EQ(best.size, 1.2f);
+    EXPECT_FLOAT_EQ(best.control, 3.0f);
+    EXPECT_FLOAT_EQ(best.pull_divisor, 3.0f);
+    EXPECT_FLOAT_EQ(best.lure, 1.0f);
+    // Balance scales heft, control and spring, down to 0.8 times at 0.
+    const fishing::RodEffect unbalanced = fishing::EffectOf({.heft = 100.0f, .control = 100.0f, .spring = 100.0f, .balance = 0.0f});
+    EXPECT_FLOAT_EQ(unbalanced.size, 1.12f);
+    EXPECT_FLOAT_EQ(unbalanced.control, 2.4f);
+    EXPECT_FLOAT_EQ(unbalanced.pull_divisor, 1.0f + 2.0f * 70.0f / 90.0f);
+}
+
+TEST_F(FishingSession, ARodsSpringAndControlEaseTheTensionFight) {
+    const auto tension_after = [](const item::Rod &rod) {
+        TensionFixture fixture;
+        fixture.fight = fishing::MakeFightStage(Tension())->Begin({.species = &fixture.species, .size = 10.0f, .distance = 30.0f, .rod = rod});
+        // Through the veer with the stick its way, then reeling.
+        while (fixture.tick < 119) {
+            fixture.Step({});
+        }
+        for (int tick = 0; tick < 60; tick++) {
+            fixture.Step({.stick_x = 1.0f});
+        }
+        const float before = fixture.fight->View().tension;
+        for (int tick = 0; tick < 30; tick++) {
+            fixture.Step({.reel = true});
+        }
+        return fixture.fight->View().tension - before;
+    };
+    const float retail = tension_after({});
+    EXPECT_LT(tension_after({.spring = 77.0f}), retail * 0.5f); // pull divided by about 2.5
+    EXPECT_LT(tension_after({.control = 100.0f}), retail);       // the veer tired the fish more
+}
+
+TEST_F(FishingSession, ARodsHeftGrowsTheFishOnlyWhereTheFightReadsRods) {
+    for (const bool tension : {false, true}) {
+        fishing::Place place = *angler.place;
+        if (tension) {
+            place.fight = fishing::MakeFightStage(Tension());
+        }
+        angler = FakeAngler();
+        angler.place = &place;
+        angler.rod.heft = 100.0f;
+        session.Reset();
+        CastAndWait();
+        Tick({.fish_status = 8, .fish_no = 3});
+        Tick({.cross = true, .fish_status = 8, .fish_no = 3});
+        EXPECT_EQ(angler.Did("grow 1.20"), tension);
+    }
+}
+
+TEST_F(FishingSession, ARodsLureMeansFewerEmptyRollsAndLessBaitLost) {
+    const auto bite = fishing::MakeBiteStage(Brisk());
+    const std::vector<const fishing::Species *> water = {fishing::SpeciesOfKind(2)};
+    const auto nothing_share = [&](float lure) {
+        std::mt19937                           engine(3);
+        std::uniform_real_distribution<double> uniform(0.0, 1.0);
+        int                                    nothing = 0;
+        for (int roll = 0; roll < 20000; roll++) {
+            fishing::BiteSession session;
+            bite->Update({.species = water[0]}, {.bait = "vanilla:potato_cake", .radius = 25.0f, .random = [&] { return uniform(engine); },
+                                                 .fish_index = 0, .fish = water, .distances = {5.0f}, .session = &session, .rod = {.lure = lure}});
+            nothing += session.chosen < 0 ? 1 : 0;
+        }
+        return nothing / 20000.0;
+    };
+    // Nothing's weight 1 against kind 2's 1.5; halved at Lure 100.
+    EXPECT_NEAR(nothing_share(0.0f), 1.0 / 2.5, 0.01);
+    EXPECT_NEAR(nothing_share(100.0f), 0.5 / 2.0, 0.01);
+
+    const auto escape = fishing::MakeBiteStage({{"stage", "brisk"}, {"wait", {240, 480}}, {"retry", 600}, {"nothing", 1.0},
+                                                {"nibble", {{"low", {100, 160}}, {"normal", {50, 100}}, {"high", {30, 60}}}},
+                                                {"window", {40, 75}}, {"lose_bait_early", 0.2}, {"lose_bait_escaped", 0.4}});
+    const fishing::BiteContext lured{.random = [] { return 0.3; }, .rod = {.lure = 100.0f}};
+    const fishing::BiteContext plain{.random = [] { return 0.3; }};
+    EXPECT_TRUE(escape->LosesBait(fishing::LossCause::LetGo, plain));  // 0.3 under 0.4
+    EXPECT_FALSE(escape->LosesBait(fishing::LossCause::LetGo, lured)); // 0.3 over 0.2
+
+    // Retail's stages read no rod.
+    EXPECT_TRUE(angler.place->bite->LosesBait(fishing::LossCause::LetGo, {.random = [] { return 0.29; }, .rod = {.lure = 100.0f}}));
 }
 
 } // namespace

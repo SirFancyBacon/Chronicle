@@ -178,7 +178,12 @@ void Session::Tick(Angler &angler, const Input &input) {
                     step_ = Step::Battle;
                     angler.Motion(12, 2);
                     angler.HookFish(input.fish_no);
-                    fight_ = place.fight->Begin(Hooked{.species = hooked_, .size = angler.HookedSize(), .distance = angler.FishDistance()});
+                    const item::Rod rod = angler.RodInUse();
+                    if (place.fight->ReadsRods()) {
+                        angler.GrowHooked(EffectOf(rod).size);
+                    }
+                    fight_ = place.fight->Begin(
+                        Hooked{.species = hooked_, .size = angler.HookedSize(), .distance = angler.FishDistance(), .rod = rod});
                     ticks_ = 0;
                 }
                 const float tug = -(0.1f + 0.05f * static_cast<float>(angler.Random()));

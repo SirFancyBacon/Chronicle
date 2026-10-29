@@ -9,6 +9,8 @@
 #include <string_view>
 #include <vector>
 
+#include "item/framework.hpp"
+
 /**
  * The fishing framework (docs/FISHING_FRAMEWORK.md): the species and places fishing knows, and the
  * stages that decide what happens at each, chosen by name in the places' documents. No game headers;
@@ -79,6 +81,19 @@ public:
 };
 
 /**
+ * What a rod does in the stages that read it, its Balance applied (Dark Cloud 2's rod numbers): 1 for
+ * each with retail's rod.
+ */
+struct RodEffect {
+    float size = 1.0f;         /**< Heft: the hooked fish's size, 0.8 to 1.2 times. */
+    float control = 1.0f;      /**< Control: how much the stick held the fish's way tires it. */
+    float pull_divisor = 1.0f; /**< Spring: the fish's pull is divided by it, 1 + 2 x (spring - 10) / 90. */
+    float lure = 0.0f;         /**< Lure: from 0 to 1, halving at 1 the rolls of nothing and the bait lost to a fish that gets away. */
+};
+
+RodEffect EffectOf(const item::Rod &rod);
+
+/**
  * What a fish is doing about the bait, as CFish's action holds it.
  */
 enum class FishAction {
@@ -124,6 +139,7 @@ struct BiteContext {
     bool                         waiting = true;     /**< The float is out, waiting for a bite. */
     BiteSession            *session = nullptr;       /**< Null where nothing is shared (a bait loss's roll). */
     int                     now = 0;                 /**< Ticks, counting up through the session. */
+    item::Rod               rod;                     /**< The rod in use. */
 };
 
 /**
@@ -232,6 +248,7 @@ struct Hooked {
     const Species *species = nullptr;
     float          size = 0.0f;     /**< In size units, as CFish keeps it. */
     float          distance = 0.0f; /**< From the angler as the hook is set: the line out. */
+    item::Rod      rod;             /**< The rod in use. */
 };
 
 /**
@@ -248,6 +265,11 @@ public:
      * being taken as the hook is set (retail's).
      */
     [[nodiscard]] virtual bool BaitStaysOn() const { return false; }
+
+    /**
+     * Whether the fight reads the rod: then its Heft grows the hooked fish as the hook is set.
+     */
+    [[nodiscard]] virtual bool ReadsRods() const { return false; }
 };
 
 /**

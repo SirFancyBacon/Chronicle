@@ -87,6 +87,8 @@ public:
     virtual float HookedSize() = 0;          /**< The hooked fish's size, as CFish keeps it. */
     virtual float FishDistance() = 0;        /**< The hooked fish (or the float) from the angler, across the water. */
     virtual void  ReleaseFish() = 0;         /**< The hooked fish swims free: the line broke. */
+    virtual void  GrowHooked(float factor) = 0; /**< The hooked fish's size times factor: a rod's Heft. */
+    virtual item::Rod RodInUse() = 0;
     virtual bool ModelReady() = 0;
     virtual void LandFish() = 0;
     virtual void PutAwayFish() = 0;

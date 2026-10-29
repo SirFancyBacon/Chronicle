@@ -90,7 +90,7 @@ double Uniform() {
 
 // The bait on the hook, as FishingStepFish gives it to the fish.
 BiteContext HookBait() {
-    BiteContext context{.random = Uniform};
+    BiteContext context{.random = Uniform, .rod = RodInUse()};
     if (const BaitInfo *bait = BaitAt(esa_type); bait != nullptr && EsaFrame != nullptr) {
         context.bait = bait->id;
         context.radius = bait->radius;
@@ -321,6 +321,17 @@ public:
         FishingBattleFish(-1);
     }
 
+    // As CFish::SetScale scales the models from the size.
+    void GrowHooked(float factor) override {
+        if (CFish *fish = FishingGetBattleFish()) {
+            fish->size *= factor;
+            fish->angle_model_scale = fish->size / fish->info.model_size;
+            fish->model_scale = fish->size / 25.0f;
+        }
+    }
+
+    item::Rod RodInUse() override { return fishing::RodInUse(); }
+
     // The angling model goes in the free end of the villagers' buffer.
     void LandFish() override {
         BG_READ_INFO  *read_info = GetReadBGFile(0);
@@ -521,7 +532,7 @@ void UpdateFishAction(CFish &fish) {
     }
     sceVu0FVECTOR position;
     fish.GetPosition(position);
-    BiteContext context{.random = Uniform, .fish_index = static_cast<int>(&fish - Fish), .session = &g_bite, .now = g_ticks};
+    BiteContext context{.random = Uniform, .fish_index = static_cast<int>(&fish - Fish), .session = &g_bite, .now = g_ticks, .rod = RodInUse()};
     if (const BaitInfo *bait = BaitAt(fish.food_kind)) {
         context.bait = bait->id;
         context.radius = fish.food_radius;

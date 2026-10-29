@@ -194,6 +194,23 @@ settings say `"points": true` and `"records": true`. The evaluation message stil
 unless they were given. A full bag overflows as an event's gift does, the player choosing what to
 throw away. A species without an item isn't kept.
 
+## Rods
+
+A rod is an item with the `Rod` trait, carrying Dark Cloud 2's five rod numbers under names for what
+each does. Only the stages that read rods use them: `brisk` (Lure) and `tension` (the rest); in
+Original, and to the town scripts, which check for the Fishing Rod before offering to fish, a rod is
+only a rod. The Fishing Rod has the stats that change nothing, so it fights as the stages' numbers say;
+better rods are custom items with a `rod` (docs/ITEM_FRAMEWORK.md). The rod in use is the Fishing Rod
+for now (`fishing::RodInUse`).
+
+| Stat | Retail's rod | Does (`fishing::EffectOf`) |
+|---|---|---|
+| Heft | 50 | the hooked fish's size, 0.8 to 1.2 times, as the hook is set (more points, a stronger fight) |
+| Control | 33 | the stick held the fish's way tires it 3 x control / 100 times as much |
+| Spring | 10 | the fish's pull is divided by 1 + 2 x (spring - 10) / 90 above 10 |
+| Balance | 100 | heft, control and spring count 0.8 + 0.2 x balance / 100 of themselves |
+| Lure | 0 | up to half fewer rolls of nothing biting, and half the bait lost to a fish that gets away or snaps the line |
+
 ## Kept fish
 
 A species row or document may name an `item` (an item ID, or null): what one of its fish becomes at a

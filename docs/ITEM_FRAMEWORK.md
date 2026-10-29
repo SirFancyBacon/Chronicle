@@ -31,6 +31,7 @@ item has the trait it cares about (`def->Has<item::Bait>()`, `def->Get<item::Sel
 | `Attachment` | stats, elements, monster effectiveness | `AttachList` |
 | `Weapon` | owner, base stats, durability, holes | `WeaponList` |
 | `Bait` | how far fish notice it, whether it is a lure, what species that don't name it think of it | `esa_info` (eaten, liked by none but those that name it) |
+| `Rod` | a fishing rod's five stats, which Enhanced fishing reads (docs/FISHING_FRAMEWORK.md, "Rods") | the Fishing Rod, with the stats that change nothing |
 | `Fish` | a fish kept as an item | `ITEM_SORT_FISH` |
 | `Sellable` | buy and sell price | `PriceList` |
 | `KeyItem`, `QuestItem` | a story item, a dungeon's quest item | `ITEM_SORT_KEY_ITEM`, `ITEM_SORT_QUEST` |
@@ -135,7 +136,9 @@ The file's name must be the ID with `.` for `:`, and `vanilla:` is retail's. The
 back to English and then to the first given; and an optional `bait` with its `radius`, `lure` (true for
 one that comes back to the bag after a catch rather than being eaten, and is never lost; false if left
 out) and `default_affinity` (the liking of a species that doesn't name it, 0 if left out;
-docs/FISHING_FRAMEWORK.md). A document
+docs/FISHING_FRAMEWORK.md); and an optional `rod` with any of its stats, `heft`, `control`, `spring`,
+`balance` and `lure` (0 to 100, retail's rod's where left out; docs/FISHING_FRAMEWORK.md, "Rods"). A
+document
 that cannot be read is left out with a `config:` line saying why, and a field one holds that this
 version does not read is named in another.
 

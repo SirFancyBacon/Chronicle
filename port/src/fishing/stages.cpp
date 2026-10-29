@@ -274,6 +274,7 @@ public:
     std::unique_ptr<Fight> Begin(const Hooked &fish) const override { return std::make_unique<Run>(settings_, fish); }
 
     [[nodiscard]] bool BaitStaysOn() const override { return true; }
+    [[nodiscard]] bool ReadsRods() const override { return true; }
 
 private:
     // Its veer of 30 ticks, a second; and the port's easing, 2.5 times its 0.004, which made a fight
@@ -298,7 +299,10 @@ private:
             // have no such scale, so a fish of its kind's usual size pulls its species' pull.
             const Species *species = fish.species;
             const float    usual = species != nullptr && species->min_size > 0.0f ? species->min_size : 1.0f;
-            pull_ = (species != nullptr ? species->pull : 1.0f) * std::max(fish.size, 0.0f) / usual;
+            const RodEffect rod = EffectOf(fish.rod);
+            pull_ = (species != nullptr ? species->pull : 1.0f) * std::max(fish.size, 0.0f) / usual / rod.pull_divisor;
+            control_ = rod.control;
+            lure_ = rod.lure;
             line_ = std::max(fish.distance, stage.land + 1.0f);
             start_ = line_;
         }
@@ -333,7 +337,7 @@ private:
             return {.steers = true, .tension = tension_, .line = line_, .heading = heading_, .chance = chance_ > 0 ? direction_ : 0, .landing = stage_.land, .start = start_};
         }
 
-        bool LosesBait(const FightContext &context) const override { return context.random() < stage_.lose_snapped; }
+        bool LosesBait(const FightContext &context) const override { return context.random() < stage_.lose_snapped * (1.0 - 0.5 * lure_); }
 
     private:
         // FishBattle: the fish swims outward within 72 degrees of the angler's facing, turning a tenth
@@ -389,7 +393,7 @@ private:
                 strength = 150;
             }
             if (aligned) {
-                vigour_ -= Dc2Rate(0.02f) * kControl;
+                vigour_ -= Dc2Rate(0.02f) * control_;
                 strength = std::max(strength, 100);
             } else {
                 vigour_ += kRecovery;
@@ -412,8 +416,6 @@ private:
             warned_ = std::max(warned_ - 1, 0);
         }
 
-        // Dark Cloud 2's rod control term (3 x RodData.status[1] / 100), neutral until rods come (step 4).
-        static constexpr float kControl = 1.0f;
         static constexpr float kRecovery = Dc2Rate(0.01f);
 
         // The port's, from the user's play: tension builds 26.5% faster than Dark Cloud 2's for reeling
@@ -427,6 +429,8 @@ private:
 
         Settings            stage_;
         float               pull_ = 1.0f;
+        float               control_ = 1.0f; /**< The rod's Control. */
+        float               lure_ = 0.0f;    /**< The rod's Lure. */
         float               line_ = 0.0f;
         float               start_ = 0.0f;
         float               tension_ = 0.0f;
@@ -585,8 +589,12 @@ public:
         return away(1);
     }
 
+    // A rod's Lure halves, at its most, the bait lost to a fish that gets away (Dark Cloud 2, F:3285).
     bool LosesBait(LossCause cause, const BiteContext &context) const override {
-        return context.random() < (cause == LossCause::PressedEarly ? lose_early_ : lose_escaped_);
+        if (cause == LossCause::PressedEarly) {
+            return context.random() < lose_early_;
+        }
+        return context.random() < lose_escaped_ * (1.0 - 0.5 * EffectOf(context.rod).lure);
     }
 
     [[nodiscard]] bool ChoosesForTheCast() const override { return true; }
@@ -635,7 +643,8 @@ private:
             session.until = context.now + kLookAgain;
             return;
         }
-        double roll = context.random() * (liked + nothing_);
+        // A rod's Lure halves, at its most, the weight of nothing coming (Dark Cloud 2, F:3852).
+        double roll = context.random() * (liked + nothing_ * (1.0 - 0.5 * EffectOf(context.rod).lure));
         for (std::size_t index = 0; index < weights.size(); index++) {
             if (roll < weights[index]) {
                 session.chosen = static_cast<int>(index);

@@ -24,6 +24,7 @@
 #include "fishing/framework.hpp"
 #include "item/framework.hpp"
 #include "item/host.hpp"
+#include "itemdata.hpp"
 #include "data/data_read.hpp"
 #include "platform/datapacks.hpp"
 #include "platform/native_config.hpp"
@@ -729,6 +730,11 @@ const std::string &SpeciesName(const Species &species, std::string_view language
         }
     }
     return species.names.empty() ? none : species.names.begin()->second;
+}
+
+item::Rod RodInUse() {
+    const item::Def *rod = item::Find(ITEM_FISHING_ROD);
+    return rod != nullptr && rod->Has<item::Rod>() ? *rod->Get<item::Rod>() : item::Rod{};
 }
 
 TimeOfDay TimeOfDayNow() {

@@ -532,6 +532,10 @@ Def VanillaDef(int item) {
     if (const auto bait = std::ranges::find(esa_info, item, &EsaInfo::item_no); bait != esa_info.end()) {
         def.With(Bait{.radius = bait->radius});
     }
+    // Retail's rod is a rod with the stats that change nothing.
+    if (item == ITEM_FISHING_ROD) {
+        def.With(Rod{});
+    }
     return def;
 }
 
@@ -546,6 +550,7 @@ struct Custom {
     std::string                     model; /**< Empty for none. */
     std::map<std::string, ItemText> text;  /**< By language file, en_gb and so on. */
     std::optional<Bait>             bait;
+    std::optional<Rod>              rod;
     State                           state; /**< A new copy's state; empty for none. */
     int                             state_version = 0;
     bool                            orphan = false; /**< Stands for a loaded save's item with no definition. */
@@ -588,7 +593,7 @@ void ReportUnknown(std::string_view file, const Json &document) {
     std::set<std::string> unknown;
     for (const auto &[key, value] : document.items()) {
         const bool known = key == "schema_version" || key == "kind" || key == "id" || key == "icon" || key == "model" ||
-                           key == "text" || key == "bait" || key == "state" || key == "state_version" ||
+                           key == "text" || key == "bait" || key == "rod" || key == "state" || key == "state_version" ||
                            std::ranges::any_of(kItemFields, [&key](const Field &field) { return key == field.name; }) ||
                            std::ranges::any_of(kPriceFields, [&key](const Field &field) { return key == field.name; });
         if (!known) {
@@ -599,6 +604,13 @@ void ReportUnknown(std::string_view file, const Json &document) {
         for (const auto &[key, value] : bait->items()) {
             if (key != "radius" && key != "lure" && key != "default_affinity") {
                 unknown.insert("bait." + key);
+            }
+        }
+    }
+    if (const auto rod = document.find("rod"); rod != document.end() && rod->is_object()) {
+        for (const auto &[key, value] : rod->items()) {
+            if (key != "heft" && key != "control" && key != "spring" && key != "balance" && key != "lure") {
+                unknown.insert("rod." + key);
             }
         }
     }
@@ -679,6 +691,22 @@ Custom ParseCustom(std::string_view file, const Json &document) {
             }
         }
     }
+    if (const auto rod = document.find("rod"); rod != document.end()) {
+        if (!rod->is_object()) {
+            throw std::runtime_error("rod must hold its stats: heft, control, spring, balance, lure");
+        }
+        Rod stats;
+        for (const auto &[key, field] : std::initializer_list<std::pair<const char *, float Rod::*>>{
+                 {"heft", &Rod::heft}, {"control", &Rod::control}, {"spring", &Rod::spring}, {"balance", &Rod::balance}, {"lure", &Rod::lure}}) {
+            if (rod->contains(key)) {
+                stats.*field = native_config::Float((*rod)[key]);
+                if (stats.*field < 0.0f || stats.*field > 100.0f) {
+                    throw std::runtime_error(std::format("rod {} must be from 0 to 100", key));
+                }
+            }
+        }
+        custom.rod = stats;
+    }
     if (const auto state = document.find("state"); state != document.end()) {
         if (!state->is_object()) {
             throw std::runtime_error("state must map each name a copy keeps to the number it starts with");
@@ -741,6 +769,9 @@ Def CustomDef(int number, const Custom &custom) {
     ItemTraits(def, custom.data);
     if (custom.bait) {
         def.With(*custom.bait);
+    }
+    if (custom.rod) {
+        def.With(*custom.rod);
     }
     return def;
 }
