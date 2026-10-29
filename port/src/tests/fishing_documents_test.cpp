@@ -287,6 +287,28 @@ TEST_F(FishingDocuments, ACustomSpeciesThatCannotBeReadIsLeftOutAndTold) {
     EXPECT_NE(told.find("fields this version does not read: colour"), std::string::npos) << told;
 }
 
+TEST_F(FishingDocuments, TheIncludedEnhancedFishingPackLoadsWhole) {
+    // port/datapacks/enhanced_fishing, which testers copy into their datapacks.
+    const fs::path pack = fs::path(__FILE__).parent_path().parent_path().parent_path() / "datapacks/enhanced_fishing";
+    fs::create_directories(directory / "datapacks");
+    fs::copy(pack, directory / "datapacks/enhanced_fishing", fs::copy_options::recursive);
+    testing::internal::CaptureStderr();
+    Order(R"("enhanced_fishing")");
+    const std::string told = testing::internal::GetCapturedStderr();
+    EXPECT_EQ(told.find("config:"), std::string::npos) << told;
+
+    for (int spot = 0; spot < 5; spot++) {
+        EXPECT_TRUE(fishing::PlaceAtSpot(spot)->bite->ChoosesForTheCast()) << spot; // brisk
+        EXPECT_TRUE(fishing::PlaceAtSpot(spot)->fight->ReadsRods()) << spot;         // tension
+    }
+    EXPECT_EQ(fishing::SpeciesOfKind(17)->pull, 3.0f);
+    // The Baron's pull with each of Ruty's rods: barely, catchable, and the first test fight's feel.
+    const auto baron_with = [](std::string_view rod) { return 3.0f / fishing::EffectOf(*item::Find(rod)->Get<item::Rod>()).pull_divisor; };
+    EXPECT_NEAR(baron_with("chronicle:sea_rod"), 2.5f, 0.05f);
+    EXPECT_NEAR(baron_with("chronicle:garayan_rod"), 2.0f, 0.05f);
+    EXPECT_NEAR(baron_with("chronicle:baron_rod"), 1.0f, 0.05f);
+}
+
 TEST_F(FishingDocuments, EachPlaceSpawnsWithRetailsOdds) {
     using enum fishing::TimeOfDay;
     const auto expect = [](int spot, fishing::TimeOfDay time, const std::map<int, double> &odds) {

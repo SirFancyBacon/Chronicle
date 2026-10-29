@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "kind": "item",
+  "id": "chronicle:sea_rod",
+  "kind_flags": 24,
+  "sort_key": 6,
+  "stack_kind": 2,
+  "buy_price": 1200,
+  "sell_price": 600,
+  "icon": 56,
+  "model": "turisao",
+  "text": {
+    "en_gb": {
+      "name": "Sea Rod",
+      "description": "\"Sea Rod\"\nA sturdy rod a sailor\ngave Ruty for a favor."
+    }
+  },
+  "rod": {
+    "heft": 55,
+    "control": 45,
+    "spring": 19,
+    "balance": 90,
+    "lure": 10
+  }
+}

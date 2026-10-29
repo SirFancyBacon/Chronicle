@@ -211,6 +211,23 @@ for now (`fishing::RodInUse`).
 | Balance | 100 | heft, control and spring count 0.8 + 0.2 x balance / 100 of themselves |
 | Lure | 0 | up to half fewer rolls of nothing biting, and half the bait lost to a fish that gets away or snaps the line |
 
+## Enhanced fishing
+
+Enhanced fishing is a datapack, `port/datapacks/enhanced_fishing/`: having it is having Enhanced, and
+without it fishing is the port's base. For now it is copied into `datapacks/` by hand and named in
+`datapacks.json`. It holds:
+
+- `places.json`: every place with the `brisk` bite and the `tension` fight, its spawns and outcomes
+  retail's.
+- `fish.json`: each species' `fight.pull` with retail's rod, from 0.75 for most small fish to 3 for the
+  Baron Garayan.
+- Ruty's three rods, custom items with the `Rod` trait (retail's model and icon): the Sea Rod (Spring
+  19, the Baron barely catchable), the Garayan Rod (33, catchable) and the Baron Rod (100, with Control
+  100 to tire it).
+- `modpack.json`, its name, description and version, for the menu that will list packs.
+
+`FishingDocuments.TheIncludedEnhancedFishingPackLoadsWhole` loads it whole.
+
 ## Kept fish
 
 A species row or document may name an `item` (an item ID, or null): what one of its fish becomes at a

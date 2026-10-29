@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "kind": "item",
+  "id": "chronicle:baron_rod",
+  "kind_flags": 24,
+  "sort_key": 6,
+  "stack_kind": 2,
+  "buy_price": 4000,
+  "sell_price": 2000,
+  "icon": 56,
+  "model": "turisao",
+  "text": {
+    "en_gb": {
+      "name": "Baron Rod",
+      "description": "\"Baron Rod\"\nRuty's best, for the\none who found the Baron."
+    }
+  },
+  "rod": {
+    "heft": 70,
+    "control": 100,
+    "spring": 100,
+    "balance": 100,
+    "lure": 50
+  }
+}
