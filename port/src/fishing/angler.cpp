@@ -332,10 +332,32 @@ public:
                         int window[4];
                         EditMes1.AutoSet(window);
                         message_shown = true;
-                    }};
+                    },
+                .keep = Keep};
     }
 
     double Random() override { return Uniform(); }
+
+    // A kept fish is a copy of its species' item, its size in the copy's state where the item keeps one,
+    // given as an event's gift is: a full bag overflows, as retail's does.
+    static bool Keep(const Catch &fish) {
+        const item::Def *def = fish.species != nullptr && !fish.species->item.empty() ? item::Find(fish.species->item) : nullptr;
+        if (def == nullptr) {
+            return false;
+        }
+        int number = def->number;
+        if (!def->state.empty()) {
+            number = item::NewCopy(*def);
+            if (number < 0) {
+                return false;
+            }
+            if (item::Copy *copy = item::FindCopy(number); copy != nullptr && copy->state.contains("size")) {
+                copy->state["size"] = fish.size / 10.0;
+            }
+        }
+        EdGetItem(number, 1, -1);
+        return true;
+    }
 
 private:
     CMainChara    &chara_;

@@ -95,7 +95,7 @@ A pack adds a species with a document of its own, `gameplay/fishing/species/<nam
 }
 ```
 
-The fields are a `fish.json` row's, with the name by language file (falling back to English, then
+The fields are a `fish.json` row's (with `item` optional, as there), the name by language file (falling back to English, then
 the first given) in place of `name_msg`, and `mardan_garayan` false if left out. The file's name must
 be the ID with `.` for `:`, and `vanilla:` is retail's. Custom species get kinds from 256
 (`fishing::kCustomKindFirst`) in ID order, and a place's spawn names them like any species. The catch
@@ -135,6 +135,20 @@ beside the name (`port/src/fishing/framework.hpp`; a new one is a class and a li
 | bite | what each fish does about the bait, asked by `CFish::Step` when its last action has run out, and when the bait is lost (never a lure) | notices at its liking x 0.3, takes the bait and the hook at x 0.5, loses interest at 0.1, every 21 to 50 ticks; holds the hook `hook_ticks`; loses the bait at `lose_bait_early` for Cross on a nibble and `lose_bait_escaped` for a fish that lets go |
 | fight | from the hook set to the fish landed | none: the controller rumbles for `ticks` while the fish's model loads |
 | outcome | what a landed fish gives | the Mardan Garayan count, the points, the records and the evaluation message |
+
+The port also ships a `keep` outcome: the fish goes into the bag as its species' `item` (below), and
+gives its points and goes in the records (with the Mardan Garayan count) only where the place's
+settings say `"points": true` and `"records": true`. The evaluation message still shows, with no points
+unless they were given. A full bag overflows as an event's gift does, the player choosing what to
+throw away. A species without an item isn't kept.
+
+## Kept fish
+
+A species row or document may name an `item` (an item ID, or null): what one of its fish becomes at a
+`keep` place. Where the item's document declares `state` with a `size`, each kept fish is a copy of its
+own with its size there (docs/ITEM_FRAMEWORK.md, "Copies"); an item with `sort_key` 7 has the `Fish`
+trait, so a quest's `HasItemWith<item::Fish>` counts it. Retail's places don't keep: turning that on is
+a pack's `places.json`.
 
 ## The session
 

@@ -1075,7 +1075,14 @@ short *ClsMes::GetTextLineDataTop(int line) {
     return item::CustomMessage(line, this->buff == SystemMes);
 }
 
+// The overlay covers a window's inserted system messages too: a catch's fish name is one.
 short *ClsMes::GetTextLineDataTop_system(int line) {
+    if (this == g_overlay_mes) {
+        if (short *text = FindMessage(g_overlay_file, line)) {
+            return text;
+        }
+    }
+
     const int count = this->buff_system[0];
     short    *body = &this->buff_system[1];
 

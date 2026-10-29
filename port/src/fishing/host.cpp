@@ -256,6 +256,12 @@ bool ValidModel(std::string_view path) {
 
 // What a species row and a custom species' document share: the model, sizes, points and likings.
 void ParseFish(Species &species, const Json &row, std::string_view where) {
+    if (const auto item = row.find("item"); item != row.end() && !item->is_null()) {
+        if (!item->is_string() || item::Find(item->get_ref<const std::string &>()) == nullptr) {
+            throw std::runtime_error(std::format("{} item must be the ID of an item, or null", where));
+        }
+        species.item = item->get<std::string>();
+    }
     species.model = native_config::At(row, "model").get<std::string>();
     if (!ValidModel(species.model)) {
         throw std::runtime_error(std::format("{} model \"{}\" is not a path in the data", where, species.model));
@@ -307,7 +313,7 @@ Parsed<std::vector<Species>> ParseSpecies(const Json &document) {
         }
         ParseFish(species, row, where);
         species.mardan_garayan = Bool(row, "mardan_garayan", where);
-        NoteUnknown(row, {"fish_kind", "id", "model", "name_msg", "model_size", "min_size", "max_size", "min_fp", "max_fp", "food_affinity", "mardan_garayan"},
+        NoteUnknown(row, {"fish_kind", "id", "model", "name_msg", "model_size", "min_size", "max_size", "min_fp", "max_fp", "food_affinity", "mardan_garayan", "item"},
                     parsed.unknown);
         if (!by_kind.emplace(kind, std::move(species)).second) {
             throw std::runtime_error(std::format("{} is listed twice", where));
@@ -363,7 +369,7 @@ Species ParseCustomSpecies(std::string_view file, const Json &document) {
         throw std::runtime_error("text needs a name in at least one language");
     }
     std::set<std::string> unknown;
-    NoteUnknown(document, {"schema_version", "kind", "id", "model", "model_size", "min_size", "max_size", "min_fp", "max_fp", "food_affinity", "mardan_garayan", "text"},
+    NoteUnknown(document, {"schema_version", "kind", "id", "model", "model_size", "min_size", "max_size", "min_fp", "max_fp", "food_affinity", "mardan_garayan", "text", "item"},
                 unknown);
     if (!unknown.empty()) {
         std::string names;

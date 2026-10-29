@@ -223,7 +223,7 @@ private:
  */
 class RetailOutcome final : public OutcomeStage {
 public:
-    void Apply(const Catch &fish, const OutcomeContext &context) const override {
+    void Apply(Catch &fish, const OutcomeContext &context) const override {
         if (fish.species != nullptr && fish.species->mardan_garayan) {
             context.count_mardan_garayan();
         }
@@ -233,6 +233,47 @@ public:
     }
 };
 
+bool Flag(const Json &settings, const char *key, std::string_view where) {
+    if (!settings.contains(key)) {
+        return false;
+    }
+    if (!settings[key].is_boolean()) {
+        throw std::runtime_error(std::format("{}: {} must be true or false", where, key));
+    }
+    return settings[key].get<bool>();
+}
+
+/**
+ * The fish into the bag as its species' item, with its size; the points and the records only where
+ * the place asks for them.
+ */
+class KeepOutcome final : public OutcomeStage {
+public:
+    explicit KeepOutcome(const Json &settings)
+        : points_(Flag(settings, "points", "outcome")), records_(Flag(settings, "records", "outcome")) {}
+
+    void Apply(Catch &fish, const OutcomeContext &context) const override {
+        fish.kept = context.keep(fish);
+        if (records_ && fish.species != nullptr && fish.species->mardan_garayan) {
+            context.count_mardan_garayan();
+        }
+        if (points_) {
+            context.add_points(fish.points);
+        }
+        if (records_) {
+            context.record(fish);
+        }
+        // The window says what was given: no points unless the place gives them.
+        Catch shown = fish;
+        shown.points = points_ ? fish.points : 0;
+        context.show(shown);
+    }
+
+private:
+    bool points_;
+    bool records_;
+};
+
 } // namespace
 
 void RegisterBuiltinStages() {
@@ -240,6 +281,7 @@ void RegisterBuiltinStages() {
     RegisterBiteStage("retail", [](const Json &settings) { return std::make_unique<RetailBite>(settings); });
     RegisterFightStage("retail", [](const Json &settings) { return std::make_unique<RetailFight>(settings); });
     RegisterOutcomeStage("retail", [](const Json &) { return std::make_unique<RetailOutcome>(); });
+    RegisterOutcomeStage("keep", [](const Json &settings) { return std::make_unique<KeepOutcome>(settings); });
 }
 
 } // namespace dc::fishing

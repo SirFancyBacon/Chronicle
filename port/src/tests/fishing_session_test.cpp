@@ -35,6 +35,8 @@ public:
     std::vector<int>         records;
     int                      mardan_garayan = 0;
     int                      shown = 0;
+    int                      shown_points = -1;
+    std::vector<std::string> kept;
     const fishing::Place    *place = fishing::PlaceAtSpot(2);
     std::optional<fishing::Catch> caught = fishing::Catch{.species = fishing::SpeciesOfKind(5), .size = 142, .points = 300};
 
@@ -79,7 +81,17 @@ public:
         return {.add_points = [this](int added) { points += added; },
                 .record = [this](const fishing::Catch &fish) { records.insert(records.end(), {fish.species->kind, fish.size}); },
                 .count_mardan_garayan = [this] { mardan_garayan++; },
-                .show = [this](const fishing::Catch &) { shown++; }};
+                .show = [this](const fishing::Catch &fish) {
+                    shown++;
+                    shown_points = fish.points;
+                },
+                .keep = [this](const fishing::Catch &fish) {
+                    if (fish.species == nullptr || fish.species->item.empty()) {
+                        return false;
+                    }
+                    kept.push_back(fish.species->item);
+                    return true;
+                }};
     }
     double Random() override {
         if (rolls.empty()) {
@@ -261,6 +273,41 @@ TEST_F(FishingSession, QuestHelpersCountTheCatchesIntoTheQuestsNumbers) {
     EXPECT_EQ(progress.vars.at("largest"), 142);
     EXPECT_EQ(progress.vars.at("matataki"), 1); // the same species twice counts once
     quest::Clear();
+}
+
+TEST_F(FishingSession, AKeepPlaceGivesTheFishAsItsSpeciesItem) {
+    // Matataki's second spot with its outcome turned to keep, and the Mardan Garayan made an item.
+    fishing::Species mardan = *fishing::SpeciesOfKind(5);
+    mardan.item = "vanilla:flapping_fish";
+    fishing::Place place = *angler.place;
+    for (const auto &[points, records] : std::vector<std::pair<bool, bool>>{{false, false}, {true, true}}) {
+        place.outcome = fishing::MakeOutcomeStage({{"stage", "keep"}, {"points", points}, {"records", records}});
+        angler = FakeAngler();
+        angler.place = &place;
+        angler.caught->species = &mardan;
+        session.Reset();
+        std::vector<bool> published;
+        const int id = fishing::OnCatch([&](const fishing::Catch &fish) { published.push_back(fish.kept); });
+        CastAndWait();
+        LandFish(*this, session, angler);
+        fishing::Unsubscribe(id);
+        EXPECT_EQ(angler.kept, std::vector<std::string>{"vanilla:flapping_fish"});
+        EXPECT_EQ(published, std::vector<bool>{true});
+        EXPECT_EQ(angler.points, points ? 300 : 0);
+        EXPECT_EQ(angler.records.empty(), !records);
+        EXPECT_EQ(angler.mardan_garayan, records ? 1 : 0);
+        EXPECT_EQ(angler.shown_points, points ? 300 : 0) << "the window says what was given";
+    }
+
+    // A species without an item isn't kept; the window still shows the catch.
+    place.outcome = fishing::MakeOutcomeStage({{"stage", "keep"}});
+    angler = FakeAngler();
+    angler.place = &place;
+    session.Reset();
+    CastAndWait();
+    LandFish(*this, session, angler);
+    EXPECT_TRUE(angler.kept.empty());
+    EXPECT_EQ(angler.shown, 1);
 }
 
 TEST_F(FishingSession, CrossOnANibbleSinksTheFloatAndLosesTheBaitOneTimeInFive) {

@@ -32,6 +32,7 @@ struct Species {
     std::map<std::string, float> food_affinity; /**< Liking by bait item ID; a bait left out is not liked. */
     bool                         mardan_garayan = false; /**< Counted toward the Mardan Garayan. */
     std::map<std::string, std::string> names; /**< A custom species' name by language file; retail's are name_msg. */
+    std::string                        item;  /**< The item a kept fish becomes (the keep outcome); empty for none. */
 
     [[nodiscard]] bool IsCustom() const;
 
@@ -207,6 +208,7 @@ struct OutcomeContext {
     std::function<void(const Catch &)>           record; /**< Into the records: the save's for retail's kinds, chronicle.dat's for custom ones. */
     std::function<void()>                        count_mardan_garayan;
     std::function<void(const Catch &)>           show; /**< The evaluation message. */
+    std::function<bool(const Catch &)>           keep; /**< Into the bag as its species' item; false where it has none. */
 };
 
 /**
@@ -216,7 +218,10 @@ class OutcomeStage {
 public:
     virtual ~OutcomeStage() = default;
 
-    virtual void Apply(const Catch &fish, const OutcomeContext &context) const = 0;
+    /**
+     * What the catch gives; the stage marks it kept when it gives it as an item.
+     */
+    virtual void Apply(Catch &fish, const OutcomeContext &context) const = 0;
 };
 
 /**
