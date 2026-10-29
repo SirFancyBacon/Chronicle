@@ -1,6 +1,10 @@
 #pragma once
 
 #include <string>
+#include <string_view>
+#include <vector>
+
+#include "dialog/framework.hpp"
 
 // Villager conversations through the dialog framework (docs/DIALOG_FRAMEWORK.md). EdTalkMode offers
 // each conversation to the framework on its first tick; one the framework takes runs here until it
@@ -28,6 +32,12 @@ void DialogNpcSetMessageFile(const char *path);
  * true when the framework took it, which it does only where a provider adds a choice.
  */
 bool DialogNpcOpen(int map_no, int character_info_id, int mes_no);
+
+/**
+ * Opens a menu of the caller's own in EditMes1's window, outside a conversation (fishing's, while
+ * standing at the water): stepped and shown as DialogNpcOpen's are.
+ */
+void DialogNpcOpenMenu(std::string_view prompt, std::vector<ChoiceItem> choices);
 
 /**
  * One tick of a conversation DialogNpcOpen took: the pad, then where it stands. While it runs,

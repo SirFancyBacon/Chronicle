@@ -388,5 +388,10 @@
     "item.orphan.description": "Aus einem nicht geladenen Mod.",
     "fishing.fight.tension": "Spannung",
     "fishing.fight.line": "Schnur",
-    "fishing.fight.hit": "Biss!"
+    "fishing.fight.hit": "Biss!",
+    "fishing.menu.prompt": "Angeln",
+    "fishing.menu.rod": "Angel wechseln",
+    "fishing.menu.look": "Nach Fischen sehen",
+    "fishing.menu.more": "Mehr...",
+    "fishing.menu.rod_prompt": "Welche Angel?"
 }

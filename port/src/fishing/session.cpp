@@ -43,8 +43,13 @@ void Session::Tick(Angler &angler, const Input &input) {
                 step_ = Step::CastStart;
                 ticks_ = 0;
             }
+            // Enhanced fishing's menu (the rod, Look for fish) leads on to the town's own.
             if (input.circle) {
-                angler.OpenMenu(0x85);
+                if (place.fight->ReadsRods()) {
+                    angler.OpenFishingMenu();
+                } else {
+                    angler.OpenMenu(0x85);
+                }
                 angler.Motion(0, 0);
             }
             if (input.square) {

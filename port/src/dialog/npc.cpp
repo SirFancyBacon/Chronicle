@@ -231,6 +231,15 @@ bool DialogNpcOpen(int map_no, int character_info_id, int mes_no) {
     return true;
 }
 
+void DialogNpcOpenMenu(std::string_view prompt, std::vector<ChoiceItem> choices) {
+    Setup();
+    NpcContext ctx;
+    ctx.bubble = BubbleKind::StandardWindow;
+    OpenCustomSession(ctx, prompt, std::move(choices));
+    g_window.retail_buff = EditMes1.buff;
+    g_window.shown.clear();
+}
+
 DialogNpcState DialogNpcStep() {
     StepSession();
 

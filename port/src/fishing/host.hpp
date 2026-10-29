@@ -154,15 +154,32 @@ void UpdateFishAction(game::CFish &fish);
 float ApproachSpeed(const game::CFish &fish);
 
 /**
- * The rod the angler fishes with: retail's until the fishing menu offers a choice (step 4).
+ * The rod the angler fishes with: the one chosen from the fishing menu while it is in the bag, else
+ * the Fishing Rod. The choice is kept with the save (chronicle.dat's FISH chunk).
  */
 item::Rod RodInUse();
+
+/**
+ * Chooses the rod by item ID; empty for the Fishing Rod.
+ */
+void               ChooseRod(std::string id);
+const std::string &ChosenRod();
+
+/**
+ * Every rod (the Rod trait) the bag holds, each once, by item number.
+ */
+std::vector<int> RodsCarried();
 
 /**
  * Whether the fight holds the hooked fish where it says (FightView::steers), and the way it faces.
  */
 bool  FightSteers();
 float BattleHeading();
+
+/**
+ * Whether the fishing menu is up, holding the angler still.
+ */
+bool MenuOpen();
 
 /**
  * Draws a fight's gauges in the town's 2D pass (a fight that steers: tension, the line still out,

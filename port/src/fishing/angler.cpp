@@ -24,7 +24,14 @@
 #include "fish.hpp"
 #include "fishing.hpp"
 #include "fishing/host.hpp"
+#include "dialog/framework.hpp"
+#include "dialog/npc.hpp"
+#include "editloop3.hpp"
 #include "gamepad.hpp"
+#include "itemdata.hpp"
+#include "main.hpp"
+#include "menuetc.hpp"
+#include "text/gametext.hpp"
 #include "ui/framework/surfaces.hpp"
 #include "ui/framework/text.hpp"
 #include "ui/framework/widgets.hpp"
@@ -79,6 +86,61 @@ const char *ActionName(game::FishAction action) {
 }
 
 BiteSession g_bite;
+
+// The fishing menu (GameAngler::OpenFishingMenu), open while the angler stands at the water; "More..."
+// opens the town's own menu once it has closed.
+bool g_menu = false;
+bool g_more = false;
+
+constexpr const char *kMenuPrompt = "fishing.menu.prompt";
+constexpr const char *kMenuPromptText = "Fishing";
+constexpr const char *kMenuRod = "fishing.menu.rod";
+constexpr const char *kMenuRodText = "Change rod";
+constexpr const char *kMenuLook = "fishing.menu.look";
+constexpr const char *kMenuLookText = "Look for fish";
+constexpr const char *kMenuMore = "fishing.menu.more";
+constexpr const char *kMenuMoreText = "More...";
+constexpr const char *kRodPrompt = "fishing.menu.rod_prompt";
+constexpr const char *kRodPromptText = "Which rod?";
+
+// An item's name, as the menus show it: its system message (a custom item's own text answers there).
+std::string ItemName(int number) {
+    const COM_ITEM_INFO *info = GetCommonItemInfo(number);
+    if (info == nullptr || SystemMes == nullptr) {
+        return {};
+    }
+    short *saved = CommonMenuMes3.buff;
+    CommonMenuMes3.buff = SystemMes;
+    const short *codes = CommonMenuMes3.GetTextLineDataTop(info->msg + 100);
+    CommonMenuMes3.buff = saved;
+    std::string name = codes != nullptr ? text::GameTextDecode(codes) : std::string();
+    return name.substr(0, name.find('\n'));
+}
+
+// "Look for fish": the water redrawn with the place's odds, as leaving and coming back does. Every
+// fish swims with the one model (chara/f00s.chr), so only its kind and size change.
+void RespawnFish() {
+    const Place &place = CurrentPlace();
+    if (Fish == nullptr || PlaceAtSpot(place.spot) == nullptr) {
+        return;
+    }
+    const Spawning spawning = SpawnAt(place.spot, EdGetTime(SaveData->GetNowTime()));
+    for (int index = 0; index < FishNum; index++) {
+        CFish          &fish = Fish[index];
+        const int       kind = std::cmp_less(index, spawning.kinds.size()) ? spawning.kinds[static_cast<std::size_t>(index)] : -1;
+        const FishInfo *info = fishing::Info(kind);
+        // A place left empty as the water was loaded has no model to swim with.
+        if (fish.fish_kind < 0 || info == nullptr) {
+            continue;
+        }
+        fish.info = *info;
+        fish.fish_kind = kind;
+        fish.SetScale();
+    }
+    FishingInitFishStatus();
+    FishingInitFish(fish_rect);
+    g_bite = {};
+}
 
 // Brisk looks at the water again this often while no fish there likes the bait; longer gaps are a
 // roll of nothing, which the trace says.
@@ -210,6 +272,35 @@ public:
         } else {
             EdFishingWalkHelpMes(FishingGetEsaItemNo());
         }
+    }
+
+    void OpenFishingMenu() override {
+        std::vector<dialog::ChoiceItem> choices;
+        choices.push_back({.id = "fishing.rod", .label_key = kMenuRod, .fallback_label = kMenuRodText, .on_select = [](dialog::ISessionController &session) {
+            std::vector<dialog::ChoiceItem> rods;
+            for (const int number : RodsCarried()) {
+                const item::Def *rod = item::Find(number);
+                const bool       chosen = ChosenRod().empty() ? number == ITEM_FISHING_ROD : rod->id == ChosenRod();
+                rods.push_back({.id = rod->id,
+                                .fallback_label = ItemName(number),
+                                .color = chosen ? dialog::ChoiceColor::Yellow : dialog::ChoiceColor::White,
+                                .on_select = [number, id = rod->id](dialog::ISessionController &picked) {
+                                    ChooseRod(number == ITEM_FISHING_ROD ? std::string() : id);
+                                    picked.Close();
+                                }});
+            }
+            session.PushRawChoicePage(localize::LocalizeText(kRodPrompt, kRodPromptText), std::move(rods));
+        }});
+        choices.push_back({.id = "fishing.look", .label_key = kMenuLook, .fallback_label = kMenuLookText, .on_select = [](dialog::ISessionController &session) {
+            RespawnFish();
+            session.Close();
+        }});
+        choices.push_back({.id = "fishing.more", .label_key = kMenuMore, .fallback_label = kMenuMoreText, .on_select = [](dialog::ISessionController &session) {
+            g_more = true;
+            session.Close();
+        }});
+        dialog::DialogNpcOpenMenu(localize::LocalizeText(kMenuPrompt, kMenuPromptText), std::move(choices));
+        g_menu = true;
     }
 
     void OpenMenu(int event) override {
@@ -499,6 +590,21 @@ void StepSession(CMainChara &chara, CCameraFollow &camera, float *position, floa
     if (chara_fishing == ED_FISHING_INIT && g_session.CurrentStep() != Step::Init) {
         g_session.Reset();
     }
+    GameAngler angler(chara, camera, position);
+    // The fishing menu takes the pad while it is up; the session waits for it.
+    if (g_menu) {
+        if (dialog::DialogNpcStep() == dialog::DialogNpcState::Running) {
+            dialog::DialogNpcShowWindow();
+        } else {
+            g_menu = false;
+            if (std::exchange(g_more, false)) {
+                angler.OpenMenu(0x85);
+            }
+        }
+        float_weight = g_session.FloatWeight();
+        hook_weight = g_session.HookWeight();
+        return;
+    }
     int          fish_no = -1;
     const Input  input{.cross = EdPadDown(0x40, 0xFFFF) != 0,
                        .circle = EdPadDown(0x20, 0xFFFF) != 0,
@@ -509,7 +615,6 @@ void StepSession(CMainChara &chara, CCameraFollow &camera, float *position, floa
                        .fish_status = FishingFishStatus(&fish_no),
                        .fish_no = fish_no,
                        .debug = DebugMode != 0};
-    GameAngler angler(chara, camera, position);
     g_ticks++;
     const Step before = g_session.CurrentStep();
     g_session.Tick(angler, input);
@@ -588,10 +693,19 @@ constexpr const char *kHitText = "HIT!";
 
 std::vector<std::pair<std::string, std::string>> Strings() {
     return {
-        {kTension, kTensionText},
-        {kLine,    kLineText   },
-        {kHit,     kHitText    },
+        {kTension,     kTensionText    },
+        {kLine,        kLineText       },
+        {kHit,         kHitText        },
+        {kMenuPrompt,  kMenuPromptText },
+        {kMenuRod,     kMenuRodText    },
+        {kMenuLook,    kMenuLookText   },
+        {kMenuMore,    kMenuMoreText   },
+        {kRodPrompt,   kRodPromptText  },
     };
+}
+
+bool MenuOpen() {
+    return g_menu;
 }
 
 // Dark Cloud 1 has no art for a fight, so the gauges are the port's: a paper plate at the foot of the

@@ -388,5 +388,10 @@
     "item.orphan.description": "Da una mod non caricata.",
     "fishing.fight.tension": "Tensione",
     "fishing.fight.line": "Lenza",
-    "fishing.fight.hit": "Abbocca!"
+    "fishing.fight.hit": "Abbocca!",
+    "fishing.menu.prompt": "Pesca",
+    "fishing.menu.rod": "Cambia canna",
+    "fishing.menu.look": "Cerca pesci",
+    "fishing.menu.more": "Altro...",
+    "fishing.menu.rod_prompt": "Quale canna?"
 }

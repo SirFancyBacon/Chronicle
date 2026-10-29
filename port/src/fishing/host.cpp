@@ -508,14 +508,17 @@ T Read(std::string_view path, std::string_view kind, Parsed<T> (*parse)(const Js
 
 std::map<int, FishInfo>                            g_info;
 std::map<std::string, SpeciesRecord, std::less<>> g_records;
+std::string                                       g_rod; // the rod chosen from the fishing menu
 
-constexpr std::uint32_t kRecordsVersion = 1;
+// Version 2 puts the chosen rod before the records.
+constexpr std::uint32_t kRecordsVersion = 2;
 
 std::optional<save::ExtensionChunk> RecordsChunk(CSaveData & /*image*/) {
-    if (g_records.empty()) {
+    if (g_records.empty() && g_rod.empty()) {
         return std::nullopt;
     }
     save::ChunkWriter out;
+    out.PutText(g_rod);
     out.Put(static_cast<std::uint32_t>(g_records.size()));
     for (const auto &[id, record] : g_records) {
         out.PutText(id);
@@ -533,11 +536,12 @@ std::optional<save::ExtensionChunk> RecordsChunk(CSaveData & /*image*/) {
     return chunk;
 }
 
-std::optional<std::map<std::string, SpeciesRecord, std::less<>>> DecodeRecords(std::span<const std::uint8_t> bytes) {
+std::optional<std::map<std::string, SpeciesRecord, std::less<>>> DecodeRecords(std::span<const std::uint8_t> bytes, std::uint32_t version,
+                                                                                 std::string &rod) {
     save::ChunkReader                                 reader(bytes);
     std::map<std::string, SpeciesRecord, std::less<>> records;
     std::uint32_t                                     count = 0;
-    if (!reader.Get(count)) {
+    if ((version >= 2 && !reader.GetText(rod)) || !reader.Get(count)) {
         return std::nullopt;
     }
     for (std::uint32_t index = 0; index < count; index++) {
@@ -564,15 +568,17 @@ std::optional<std::map<std::string, SpeciesRecord, std::less<>>> DecodeRecords(s
 
 void RestoreRecords(const save::ExtensionChunk *chunk) {
     g_records.clear();
+    g_rod.clear();
     if (chunk == nullptr) {
         return;
     }
     std::optional<std::map<std::string, SpeciesRecord, std::less<>>> records;
-    if (chunk->version == kRecordsVersion) {
-        records = DecodeRecords(chunk->payload);
+    if (chunk->version == 1 || chunk->version == kRecordsVersion) {
+        records = DecodeRecords(chunk->payload, chunk->version, g_rod);
     }
     if (!records) {
         std::println(stderr, "fishing: the save's records of custom fish cannot be read (version {}); they are left out", chunk->version);
+        g_rod.clear();
         return;
     }
     g_records = std::move(*records);
@@ -732,7 +738,36 @@ const std::string &SpeciesName(const Species &species, std::string_view language
     return species.names.empty() ? none : species.names.begin()->second;
 }
 
+std::vector<int> RodsCarried() {
+    std::vector<int> rods;
+    if (SaveData == nullptr) {
+        return rods;
+    }
+    const ITEM_PACK &pack = SaveData->GetDngStatus()->item_pack;
+    const auto       add = [&rods](int number) {
+        const item::Def *def = number > 0 ? item::Find(item::Definition(number)) : nullptr;
+        if (def != nullptr && def->Has<item::Rod>() && std::ranges::find(rods, def->number) == rods.end()) {
+            rods.push_back(def->number);
+        }
+    };
+    std::ranges::for_each(pack.item, add);
+    std::ranges::for_each(pack.quick_item_slot, add);
+    return rods;
+}
+
+void ChooseRod(std::string id) {
+    g_rod = std::move(id);
+}
+
+const std::string &ChosenRod() {
+    return g_rod;
+}
+
 item::Rod RodInUse() {
+    const item::Def *chosen = g_rod.empty() ? nullptr : item::Find(g_rod);
+    if (chosen != nullptr && chosen->Has<item::Rod>() && std::ranges::contains(RodsCarried(), chosen->number)) {
+        return *chosen->Get<item::Rod>();
+    }
     const item::Def *rod = item::Find(ITEM_FISHING_ROD);
     return rod != nullptr && rod->Has<item::Rod>() ? *rod->Get<item::Rod>() : item::Rod{};
 }

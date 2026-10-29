@@ -104,7 +104,8 @@ towns' message files have none.
 
 **Records.** `save.dat`'s `fish_data` names retail kinds, so a custom species' catches go instead into
 `chronicle.dat`'s `FISH` chunk (docs/PC.md, "Saves"): for each species, by ID, how many have been
-caught, the largest and the baits it has been caught with (`fishing::RecordOf`). Records of a species
+caught, the largest and the baits it has been caught with (`fishing::RecordOf`), with the rod chosen
+from the fishing menu. Records of a species
 whose document is gone are kept and written back until it returns. Its points still go to the save's
 fish points, which are only a number.
 
@@ -200,8 +201,15 @@ A rod is an item with the `Rod` trait, carrying Dark Cloud 2's five rod numbers 
 each does. Only the stages that read rods use them: `brisk` (Lure) and `tension` (the rest); in
 Original, and to the town scripts, which check for the Fishing Rod before offering to fish, a rod is
 only a rod. The Fishing Rod has the stats that change nothing, so it fights as the stages' numbers say;
-better rods are custom items with a `rod` (docs/ITEM_FRAMEWORK.md). The rod in use is the Fishing Rod
-for now (`fishing::RodInUse`).
+better rods are custom items with a `rod` (docs/ITEM_FRAMEWORK.md). The rod in use is the one chosen
+from the fishing menu while it is in the bag, else the Fishing Rod (`fishing::RodInUse`); the choice is
+kept in `chronicle.dat`'s `FISH` chunk.
+
+**The fishing menu.** Where the place's fight reads rods (Enhanced), Circle while standing at the water
+opens the port's menu in the message window (`dialog::DialogNpcOpenMenu`): Change rod, which lists the
+rods in the bag with the one in use marked; Look for fish, which redraws the fish in the water with the
+place's odds, as leaving and coming back does; and More..., which opens the town's own menu (the bait,
+the records, the exchange) as Circle does in Original. The angler stands still while it is up.
 
 | Stat | Retail's rod | Does (`fishing::EffectOf`) |
 |---|---|---|

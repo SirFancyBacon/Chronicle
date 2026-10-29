@@ -650,6 +650,31 @@ TEST(SaveSlots, ACustomFishsRecordGoesToChronicleDatAndOutlivesItsDefinition) {
     fs::remove_all(root);
 }
 
+TEST(SaveSlots, TheChosenRodIsUsedWhileCarriedAndKeptWithTheSave) {
+    fs::path root = UseTempSaveRoot();
+    PrepareSave();
+    item::Load();
+    item::Register(item::Def{.id = "chronicle:sea_rod", .number = kRod}.With(item::Rod{.spring = 19.0f}));
+    fishing::Load();
+    PackOf(g_save).item[0] = ITEM_FISHING_ROD;
+    fishing::ChooseRod("chronicle:sea_rod");
+    EXPECT_EQ(fishing::RodInUse().spring, 10.0f); // not carried: the Fishing Rod
+    PackOf(g_save).item[1] = kRod;
+    EXPECT_EQ(fishing::RodsCarried(), (std::vector<int>{ITEM_FISHING_ROD, kRod}));
+    EXPECT_EQ(fishing::RodInUse().spring, 19.0f);
+
+    BuildImage();
+    ASSERT_EQ(SaveNew(0), 1);
+    save::ExtensionNewGame();
+    EXPECT_TRUE(fishing::ChosenRod().empty());
+    g_mc.file_no = 0;
+    ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_LOAD), 1);
+    EXPECT_EQ(fishing::ChosenRod(), "chronicle:sea_rod");
+    save::ExtensionNewGame();
+    item::Load();
+    fs::remove_all(root);
+}
+
 TEST(SaveSlots, CustomItemsGoToChronicleDatAndSaveDatStaysRetails) {
     fs::path root = UseTempSaveRoot();
     PrepareSave();

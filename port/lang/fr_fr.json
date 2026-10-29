@@ -388,5 +388,10 @@
     "item.orphan.description": "D'un mod qui n'est pas chargé.",
     "fishing.fight.tension": "Tension",
     "fishing.fight.line": "Ligne",
-    "fishing.fight.hit": "Ça mord !"
+    "fishing.fight.hit": "Ça mord !",
+    "fishing.menu.prompt": "Pêche",
+    "fishing.menu.rod": "Changer de canne",
+    "fishing.menu.look": "Chercher des poissons",
+    "fishing.menu.more": "Plus...",
+    "fishing.menu.rod_prompt": "Quelle canne ?"
 }

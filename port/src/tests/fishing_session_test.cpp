@@ -60,6 +60,7 @@ public:
     void BiteCue() override { Record("bite cue"); }
     void Help(bool) override {}
     void OpenMenu(int event) override { Record(std::format("menu {}", event)); }
+    void OpenFishingMenu() override { Record("fishing menu"); }
     void FollowLine() override {}
     void CatchCamera(float) override {}
     void FadeMusic(bool out) override { Record(out ? "music out" : "music in"); }
@@ -367,6 +368,17 @@ TEST_F(FishingSession, CrossWhileWaitingReelsIn) {
     angler.motion_done = true;
     Tick();
     EXPECT_EQ(session.CurrentStep(), Step::Stand);
+}
+
+TEST_F(FishingSession, CircleOpensEnhancedFishingsMenuWhereTheFightReadsRods) {
+    fishing::Place place = *angler.place;
+    place.fight = fishing::MakeFightStage({{"stage", "tension"}, {"land_distance", 8.0}, {"min_ticks", 200}, {"reel_speed", 0.15},
+                                           {"lose_bait_snapped", 0.3}});
+    angler.place = &place;
+    Tick();
+    Tick({.circle = true});
+    EXPECT_TRUE(angler.Did("fishing menu"));
+    EXPECT_FALSE(angler.Did("menu 133"));
 }
 
 TEST_F(FishingSession, CircleAndSquareOpenTheTownsMenus) {

@@ -388,5 +388,10 @@
     "item.orphan.description": "De un mod que no está cargado.",
     "fishing.fight.tension": "Tensión",
     "fishing.fight.line": "Sedal",
-    "fishing.fight.hit": "¡Pica!"
+    "fishing.fight.hit": "¡Pica!",
+    "fishing.menu.prompt": "Pesca",
+    "fishing.menu.rod": "Cambiar caña",
+    "fishing.menu.look": "Buscar peces",
+    "fishing.menu.more": "Más...",
+    "fishing.menu.rod_prompt": "¿Qué caña?"
 }
