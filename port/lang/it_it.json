@@ -385,5 +385,8 @@
     "quest.carls_slingshot.gina.confess": "...Carl non crede all'uccello?{page}...Va bene. Tiravo alle bottiglie, e ha fatto CRAC.{page}Non l'ho fatto apposta! Così gliene ho fatta una nuova!{page}Puoi dargliela tu? Ho paura che si arrabbi..",
     "quest.carls_slingshot.gina.waiting": "Hai dato a Carl la fionda nuova? È arrabbiato?",
     "item.orphan.name": "Oggetto sconosciuto",
-    "item.orphan.description": "Da una mod non caricata."
+    "item.orphan.description": "Da una mod non caricata.",
+    "fishing.fight.tension": "Tensione",
+    "fishing.fight.line": "Lenza",
+    "fishing.fight.hit": "Abbocca!"
 }

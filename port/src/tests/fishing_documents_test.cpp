@@ -171,6 +171,7 @@ TEST_F(FishingDocuments, APacksChangeReachesTheGameAndLeavesWithIt) {
     auto                             fish = Document("fish.json");
     Row(fish, "fish", "fish_kind", 4)["max_fp"] = 90;
     Row(fish, "fish", "fish_kind", 4)["mardan_garayan"] = true;
+    Row(fish, "fish", "fish_kind", 4)["fight"] = {{"pull", 1.5}};
     Row(fish, "fish", "fish_kind", 4)["food_affinity"] = nlohmann::json::array({
         {{"bait", "vanilla:poisonous_apple"}, {"affinity", 0.75}}
     });
@@ -194,6 +195,8 @@ TEST_F(FishingDocuments, APacksChangeReachesTheGameAndLeavesWithIt) {
     EXPECT_EQ(fishing::Info(4)->food_affinity[6], 0.75f);
     EXPECT_EQ(fishing::Info(4)->food_affinity[1], 0.0f);
     EXPECT_TRUE(fishing::CountsAsMardanGarayan(4));
+    EXPECT_EQ(fishing::SpeciesOfKind(4)->pull, 1.5f);
+    EXPECT_EQ(fishing::SpeciesOfKind(3)->pull, 0.5f); // left out: the default
     EXPECT_EQ(fishing::SpawnAt(0, ED_TIME_DAY).kinds, std::vector<int>(6, 8));
     const fishing::BiteContext always{.random = [] { return 0.99; }};
     EXPECT_TRUE(fishing::PlaceAtSpot(0)->bite->LosesBait(fishing::LossCause::PressedEarly, always));

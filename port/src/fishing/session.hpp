@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -32,16 +33,20 @@ enum class Sound {
     Bite,    /**< The fish coming out of the water. */
     Landed,  /**< The fish put away. */
     Fanfare, /**< The catch held up. */
+    Warning, /**< The line close to snapping. */
+    Snap,    /**< The line breaking. */
 };
 
 /**
  * What a session reads each tick.
  */
 struct Input {
-    bool  cross = false;
+    bool  cross = false;      /**< Pressed this tick. */
+    bool  cross_held = false;
     bool  circle = false;
     bool  square = false;
     float stick_x = 0.0f; /**< The left stick, -1 to 1. */
+    float stick_y = 0.0f; /**< -1 (down) to 1 (up). */
     int   fish_status = -1; /**< FishingFishStatus: -1, 7 nibbling, 8 on the hook, 11 fighting. */
     int   fish_no = -1;     /**< The fish FishingFishStatus last looked at. */
     bool  debug = false;    /**< Debug mode, which sets the hook itself. */
@@ -79,6 +84,9 @@ public:
     virtual void RestartBite() = 0; /**< The bite stage's cast starts over: the float settled, or the angler moved. */
     virtual void WatchFish(int fish_no) = 0;
     virtual void HookFish(int fish_no) = 0; /**< Sets the hook and starts loading the fish's model. */
+    virtual float HookedSize() = 0;          /**< The hooked fish's size, as CFish keeps it. */
+    virtual float FishDistance() = 0;        /**< The hooked fish (or the float) from the angler, across the water. */
+    virtual void  ReleaseFish() = 0;         /**< The hooked fish swims free: the line broke. */
     virtual bool ModelReady() = 0;
     virtual void LandFish() = 0;
     virtual void PutAwayFish() = 0;
@@ -103,6 +111,8 @@ public:
     void Tick(Angler &angler, const Input &input);
 
     [[nodiscard]] Step  CurrentStep() const { return step_; }
+    [[nodiscard]] const Fight *CurrentFight() const { return fight_.get(); }
+    [[nodiscard]] int          FightTicks() const { return step_ == Step::Battle ? ticks_ : 0; }
     [[nodiscard]] float FloatWeight() const { return float_weight_; } /**< How hard the float is held to the rod; below 0, free. */
     [[nodiscard]] float HookWeight() const { return hook_weight_; }
 
@@ -119,7 +129,8 @@ private:
     Message message_ = Message::Evaluate;
     int     ticks_ = 0; /**< In the step. */
     int     wait_ = 0;  /**< Waiting for a bite, for the idle motions. */
-    const Species *hooked_ = nullptr; /**< The fish on the hook. */
+    const Species         *hooked_ = nullptr; /**< The fish on the hook. */
+    std::unique_ptr<Fight> fight_;            /**< The hooked fish's fight, from the place's fight stage. */
     std::string    bait_;             /**< The bait it took, for the catch. */
     float   float_weight_ = -1.0f;
     float   hook_weight_ = -1.0f;

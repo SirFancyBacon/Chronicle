@@ -5,6 +5,7 @@
 namespace dc::fishing {
 
 void Session::Reset() {
+    fight_.reset();
     step_ = Step::Init;
     message_ = Message::Evaluate;
     ticks_ = 0;
@@ -169,11 +170,15 @@ void Session::Tick(Angler &angler, const Input &input) {
             } else {
                 if (input.cross || input.debug) {
                     angler.Play(Sound::Cast);
-                    // Retail deleted the bait every tick of the fight; it is taken once.
-                    angler.UseBait();
+                    // Retail deleted the bait every tick of the fight; it is taken once, here unless
+                    // the fight can be lost.
+                    if (!place.fight->BaitStaysOn()) {
+                        angler.UseBait();
+                    }
                     step_ = Step::Battle;
                     angler.Motion(12, 2);
                     angler.HookFish(input.fish_no);
+                    fight_ = place.fight->Begin(Hooked{.species = hooked_, .size = angler.HookedSize(), .distance = angler.FishDistance()});
                     ticks_ = 0;
                 }
                 const float tug = -(0.1f + 0.05f * static_cast<float>(angler.Random()));
@@ -185,15 +190,42 @@ void Session::Tick(Angler &angler, const Input &input) {
             }
             break;
         case Step::Battle: {
-            const FightContext context{.ticks = ticks_,
-                                       .model_ready = [&] { return angler.ModelReady(); },
-                                       .random = [&] { return angler.Random(); },
-                                       .rumble = [&](int intensity, int ticks) { angler.Rumble(intensity, ticks); }};
-            if (place.fight->Step(context) == FightResult::Landed) {
-                step_ = Step::Landed;
-                angler.Motion(6, 6);
-                angler.LandFish();
-                angler.Play(Sound::Bite);
+            const FightContext context{
+                .ticks = ticks_,
+                .input = {.reel = input.cross_held, .tapped = input.cross, .stick_x = input.stick_x, .stick_y = input.stick_y},
+                .distance = angler.FishDistance(),
+                .model_ready = [&] { return angler.ModelReady(); },
+                .random = [&] { return angler.Random(); },
+                .rumble = [&](int intensity, int ticks) { angler.Rumble(intensity, ticks); },
+                .warn = [&] { angler.Play(Sound::Warning); }};
+            switch (fight_ != nullptr ? fight_->Step(context) : FightResult::Landed) {
+                case FightResult::Landed:
+                    // Before the landed fish's model goes where the bait's is.
+                    if (place.fight->BaitStaysOn()) {
+                        angler.UseBait();
+                    }
+                    step_ = Step::Landed;
+                    angler.Motion(6, 6);
+                    angler.LandFish();
+                    angler.Play(Sound::Bite);
+                    fight_.reset();
+                    break;
+                case FightResult::Snapped: {
+                    const bool lost = fight_->LosesBait(context);
+                    if (lost) {
+                        angler.LoseBait();
+                    }
+                    angler.Play(Sound::Snap);
+                    angler.ReleaseFish();
+                    Publish(Lost{.species = hooked_, .place = &place, .bait = bait_, .why = LossCause::Snapped, .bait_lost = lost});
+                    step_ = Step::Sink;
+                    angler.Motion(6, 6);
+                    ticks_ = 0;
+                    fight_.reset();
+                    break;
+                }
+                case FightResult::Fighting:
+                    break;
             }
             follow = true;
             break;

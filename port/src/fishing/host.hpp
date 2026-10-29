@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace dc::game {
@@ -149,5 +150,22 @@ void UpdateFishAction(game::CFish &fish);
  * for the cast (BiteSession::speed).
  */
 float ApproachSpeed(const game::CFish &fish);
+
+/**
+ * Whether the fight holds the hooked fish where it says (FightView::steers), and the way it faces.
+ */
+bool  FightSteers();
+float BattleHeading();
+
+/**
+ * Draws a fight's gauges in the town's 2D pass (a fight that steers: tension, the line still out,
+ * the fish veering, HIT! as it starts); nothing otherwise.
+ */
+void DrawFight();
+
+/**
+ * The fishing framework's text keys and their English, for the language files.
+ */
+std::vector<std::pair<std::string, std::string>> Strings();
 
 } // namespace dc::fishing

@@ -94,7 +94,13 @@ void CFish::Step() {
         target_speed = 0.0f;
     }
 
-    if (action == FISH_ACTION_BATTLE) {
+    // A fight that steers the fish (fishing/angler.cpp) holds it at the line's end, facing its way.
+    if (action == FISH_ACTION_BATTLE && fishing::FightSteers()) {
+        target_yaw = fishing::BattleHeading();
+        target_speed = 0.0f;
+        speed = 0.0f;
+        turn_step *= 2.0f;
+    } else if (action == FISH_ACTION_BATTLE) {
         target_yaw = TWO_PI * (static_cast<float>(rand()) / 2147483648.0f);
         target_yaw = AngleLimit(target_yaw);
         target_speed = 0.5f;

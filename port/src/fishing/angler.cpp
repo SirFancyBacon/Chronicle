@@ -4,6 +4,8 @@
 // nlohmann/json (through the framework) before the game headers, whose one-letter macros it cannot stand.
 #include "fishing/session.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <format>
 #include <optional>
@@ -23,6 +25,9 @@
 #include "fishing.hpp"
 #include "fishing/host.hpp"
 #include "gamepad.hpp"
+#include "ui/framework/surfaces.hpp"
+#include "ui/framework/text.hpp"
+#include "ui/framework/widgets.hpp"
 #include "mainselect.hpp"
 #include "item/framework.hpp"
 #include "item/host.hpp"
@@ -167,6 +172,12 @@ public:
             case Sound::Fanfare:
                 SndSPSePlay(0x2F, -1);
                 break;
+            case Sound::Warning:
+                SndSePlay(SE_WARNING, -1, 0);
+                break;
+            case Sound::Snap:
+                SndSePlay(SE_WEAPON_BREAK, -1, 0);
+                break;
         }
     }
 
@@ -289,6 +300,26 @@ public:
     }
 
     bool ModelReady() override { return ReadBGSync() == 0; }
+
+    float HookedSize() override {
+        const CFish *fish = FishingGetBattleFish();
+        return fish != nullptr ? fish->size : 0.0f;
+    }
+
+    float FishDistance() override {
+        sceVu0FVECTOR at;
+        if (CFish *fish = FishingGetBattleFish()) {
+            fish->GetPosition(at);
+        } else {
+            FishLineGetUki(at);
+        }
+        return std::hypot(at[0] - position_[0], at[2] - position_[2]);
+    }
+
+    void ReleaseFish() override {
+        FishingInitFishStatus();
+        FishingBattleFish(-1);
+    }
 
     // The angling model goes in the free end of the villagers' buffer.
     void LandFish() override {
@@ -423,6 +454,33 @@ private:
 
 Session g_session;
 
+float g_heading = 0.0f; // where the steered fish faces
+
+// Retail's line link, which a fight that reels the line in shortens.
+constexpr float kRetailLink = 1.6666666f;
+
+// A fight that steers holds the hooked fish at the line's end, along its heading from the angler's
+// facing, and the line's links shorten with it as it is reeled in.
+void Steer(CMainChara &chara, const float *position) {
+    const Fight    *fight = g_session.CurrentFight();
+    const FightView view = fight != nullptr ? fight->View() : FightView{};
+    CFish          *fish = FishingGetBattleFish();
+    if (!view.steers || fish == nullptr) {
+        distp = kRetailLink;
+        return;
+    }
+    sceVu0FVECTOR facing;
+    sceVu0FVECTOR at;
+    chara.GetRotation(facing);
+    fish->GetPosition(at);
+    g_heading = AngleLimit(facing[1] + view.heading);
+    // Eased there, so the fish doesn't jump as the fight takes it.
+    at[0] += 0.2f * (position[0] + view.line * sinf(g_heading) - at[0]);
+    at[2] += 0.2f * (position[2] + view.line * cosf(g_heading) - at[2]);
+    fish->SetPosition(at);
+    distp = std::max(view.line, 1.0f) / 23.0f;
+}
+
 } // namespace
 
 void StepSession(CMainChara &chara, CCameraFollow &camera, float *position, float &float_weight, float &hook_weight) {
@@ -434,7 +492,9 @@ void StepSession(CMainChara &chara, CCameraFollow &camera, float *position, floa
     const Input  input{.cross = EdPadDown(0x40, 0xFFFF) != 0,
                        .circle = EdPadDown(0x20, 0xFFFF) != 0,
                        .square = EdPadDown(0x80, 0xFFFF) != 0,
+                       .cross_held = EdPadOn(0x40, 0xFFFF) != 0,
                        .stick_x = GamePad.GetLXf(),
+                       .stick_y = -GamePad.GetLYf(),
                        .fish_status = FishingFishStatus(&fish_no),
                        .fish_no = fish_no,
                        .debug = DebugMode != 0};
@@ -447,6 +507,7 @@ void StepSession(CMainChara &chara, CCameraFollow &camera, float *position, floa
               input.cross);
     }
     chara_fishing = static_cast<int>(g_session.CurrentStep());
+    Steer(chara, position);
     float_weight = g_session.FloatWeight();
     hook_weight = g_session.HookWeight();
 }
@@ -492,6 +553,71 @@ void UpdateFishAction(CFish &fish) {
     fish.action = ToGame(next.action);
     // Retail counts the timer down past 0 before asking again, and the tick asked counts too.
     fish.action_timer = next.ticks - 1;
+}
+
+bool FightSteers() {
+    const Fight *fight = g_session.CurrentFight();
+    return fight != nullptr && fight->View().steers;
+}
+
+float BattleHeading() {
+    return g_heading;
+}
+
+namespace {
+
+constexpr const char *kTension = "fishing.fight.tension";
+constexpr const char *kTensionText = "Tension";
+constexpr const char *kLine = "fishing.fight.line";
+constexpr const char *kLineText = "Line";
+constexpr const char *kHit = "fishing.fight.hit";
+constexpr const char *kHitText = "HIT!";
+
+} // namespace
+
+std::vector<std::pair<std::string, std::string>> Strings() {
+    return {
+        {kTension, kTensionText},
+        {kLine,    kLineText   },
+        {kHit,     kHitText    },
+    };
+}
+
+// Dark Cloud 1 has no art for a fight, so the gauges are the port's: a paper plate at the foot of the
+// screen with the tension, shading toward red, and the line still to reel in.
+void DrawFight() {
+    const Fight *fight = g_session.CurrentFight();
+    if (fight == nullptr || g_session.CurrentStep() != Step::Battle) {
+        return;
+    }
+    const FightView view = fight->View();
+    if (!view.steers) {
+        return;
+    }
+    ui::TrackerWindow::DrawPaper(ui::Rect(190, 372, 260, 76));
+    ui::ProgressBarStyle tension;
+    const float          hot = std::clamp((view.tension - 0.4f) / 0.5f, 0.0f, 1.0f);
+    tension.fill_r = static_cast<u8>(28 + hot * 150);
+    tension.fill_g = static_cast<u8>(68 - hot * 50);
+    tension.fill_b = static_cast<u8>(45 - hot * 25);
+    tension.hi_r = static_cast<u8>(45 + hot * 170);
+    tension.hi_g = static_cast<u8>(95 - hot * 60);
+    tension.hi_b = static_cast<u8>(65 - hot * 35);
+    tension.done_r = 200;
+    tension.done_g = 30;
+    tension.done_b = 20;
+    ui::ProgressBar::Draw(ui::Rect(205, 384, 230, 22), view.tension, localize::LocalizeText(kTension, kTensionText), tension);
+    const float span = std::max(view.start - view.landing, 1.0f);
+    ui::ProgressBar::Draw(ui::Rect(205, 414, 230, 22), std::clamp((view.line - view.landing) / span, 0.0f, 1.0f),
+                          localize::LocalizeText(kLine, kLineText));
+    ui::TextStyle big{.scale = 2.0f, .weight = ui::FontWeight::Bold};
+    if (g_session.FightTicks() < 60) {
+        ui::DrawTextBox(localize::LocalizeText(kHit, kHitText), ui::Rect(220, 150, 200, 60), big);
+    }
+    if (view.chance != 0) {
+        // The side the fish veers to, where the stick pays.
+        ui::DrawTextBox(view.chance > 0 ? ">>>" : "<<<", ui::Rect(view.chance > 0 ? 470 : 70, 220, 100, 60), big);
+    }
 }
 
 float ApproachSpeed(const CFish &fish) {

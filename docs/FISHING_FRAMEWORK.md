@@ -133,7 +133,7 @@ beside the name (`port/src/fishing/framework.hpp`; a new one is a class and a li
 |---|---|---|
 | spawn | the fish in the water when fishing starts | each fish drawn by weight, the rare table one time in `interval` |
 | bite | what each fish does about the bait, asked by `CFish::Step` when its last action has run out, and when the bait is lost (never a lure) | notices at its liking x 0.3, takes the bait and the hook at x 0.5, loses interest at 0.1, every 21 to 50 ticks; holds the hook `hook_ticks`; loses the bait at `lose_bait_early` for Cross on a nibble and `lose_bait_escaped` for a fish that lets go |
-| fight | from the hook set to the fish landed | none: the controller rumbles for `ticks` while the fish's model loads |
+| fight | from the hook set to the fish landed or the line snapped, with the fish's state across the fight (`fishing::Fight`) | none: the controller rumbles for `ticks` while the fish's model loads |
 | outcome | what a landed fish gives | the Mardan Garayan count, the points, the records and the evaluation message |
 
 The port also ships a `brisk` bite, Dark Cloud 2's (`GetUkiWaitTime`): once the float is out, one
@@ -152,6 +152,41 @@ the bait away at once. Its losses are `lose_bait_early` and an optional `lose_ba
           "nibble": { "low": [100, 160], "normal": [50, 100], "high": [30, 60] }, "window": [40, 75],
           "lose_bait_early": 0.2 }
 ```
+
+And a `tension` fight, Dark Cloud 2's (`BattleLoop`, `LineTensionStep`): the fish pulls and the
+angler winds it in without letting the line's tension reach the top, where it snaps. Dark Cloud 2 runs
+at 30 ticks a second, so its rates are halved and its durations doubled to keep its pace; the numbers
+below are its own, in its ticks, where not said otherwise.
+
+- **Reeling:** holding Cross winds in `reel_speed` of line a port tick and raises tension by 0.03 x the
+  fish's pull, 26.5% more than Dark Cloud 2 (the port's). The fish is held at the line's end, so the line
+  out is how far it is; once that is within `land_distance`, after `min_ticks` port ticks, it is landed
+  as in Original. Left alone, tension eases `ease` a port tick (0.005, two and a half times Dark Cloud
+  2's; its own made a fight mostly waiting for the line to slacken), and the fish's vigour recovers.
+- **Mashing:** more than 5 presses of Cross and pushes of the stick in quick succession make tension
+  climb, more than 20 make it jump.
+- **The fish veering** (the port's answer, in place of Dark Cloud 2's leaning on the rod): every 60 to
+  139 ticks it swims to one side for `veer_ticks` port ticks (60, Dark Cloud 2's second), shown on
+  screen. The left stick held that way takes three quarters of what reeling adds, winds the line in 5%
+  faster and tires the fish, for as long as the arrow shows and 10 port ticks after, for a person's
+  reaction. Held the other way,
+  or at all once the veer is over, the rod is out of position: tension climbs by half again what
+  reeling adds, reeling or not.
+- **The pull** is the species' `fight.pull` (`fish.json` row or species document; 0.5 if left out, the
+  least at which holding Cross through the fight snaps the line) at its usual size, in proportion to its size, and grows up to half again with its vigour. Tension can't
+  fall below a floor rising 0.0001 a tick, so a fight ends in about three minutes at most.
+- **Snapped:** the fish swims free, and the bait goes with it at `lose_bait_snapped`. The bait stays on
+  through the fight and is taken as the fish is landed.
+
+```json
+"fight": { "stage": "tension", "land_distance": 8.0, "min_ticks": 200, "reel_speed": 0.15, "lose_bait_snapped": 0.3 }
+```
+
+The gauges are the port's, since Dark Cloud 1 has none (`fishing::DrawFight`, drawn after the town's
+messages): a paper plate at the foot of the screen with the tension, shading toward red, and the line
+still to reel in; "HIT!" as the fight starts; and the side the fish veers to. A warning beep sounds
+above 0.7 (retail's `SE_WARNING`), and the line breaks with `SE_WEAPON_BREAK`. The rumble follows Dark
+Cloud 2's.
 
 The port also ships a `keep` outcome: the fish goes into the bag as its species' `item` (below), and
 gives its points and goes in the records (with the Mardan Garayan count) only where the place's

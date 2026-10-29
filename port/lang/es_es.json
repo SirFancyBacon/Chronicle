@@ -385,5 +385,8 @@
     "quest.carls_slingshot.gina.confess": "...¿Carlos no se cree lo del pájaro?{page}...Vale. Estaba disparando a botellas, y hizo CRAC.{page}¡No fue a propósito! ¡Así que le hice una nueva!{page}¿Se la puedes dar? Me da miedo que se enfade..",
     "quest.carls_slingshot.gina.waiting": "¿Le diste la honda nueva a Carlos? ¿Está enfadado?",
     "item.orphan.name": "Objeto desconocido",
-    "item.orphan.description": "De un mod que no está cargado."
+    "item.orphan.description": "De un mod que no está cargado.",
+    "fishing.fight.tension": "Tensión",
+    "fishing.fight.line": "Sedal",
+    "fishing.fight.hit": "¡Pica!"
 }

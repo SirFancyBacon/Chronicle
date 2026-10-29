@@ -209,14 +209,241 @@ public:
         ticks_ = Ticks(settings.contains("ticks") ? settings["ticks"] : Json(), "fight: ticks");
     }
 
-    FightResult Step(const FightContext &context) const override {
-        const bool landed = context.ticks > ticks_ && context.model_ready();
-        context.rumble(80 + static_cast<int>(context.random() * 40.0), 10);
-        return landed ? FightResult::Landed : FightResult::Fighting;
-    }
+    std::unique_ptr<Fight> Begin(const Hooked & /*fish*/) const override { return std::make_unique<Run>(ticks_); }
 
 private:
+    class Run final : public Fight {
+    public:
+        explicit Run(int ticks) : ticks_(ticks) {}
+
+        FightResult Step(const FightContext &context) override {
+            const bool landed = context.ticks > ticks_ && context.model_ready();
+            context.rumble(80 + static_cast<int>(context.random() * 40.0), 10);
+            return landed ? FightResult::Landed : FightResult::Fighting;
+        }
+
+    private:
+        int ticks_;
+    };
+
     int ticks_ = 0;
+};
+
+double Number(const Json &settings, const char *key, std::string_view where, double low, double high) {
+    const Json &value = settings.contains(key) ? settings[key] : Json();
+    if (!value.is_number() || value.get<double>() < low || value.get<double>() > high) {
+        throw std::runtime_error(std::format("{}: {} must be a number from {} to {}", where, key, low, high));
+    }
+    return value.get<double>();
+}
+
+// Dark Cloud 2 runs at 30 ticks a second and the port at 60: its rates are halved and its durations
+// doubled, so that its fight moves at its own pace.
+constexpr float Dc2Rate(float per_dc2_tick) {
+    return per_dc2_tick * 0.5f;
+}
+
+constexpr int Dc2Ticks(int dc2_ticks) {
+    return dc2_ticks * 2;
+}
+
+/**
+ * Dark Cloud 2's fight (BattleLoop, LineTensionStep), in its ticks of a 30th of a second, with the
+ * port's answer to a veer: the fish pulls and the angler winds it in without letting the line's tension
+ * reach the top. Holding Cross reels, raising tension 0.03 x pull a tick (26.5% more, the port's); more
+ * than 5 presses and pushes in quick succession make tension climb, more than 20 make it jump. Every 60
+ * to 139 ticks the fish veers to one side for veer_ticks: the stick held that way takes most of what
+ * reeling adds and tires the fish; held the other way, or at all once the veer and a moment after it are
+ * over, the rod is out of position and tension climbs sharply. Left alone, tension falls by ease a tick
+ * (the port's), and can't fall below a floor rising 0.0001 a tick. The fish is landed once reeled within
+ * land_distance after min_ticks; the line snaps at 1.
+ *
+ * Dark Cloud 2's tension rules have no units and come across as they are; its distances (casts of 160
+ * to 400 landing at 90) are the settings, in Dark Cloud 1's.
+ */
+class TensionFight final : public FightStage {
+public:
+    explicit TensionFight(const Json &settings)
+        : settings_{.land = static_cast<float>(Number(settings, "land_distance", "fight", 0.5, 1000.0)),
+                    .min_ticks = Ticks(settings.contains("min_ticks") ? settings["min_ticks"] : Json(), "fight: min_ticks"),
+                    .reel = static_cast<float>(Number(settings, "reel_speed", "fight", 0.001, 100.0)),
+                    .lose_snapped = Chance(settings, "lose_bait_snapped", "fight"),
+                    .veer_ticks = settings.contains("veer_ticks") ? Ticks(settings["veer_ticks"], "fight: veer_ticks") : kVeerTicks,
+                    .ease = settings.contains("ease") ? static_cast<float>(Number(settings, "ease", "fight", 0.0, 1.0)) : kEase} {}
+
+    std::unique_ptr<Fight> Begin(const Hooked &fish) const override { return std::make_unique<Run>(settings_, fish); }
+
+    [[nodiscard]] bool BaitStaysOn() const override { return true; }
+
+private:
+    // Its veer of 30 ticks, a second; and the port's easing, 2.5 times its 0.004, which made a fight
+    // mostly waiting for the line to slacken.
+    static constexpr int   kVeerTicks = Dc2Ticks(30);
+    static constexpr float kEase = Dc2Rate(0.01f);
+
+    struct Settings {
+        float  land;
+        int    min_ticks;
+        float  reel;
+        double lose_snapped;
+        int    veer_ticks;
+        float  ease; /**< How much tension falls a tick, left alone. */
+    };
+
+    class Run final : public Fight {
+    public:
+        // A copy of the stage's settings: a fight outlives no stage in the game, but needn't rely on it.
+        Run(const Settings &stage, const Hooked &fish) : stage_(stage) {
+            // Dark Cloud 2 scales its pull_rate by the size in 80ths of a metre; Dark Cloud 1's sizes
+            // have no such scale, so a fish of its kind's usual size pulls its species' pull.
+            const Species *species = fish.species;
+            const float    usual = species != nullptr && species->min_size > 0.0f ? species->min_size : 1.0f;
+            pull_ = (species != nullptr ? species->pull : 1.0f) * std::max(fish.size, 0.0f) / usual;
+            line_ = std::max(fish.distance, stage.land + 1.0f);
+            start_ = line_;
+        }
+
+        FightResult Step(const FightContext &context) override {
+            const FightInput &input = context.input;
+            const int         stick = input.stick_x > 0.8f ? 1 : (input.stick_x < -0.8f ? -1 : 0);
+            const bool        pushed = stick != 0 && stick != stick_;
+            stick_ = stick;
+
+            if (input.reel) {
+                line_ = std::max(line_ - (Aligned(stick) ? stage_.reel * kAlignedReel : stage_.reel), 0.0f);
+            }
+            if (pushed || input.tapped) {
+                actions_++;
+                action_hold_ = Dc2Ticks(10);
+            }
+            if (--action_hold_ <= 0) {
+                actions_ = std::max(actions_ - 1, 0);
+            }
+            Swim(context);
+            Tension(context, input.reel, stick);
+
+            if (tension_ >= 1.0f) {
+                return FightResult::Snapped;
+            }
+            const bool close = std::min(context.distance, line_) < stage_.land;
+            return close && context.ticks >= stage_.min_ticks && context.model_ready() ? FightResult::Landed : FightResult::Fighting;
+        }
+
+        [[nodiscard]] FightView View() const override {
+            return {.steers = true, .tension = tension_, .line = line_, .heading = heading_, .chance = chance_ > 0 ? direction_ : 0, .landing = stage_.land, .start = start_};
+        }
+
+        bool LosesBait(const FightContext &context) const override { return context.random() < stage_.lose_snapped; }
+
+    private:
+        // FishBattle: the fish swims outward within 72 degrees of the angler's facing, turning a tenth
+        // of the way to its heading a tick, and veers to one side in an action chance.
+        void Swim(const FightContext &context) {
+            float target = static_cast<float>((context.random() - 0.5) * 2.5132742);
+            if (chance_ <= 0) {
+                chance_ = 0;
+                if (--next_chance_ <= 0) {
+                    chance_ = stage_.veer_ticks;
+                    direction_ = context.random() < 0.5 ? 1 : -1;
+                }
+            }
+            if (chance_ > 0) {
+                const float side = static_cast<float>(context.random() * 1.2566371);
+                target = direction_ > 0 ? -side : side;
+                if (--chance_ <= 0) {
+                    chance_ = 0;
+                    grace_ = kGrace + 1; // counted down from the next tick, the first without the arrow
+                    next_chance_ = Dc2Ticks(60 + static_cast<int>(context.random() * 80.0));
+                }
+            } else if (grace_ > 0) {
+                grace_--;
+            }
+            heading_ += 0.1f * (target - heading_);
+        }
+
+        // The stick held the way the fish veers, while the arrow shows or in the grace after it.
+        [[nodiscard]] bool Aligned(int stick) const { return (chance_ > 0 || grace_ > 0) && stick == direction_; }
+
+        // LineTensionStep, with the port's answer to a veer: the stick held the fish's way while the arrow
+        // shows (and for kGrace ticks after, for a person's reaction) takes most of what reeling adds and
+        // tires the fish; held any other way, or once the veer is over, the rod is out of position and
+        // tension climbs sharply, reeling or not.
+        void Tension(const FightContext &context, bool winding, int stick) {
+            const float pull = pull_ * (1.0f + 0.5f * vigour_);
+            float       rate = -stage_.ease;
+            if (actions_ > 5) {
+                rate = -stage_.ease + Dc2Rate(0.01f) * static_cast<float>(actions_ - 5) / 15.0f;
+            }
+            if (actions_ > 20) {
+                rate = Dc2Rate(0.2f);
+            }
+            if (rate > 0.0f) {
+                rate *= pull;
+            }
+            const bool aligned = Aligned(stick);
+            const bool out_of_position = stick != 0 && !aligned;
+            const float reeling = Dc2Rate(0.03f) * pull * kBuild;
+            int         strength = 0;
+            if (winding) {
+                rate += aligned ? reeling * kAligned : reeling;
+                strength = 150;
+            }
+            if (aligned) {
+                vigour_ -= Dc2Rate(0.02f) * kControl;
+                strength = std::max(strength, 100);
+            } else {
+                vigour_ += kRecovery;
+            }
+            if (out_of_position) {
+                rate += reeling * kOutOfPosition;
+                strength = 220;
+            }
+            vigour_ = std::clamp(vigour_, -1.0f, 1.0f);
+            floor_ = std::min(floor_ + Dc2Rate(0.0001f), 1.0f);
+            tension_ = std::clamp(tension_ + rate, floor_, 1.0f);
+            if (strength > 0) {
+                context.rumble(strength, Dc2Ticks(4));
+            }
+            // A warning above 0.7, now and then.
+            if (tension_ > 0.7f && warned_ == 0) {
+                context.warn();
+                warned_ = Dc2Ticks(20);
+            }
+            warned_ = std::max(warned_ - 1, 0);
+        }
+
+        // Dark Cloud 2's rod control term (3 x RodData.status[1] / 100), neutral until rods come (step 4).
+        static constexpr float kControl = 1.0f;
+        static constexpr float kRecovery = Dc2Rate(0.01f);
+
+        // The port's, from the user's play: tension builds 26.5% faster than Dark Cloud 2's for reeling
+        // (15%, then 10% more); the stick held the fish's way leaves a quarter of it and winds 5% faster,
+        // held out of position adds half again more.
+        static constexpr float kBuild = 1.15f * 1.1f;
+        static constexpr float kAligned = 0.25f;
+        static constexpr float kAlignedReel = 1.05f;
+        static constexpr float kOutOfPosition = 1.5f;
+        static constexpr int   kGrace = 10;
+
+        Settings            stage_;
+        float               pull_ = 1.0f;
+        float               line_ = 0.0f;
+        float               start_ = 0.0f;
+        float               tension_ = 0.0f;
+        float               floor_ = 0.0f;
+        float               vigour_ = 0.0f;
+        float               heading_ = 0.0f;
+        int                 actions_ = 0;
+        int                 action_hold_ = 0;
+        int                 chance_ = 0;
+        int                 next_chance_ = Dc2Ticks(60);
+        int                 direction_ = 1;
+        int                 warned_ = 0;
+        int                 grace_ = 0;
+        int                 stick_ = 0;
+    };
+
+    Settings settings_;
 };
 
 /**
@@ -482,6 +709,7 @@ void RegisterBuiltinStages() {
     RegisterBiteStage("retail", [](const Json &settings) { return std::make_unique<RetailBite>(settings); });
     RegisterBiteStage("brisk", [](const Json &settings) { return std::make_unique<BriskBite>(settings); });
     RegisterFightStage("retail", [](const Json &settings) { return std::make_unique<RetailFight>(settings); });
+    RegisterFightStage("tension", [](const Json &settings) { return std::make_unique<TensionFight>(settings); });
     RegisterOutcomeStage("retail", [](const Json &) { return std::make_unique<RetailOutcome>(); });
     RegisterOutcomeStage("keep", [](const Json &settings) { return std::make_unique<KeepOutcome>(settings); });
 }

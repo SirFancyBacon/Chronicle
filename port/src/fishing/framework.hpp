@@ -33,6 +33,7 @@ struct Species {
     bool                         mardan_garayan = false; /**< Counted toward the Mardan Garayan. */
     std::map<std::string, std::string> names; /**< A custom species' name by language file; retail's are name_msg. */
     std::string                        item;  /**< The item a kept fish becomes (the keep outcome); empty for none. */
+    float                              pull = 0.5f; /**< How hard it pulls in a fight that reads it (tension), at its usual size: below 0.5, Cross can be held through the fight. */
 
     [[nodiscard]] bool IsCustom() const;
 
@@ -139,6 +140,7 @@ struct ActionStep {
 enum class LossCause {
     PressedEarly, /**< Cross while the fish only nibbled. */
     LetGo,        /**< The fish let go of the hook before Cross. */
+    Snapped,      /**< The line broke in the fight. */
 };
 
 /**
@@ -166,18 +168,70 @@ public:
 };
 
 /**
- * What a fight stage is given each tick.
+ * What the angler does in a fight, each tick.
+ */
+struct FightInput {
+    bool  reel = false;    /**< Cross held: winds the line in. */
+    bool  tapped = false;  /**< Cross pressed this tick. */
+    float stick_x = 0.0f;  /**< The left stick, -1 (left) to 1. */
+    float stick_y = 0.0f;  /**< -1 (down) to 1 (up). */
+};
+
+/**
+ * What a fight is given each tick.
  */
 struct FightContext {
     int                                           ticks = 0;   /**< Since the hook was set. */
+    FightInput                                    input;
+    float                                         distance = 0.0f; /**< The fish from the angler, across the water. */
     std::function<bool()>                         model_ready; /**< Whether the fish's angling model has loaded. */
     std::function<double()>                       random;
     std::function<void(int intensity, int ticks)> rumble;
+    std::function<void()>                         warn; /**< The line close to snapping. */
 };
 
 enum class FightResult {
     Fighting,
     Landed,
+    Snapped, /**< The line broke: the fish is gone. */
+};
+
+/**
+ * What a fight shows, and how the game moves the fish and the line.
+ */
+struct FightView {
+    bool  steers = false;  /**< The fight moves the fish and the line; otherwise retail's fish swims. */
+    float tension = 0.0f;  /**< 0 to 1: at 1 the line snaps. */
+    float line = 0.0f;     /**< Line out: the fish is held at most this far from the angler. */
+    float heading = 0.0f;  /**< Where the fish swims, from the angler's facing, in radians. */
+    int   chance = 0;      /**< The fish veering: -1 left, 1 right, 0 not; the stick held its way pays. */
+    float landing = 0.0f;  /**< How close the fish lands. */
+    float start = 0.0f;    /**< The line out as the hook was set. */
+};
+
+/**
+ * One hooked fish's fight, from its stage's Begin.
+ */
+class Fight {
+public:
+    virtual ~Fight() = default;
+
+    virtual FightResult Step(const FightContext &context) = 0;
+    [[nodiscard]] virtual FightView View() const { return {}; }
+
+    /**
+     * Whether the bait goes with a snapped line.
+     */
+    virtual bool LosesBait(const FightContext &context) const { return false; }
+};
+
+/**
+ * The fish being fought, as its stage is told it.
+ */
+struct Hooked {
+    const Species *species = nullptr;
+    float          size = 0.0f;     /**< In size units, as CFish keeps it. */
+    float          distance = 0.0f; /**< From the angler as the hook is set: the line out. */
 };
 
 /**
@@ -187,7 +241,13 @@ class FightStage {
 public:
     virtual ~FightStage() = default;
 
-    virtual FightResult Step(const FightContext &context) const = 0;
+    virtual std::unique_ptr<Fight> Begin(const Hooked &fish) const = 0;
+
+    /**
+     * Whether the bait stays on until the fish is landed (a fight that can be lost), rather than
+     * being taken as the hook is set (retail's).
+     */
+    [[nodiscard]] virtual bool BaitStaysOn() const { return false; }
 };
 
 /**

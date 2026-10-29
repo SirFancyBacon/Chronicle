@@ -256,6 +256,19 @@ bool ValidModel(std::string_view path) {
 
 // What a species row and a custom species' document share: the model, sizes, points and likings.
 void ParseFish(Species &species, const Json &row, std::string_view where) {
+    // What fight stages read about the species; tension its pull.
+    if (const auto fight = row.find("fight"); fight != row.end() && !fight->is_null()) {
+        if (!fight->is_object()) {
+            throw std::runtime_error(std::format("{} fight must hold what fights read, such as pull", where));
+        }
+        if (fight->contains("pull")) {
+            const float pull = native_config::Float((*fight)["pull"]);
+            if (!(pull > 0.0f) || pull > 10.0f) {
+                throw std::runtime_error(std::format("{} fight pull must be above 0 and at most 10", where));
+            }
+            species.pull = pull;
+        }
+    }
     if (const auto item = row.find("item"); item != row.end() && !item->is_null()) {
         if (!item->is_string() || item::Find(item->get_ref<const std::string &>()) == nullptr) {
             throw std::runtime_error(std::format("{} item must be the ID of an item, or null", where));
@@ -313,7 +326,7 @@ Parsed<std::vector<Species>> ParseSpecies(const Json &document) {
         }
         ParseFish(species, row, where);
         species.mardan_garayan = Bool(row, "mardan_garayan", where);
-        NoteUnknown(row, {"fish_kind", "id", "model", "name_msg", "model_size", "min_size", "max_size", "min_fp", "max_fp", "food_affinity", "mardan_garayan", "item"},
+        NoteUnknown(row, {"fish_kind", "id", "model", "name_msg", "model_size", "min_size", "max_size", "min_fp", "max_fp", "food_affinity", "mardan_garayan", "item", "fight"},
                     parsed.unknown);
         if (!by_kind.emplace(kind, std::move(species)).second) {
             throw std::runtime_error(std::format("{} is listed twice", where));
@@ -369,7 +382,7 @@ Species ParseCustomSpecies(std::string_view file, const Json &document) {
         throw std::runtime_error("text needs a name in at least one language");
     }
     std::set<std::string> unknown;
-    NoteUnknown(document, {"schema_version", "kind", "id", "model", "model_size", "min_size", "max_size", "min_fp", "max_fp", "food_affinity", "mardan_garayan", "text", "item"},
+    NoteUnknown(document, {"schema_version", "kind", "id", "model", "model_size", "min_size", "max_size", "min_fp", "max_fp", "food_affinity", "mardan_garayan", "text", "item", "fight"},
                 unknown);
     if (!unknown.empty()) {
         std::string names;

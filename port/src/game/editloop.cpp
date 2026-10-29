@@ -53,6 +53,7 @@
 #include "effectgroup.hpp"
 #include "effectmacro.hpp"
 #include "fishing.hpp"
+#include "fishing/host.hpp"
 #include "frame.hpp"
 #include "framevu1.hpp"
 #include "gamemode.hpp"
@@ -2739,6 +2740,10 @@ void EditMainDraw() {
 
         EdSystemMesStep();
         EdSystemMesDraw();
+
+        if (GameMode == ED_MODE_FISHING) {
+            fishing::DrawFight();
+        }
 
         if (GameMode == ED_MODE_GEORAMA && (EditMenuStatus.mode == EDIT_MENU_MODE_PLACE || EditMenuStatus.mode == EDIT_MENU_MODE_REPLACE)) {
             EDITPARTS_INFO *info = EditPartsInfo.GetPartsInfo(NowSelectParts);

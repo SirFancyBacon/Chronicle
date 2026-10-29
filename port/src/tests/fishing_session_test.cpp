@@ -38,6 +38,7 @@ public:
     std::vector<int>         records;
     int                      mardan_garayan = 0;
     int                      shown = 0;
+    float                    distance = 30.0f;
     int                      shown_points = -1;
     std::vector<std::string> kept;
     const fishing::Place    *place = fishing::PlaceAtSpot(2);
@@ -69,6 +70,9 @@ public:
     void RestartBite() override { Record("restart bite"); }
     void WatchFish(int) override {}
     void HookFish(int fish_no) override { Record(std::format("hook fish {}", fish_no)); }
+    float HookedSize() override { return 16.0f; }
+    float FishDistance() override { return distance; }
+    void  ReleaseFish() override { Record("release fish"); }
     bool ModelReady() override { return model_ready; }
     void LandFish() override { Record("land fish"); }
     void PutAwayFish() override { Record("put away"); }
@@ -547,6 +551,166 @@ TEST_F(FishingSession, TheSessionStartsTheBiteOverAsTheFloatSettlesAndTheAnglerM
     angler.calls.clear();
     Tick({.cross = true});
     EXPECT_TRUE(angler.Did("restart bite"));
+}
+
+nlohmann::json Tension() {
+    return {
+        {"stage",             "tension"},
+        {"land_distance",     8.0      },
+        {"min_ticks",         100      },
+        {"reel_speed",        0.15     },
+        {"lose_bait_snapped", 0.3      }
+    };
+}
+
+// A fish of its usual size and pull 0.4, fought from 30 off with a fixed roll: veering right at tick 120
+// (Dark Cloud 2's 60, at its 30 ticks a second).
+struct TensionFixture {
+    fishing::Species               species{.id = "chronicle:pike", .kind = fishing::kCustomKindFirst, .min_size = 10.0f, .max_size = 20.0f};
+    std::unique_ptr<fishing::Fight> fight;
+    int                             tick = 0;
+    double                          roll = 0.3;
+
+    TensionFixture() {
+        species.pull = 0.4f;
+        fight = fishing::MakeFightStage(Tension())->Begin({.species = &species, .size = 10.0f, .distance = 30.0f});
+    }
+
+    fishing::FightResult Step(fishing::FightInput input) {
+        const fishing::FightContext context{.ticks = ++tick, .input = input, .distance = fight->View().line,
+                                            .model_ready = [] { return true; }, .random = [this] { return roll; },
+                                            .rumble = [](int, int) {}, .warn = [] {}};
+        return fight->Step(context);
+    }
+};
+
+TEST_F(FishingSession, TensionLandsAFishReeledInBurstsAndSnapsOnMashing) {
+    TensionFixture steady;
+    fishing::FightResult result = fishing::FightResult::Fighting;
+    bool                 reeling = true;
+    while (result == fishing::FightResult::Fighting && steady.tick < 5000) {
+        // Wind while the line can take it, rest once it is tight.
+        reeling = steady.fight->View().tension < (reeling ? 0.6f : 0.2f);
+        result = steady.Step({.reel = reeling});
+    }
+    EXPECT_EQ(result, fishing::FightResult::Landed);
+    EXPECT_GE(steady.tick, 100);
+
+    TensionFixture mashing;
+    result = fishing::FightResult::Fighting;
+    while (result == fishing::FightResult::Fighting && mashing.tick < 5000) {
+        result = mashing.Step({.reel = true, .tapped = mashing.tick % 2 == 0});
+    }
+    EXPECT_EQ(result, fishing::FightResult::Snapped);
+    EXPECT_LT(mashing.tick, 200);
+}
+
+TEST_F(FishingSession, TensionsVeerRewardsTheStickTheFishsWayAndPunishesTheOther) {
+    const auto tension_after_chance = [](float stick) {
+        TensionFixture fixture;
+        // Wind it tight first, then hold the stick through the veer from tick 120 (roll 0.3: rightward).
+        while (fixture.tick < 119) {
+            fixture.Step({.reel = fixture.tick < 100});
+        }
+        EXPECT_EQ(fixture.fight->View().chance, 0);
+        fixture.Step({.stick_x = stick});
+        EXPECT_EQ(fixture.fight->View().chance, 1);
+        for (int tick = 0; tick < 40; tick++) {
+            fixture.Step({.stick_x = stick});
+        }
+        return fixture.fight->View().tension;
+    };
+    // The fish's way tires it and costs nothing; the other way is out of position.
+    const float right = tension_after_chance(1.0f);
+    const float wrong = tension_after_chance(-1.0f);
+    EXPECT_LT(right * 2.0f, wrong);
+}
+
+TEST_F(FishingSession, TensionsStickHeldTheFishsWayTakesMostOfTheReelingAndAMomentAfterTheVeer) {
+    // Reeling through the veer (tick 120 to 179) with the stick right, the fish's way, or not.
+    const auto reeling_through_veer = [](float stick) {
+        TensionFixture fixture;
+        while (fixture.tick < 119) {
+            fixture.Step({});
+        }
+        const float before = fixture.fight->View().tension;
+        for (int tick = 0; tick < 40; tick++) {
+            fixture.Step({.reel = true, .stick_x = stick});
+        }
+        return fixture.fight->View().tension - before;
+    };
+    EXPECT_LT(reeling_through_veer(1.0f) * 3.0f, reeling_through_veer(0.0f));
+
+    // And winds 5% faster: 40 ticks at 0.15, or at 0.1575.
+    const auto line_after_veer = [](float stick) {
+        TensionFixture fixture;
+        while (fixture.tick < 119) {
+            fixture.Step({});
+        }
+        for (int tick = 0; tick < 40; tick++) {
+            fixture.Step({.reel = true, .stick_x = stick});
+        }
+        return fixture.fight->View().line;
+    };
+    EXPECT_NEAR(line_after_veer(0.0f) - line_after_veer(1.0f), 40 * 0.15f * 0.05f, 0.01f);
+
+    // Held after the arrow goes: the grace's 10 ticks are still the fish's way, after them out of position.
+    const auto held_after_veer = [](int ticks) {
+        TensionFixture fixture;
+        while (fixture.fight->View().chance == 0 || fixture.tick < 120) {
+            fixture.Step({});
+        }
+        while (fixture.fight->View().chance != 0) {
+            fixture.Step({.stick_x = 1.0f});
+        }
+        const float before = fixture.fight->View().tension;
+        for (int tick = 0; tick < ticks; tick++) {
+            fixture.Step({.stick_x = 1.0f});
+        }
+        return fixture.fight->View().tension - before;
+    };
+    EXPECT_LT(held_after_veer(10), 0.001f); // the floor's rise alone
+    EXPECT_GT(held_after_veer(30), 0.05f);
+}
+
+TEST_F(FishingSession, TensionsFloorRisesAndNothingLandsBeforeMinTicks) {
+    TensionFixture fixture;
+    for (int tick = 0; tick < 1000; tick++) {
+        fixture.Step({});
+    }
+    EXPECT_NEAR(fixture.fight->View().tension, 0.05f, 0.001f); // the floor, 0.0001 a Dark Cloud 2 tick
+
+    // Landed at once on the bank (distance 0), but not before 100 ticks.
+    fishing::Species species{.id = "chronicle:pike", .kind = fishing::kCustomKindFirst, .min_size = 10.0f};
+    auto             fight = fishing::MakeFightStage(Tension())->Begin({.species = &species, .size = 10.0f, .distance = 30.0f});
+    for (int tick = 1; tick <= 100; tick++) {
+        const fishing::FightContext context{.ticks = tick, .distance = 0.0f, .model_ready = [] { return true; }, .random = [] { return 0.5; },
+                                            .rumble = [](int, int) {}, .warn = [] {}};
+        EXPECT_EQ(fight->Step(context), tick < 100 ? fishing::FightResult::Fighting : fishing::FightResult::Landed) << tick;
+    }
+}
+
+TEST_F(FishingSession, ASnappedLineLetsTheFishGoAndMayTakeTheBait) {
+    fishing::Place place = *angler.place;
+    place.fight = fishing::MakeFightStage({{"stage", "tension"}, {"land_distance", 8.0}, {"min_ticks", 100}, {"reel_speed", 0.15},
+                                           {"lose_bait_snapped", 1.0}});
+    angler.place = &place;
+    std::vector<fishing::Lost> lost;
+    const int                  id = fishing::OnLost([&](const fishing::Lost &fish) { lost.push_back(fish); });
+    CastAndWait();
+    Tick({.fish_status = 8, .fish_no = 3});
+    Tick({.cross = true, .fish_status = 8, .fish_no = 3});
+    EXPECT_FALSE(angler.Did("bait used")); // it stays on through a fight that can be lost
+    for (int tick = 0; tick < 500 && session.CurrentStep() == Step::Battle; tick++) {
+        Tick({.cross = tick % 2 == 0, .cross_held = true, .fish_status = 11});
+    }
+    fishing::Unsubscribe(id);
+    EXPECT_EQ(session.CurrentStep(), Step::Sink);
+    EXPECT_TRUE(angler.Did("release fish") && angler.Did("bait lost"));
+    EXPECT_TRUE(angler.Did(std::format("sound {}", static_cast<int>(fishing::Sound::Snap))));
+    ASSERT_EQ(lost.size(), 1u);
+    EXPECT_EQ(lost[0].why, fishing::LossCause::Snapped);
+    EXPECT_EQ(lost[0].species->kind, 5);
 }
 
 } // namespace
