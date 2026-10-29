@@ -5,7 +5,10 @@
 #include "fishing/session.hpp"
 
 #include <cstdlib>
+#include <format>
 #include <optional>
+#include <print>
+#include <utility>
 
 #include "camerafollow.hpp"
 #include "character.hpp"
@@ -40,6 +43,41 @@ namespace {
 // The message a custom species' name is laid over the evaluation window as; the town's files stop
 // far below it.
 constexpr int kCustomNameMessage = 0x7F00;
+
+int g_ticks = 0; // the sessions' ticks, for the bite stage's deadlines
+
+// DC_FISHING_TRACE prints the session's steps and each fish's actions about the bait.
+const bool kTrace = std::getenv("DC_FISHING_TRACE") != nullptr;
+
+template <class... Args>
+void Trace(std::format_string<Args...> format, Args &&...args) {
+    if (kTrace) {
+        std::println(stderr, "fishing: {:6} {}", g_ticks, std::format(format, std::forward<Args>(args)...));
+    }
+}
+
+const char *ActionName(game::FishAction action) {
+    switch (action) {
+        case FISH_ACTION_APPROACH_FOOD:
+            return "approach";
+        case FISH_ACTION_EAT_FOOD:
+            return "nibble";
+        case FISH_ACTION_BITE_HOOK:
+            return "bite";
+        case FISH_ACTION_LEAVE:
+            return "leave";
+        case FISH_ACTION_NONE:
+            return "swim";
+        default:
+            return "held";
+    }
+}
+
+BiteSession g_bite;
+
+// Brisk looks at the water again this often while no fish there likes the bait; longer gaps are a
+// roll of nothing, which the trace says.
+constexpr int BriskLookAgain = 30;
 
 double Uniform() {
     return static_cast<double>(std::rand()) / (static_cast<double>(RAND_MAX) + 1.0);
@@ -224,6 +262,21 @@ public:
 
     void ResetFish() override { FishingInitFishStatus(); }
 
+    void RestartBite() override {
+        g_bite = {};
+        Trace("the cast starts over");
+        // A stage that chose a fish for the cast sends it away now, not when its nibble runs out, so
+        // that it never nibbles on beside a fish the new roll chose.
+        if (CurrentPlace().bite->ChoosesForTheCast()) {
+            for (int place = 0; Fish != nullptr && place < kMaxFish; place++) {
+                if (Fish[place].action == FISH_ACTION_APPROACH_FOOD || Fish[place].action == FISH_ACTION_EAT_FOOD ||
+                    Fish[place].action == FISH_ACTION_BITE_HOOK) {
+                    Fish[place].action_timer = -1;
+                }
+            }
+        }
+    }
+
     void WatchFish(int fish_no) override { FishingAngleFish(fish_no); }
 
     void HookFish(int fish_no) override {
@@ -386,7 +439,13 @@ void StepSession(CMainChara &chara, CCameraFollow &camera, float *position, floa
                        .fish_no = fish_no,
                        .debug = DebugMode != 0};
     GameAngler angler(chara, camera, position);
+    g_ticks++;
+    const Step before = g_session.CurrentStep();
     g_session.Tick(angler, input);
+    if (g_session.CurrentStep() != before) {
+        Trace("step {} -> {} (status {}, cross {})", static_cast<int>(before), static_cast<int>(g_session.CurrentStep()), input.fish_status,
+              input.cross);
+    }
     chara_fishing = static_cast<int>(g_session.CurrentStep());
     float_weight = g_session.FloatWeight();
     hook_weight = g_session.HookWeight();
@@ -401,19 +460,43 @@ void UpdateFishAction(CFish &fish) {
     }
     sceVu0FVECTOR position;
     fish.GetPosition(position);
-    BiteContext context{.random = Uniform};
+    BiteContext context{.random = Uniform, .fish_index = static_cast<int>(&fish - Fish), .session = &g_bite, .now = g_ticks};
     if (const BaitInfo *bait = BaitAt(fish.food_kind)) {
         context.bait = bait->id;
         context.radius = fish.food_radius;
         context.default_affinity = bait->default_affinity;
     }
+    for (int place = 0; Fish != nullptr && place < kMaxFish; place++) {
+        sceVu0FVECTOR at;
+        Fish[place].GetPosition(at);
+        context.fish.push_back(Fish[place].fish_kind >= 0 ? SpeciesOfKind(Fish[place].fish_kind) : nullptr);
+        context.distances.push_back(DistVector(Fish[place].food_position, at));
+    }
+    const Step step = g_session.CurrentStep();
+    context.waiting = step == Step::WaitBite || step == Step::BiteCheck || step == Step::Hooked;
     const FishView   view{.species = SpeciesOfKind(fish.fish_kind),
                           .action = ActionOf(fish.action),
                           .distance = DistVector(fish.food_position, position)};
+    const int        chosen = g_bite.chosen;
+    const int        until = g_bite.until;
     const ActionStep next = CurrentPlace().bite->Update(view, context);
+    if (g_bite.chosen != chosen) {
+        Trace("fish {} chosen", g_bite.chosen);
+    } else if (g_bite.chosen < 0 && g_bite.until != until && g_bite.until - g_ticks > BriskLookAgain) {
+        Trace("no fish comes; the next roll at {}", g_bite.until);
+    }
+    if (ToGame(next.action) != fish.action) {
+        Trace("fish {} ({}) {} -> {} for {} ticks, {:.1f} from the bait", context.fish_index, view.species != nullptr ? view.species->id : "none",
+              ActionName(fish.action), ActionName(ToGame(next.action)), next.ticks, view.distance);
+    }
     fish.action = ToGame(next.action);
     // Retail counts the timer down past 0 before asking again, and the tick asked counts too.
     fish.action_timer = next.ticks - 1;
+}
+
+float ApproachSpeed(const CFish &fish) {
+    const bool chosen = Fish != nullptr && &fish - Fish == g_bite.chosen && g_bite.speed > 0.0f;
+    return chosen ? g_bite.speed : 0.1f;
 }
 
 } // namespace dc::fishing

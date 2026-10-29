@@ -98,6 +98,18 @@ struct FishView {
 };
 
 /**
+ * What a bite stage keeps across one cast, shared by every fish: brisk chooses one for the cast. The
+ * game resets it as the float settles, and when the angler turns or reels in.
+ */
+struct BiteSession {
+    bool rolled = false; /**< A fish (or none) has been chosen. */
+    int  chosen = -1;    /**< The chosen fish's place in the water, or -1 for none. */
+    int  until = 0;      /**< A stage's own deadline, in BiteContext::now's ticks. */
+    int   step = 0;       /**< A stage's own step: brisk's chosen fish has started its wait. */
+    float speed = 0.0f;   /**< How fast the chosen fish swims to the bait; 0 for retail's. */
+};
+
+/**
  * What a bite stage is given besides the fish.
  */
 struct BiteContext {
@@ -105,6 +117,12 @@ struct BiteContext {
     float                   radius = 0.0f;           /**< How far fish notice it. */
     float                   default_affinity = 0.0f; /**< The liking of a species that doesn't name it. */
     std::function<double()> random;                  /**< Uniform in [0, 1). */
+    int                     fish_index = -1;         /**< The asking fish's place in the water. */
+    std::vector<const Species *> fish;               /**< Every fish in the water by place; null where none swims. */
+    std::vector<float>           distances;          /**< Each fish's distance from the bait, by place. */
+    bool                         waiting = true;     /**< The float is out, waiting for a bite. */
+    BiteSession            *session = nullptr;       /**< Null where nothing is shared (a bait loss's roll). */
+    int                     now = 0;                 /**< Ticks, counting up through the session. */
 };
 
 /**
@@ -139,6 +157,12 @@ public:
      * Whether the bait comes off for this cause.
      */
     virtual bool LosesBait(LossCause cause, const BiteContext &context) const = 0;
+
+    /**
+     * Whether the stage chooses fish for the whole cast (BiteSession), so that a cast starting over
+     * sends the fish already at the bait away at once rather than when their actions run out.
+     */
+    [[nodiscard]] virtual bool ChoosesForTheCast() const { return false; }
 };
 
 /**

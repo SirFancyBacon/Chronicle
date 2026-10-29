@@ -74,7 +74,8 @@ void CFish::Step() {
 
     if (action == FISH_ACTION_APPROACH_FOOD) {
         target_yaw = atan2f(food_position[0] - position[0], food_position[2] - position[2]);
-        target_speed = 0.1f;
+        // Retail's 0.1, unless the bite stage hurries the fish it chose (fishing/angler.cpp).
+        target_speed = fishing::ApproachSpeed(*this);
 
         if (DistVector(food_position, position) < 1.0f) {
             target_speed = 0.0f;

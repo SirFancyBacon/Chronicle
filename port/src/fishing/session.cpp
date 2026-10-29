@@ -67,6 +67,7 @@ void Session::Tick(Angler &angler, const Input &input) {
                 step_ = Step::WaitBite;
                 ticks_ = 0;
                 wait_ = 0;
+                angler.RestartBite();
             }
             break;
         case Step::WaitBite:
@@ -90,11 +91,13 @@ void Session::Tick(Angler &angler, const Input &input) {
             if (input.stick_x != 0.0f) {
                 wait_ = 0;
                 angler.Motion(13, 0);
+                angler.RestartBite();
             }
             if (input.cross || (ticks_ > 30 && angler.FloatCaught())) {
                 step_ = Step::ReelIn;
                 angler.Motion(7, 6);
                 ticks_ = 0;
+                angler.RestartBite();
             } else {
                 if (input.fish_status == 7) {
                     step_ = Step::BiteCheck;

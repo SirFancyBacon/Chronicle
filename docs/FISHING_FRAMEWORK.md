@@ -136,6 +136,23 @@ beside the name (`port/src/fishing/framework.hpp`; a new one is a class and a li
 | fight | from the hook set to the fish landed | none: the controller rumbles for `ticks` while the fish's model loads |
 | outcome | what a landed fish gives | the Mardan Garayan count, the points, the records and the evaluation message |
 
+The port also ships a `brisk` bite, Dark Cloud 2's (`GetUkiWaitTime`): once the float is out, one
+roll chooses a fish in the water by its liking for the bait (not at all, below 0.35, below 0.75, or
+more weigh 0, 0.5, 1 and 1.5) against `nothing`'s weight, and rolls again `retry` ticks after nothing
+comes; a bait no fish there likes never brings one. The chosen fish swims to the bait in at least
+`wait` ticks (a range), faster than retail's crawl where it has far to come (up to 0.6 a tick,
+`fishing::ApproachSpeed`), nibbles there for its liking's `nibble` range (`low`, `normal`, `high`),
+then holds the hook for its `window` range; missed, or kept from the bait for twice its wait, it swims
+off and the next roll comes. It nibbles only at the bait, because Dark Cloud 1's fish can be seen. The
+other fish leave the bait alone, and turning or reeling in starts the cast over, sending the fish at
+the bait away at once. Its losses are `lose_bait_early` and an optional `lose_bait_escaped`:
+
+```json
+"bite": { "stage": "brisk", "wait": [240, 480], "retry": 600, "nothing": 1.0,
+          "nibble": { "low": [100, 160], "normal": [50, 100], "high": [30, 60] }, "window": [40, 75],
+          "lose_bait_early": 0.2 }
+```
+
 The port also ships a `keep` outcome: the fish goes into the bag as its species' `item` (below), and
 gives its points and goes in the records (with the Mardan Garayan count) only where the place's
 settings say `"points": true` and `"records": true`. The evaluation message still shows, with no points

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <format>
@@ -233,6 +234,206 @@ public:
     }
 };
 
+// A whole number of ticks from the first to the last of a two-number range.
+struct Span {
+    int first = 0;
+    int last = 0;
+
+    int Draw(const std::function<double()> &random) const { return first + static_cast<int>(random() * (last - first + 1)); }
+};
+
+Span ParseSpan(const Json &value, std::string_view what) {
+    if (!value.is_array() || value.size() != 2) {
+        throw std::runtime_error(std::format("{} needs the fewest ticks and the most", what));
+    }
+    const Span span{Ticks(value[0], what), Ticks(value[1], what)};
+    if (span.last < span.first) {
+        throw std::runtime_error(std::format("{} must not end before it starts", what));
+    }
+    return span;
+}
+
+/**
+ * Dark Cloud 2's liking levels (F:3815), which weigh a fish's chance to come 0, 0.5, 1 and 1.5; Dark
+ * Cloud 1's likings are 0, 0.2, 0.5 and 1.
+ */
+enum class Level {
+    None,
+    Low,
+    Normal,
+    High,
+};
+
+Level LevelOf(double liking) {
+    if (liking <= 0.0) {
+        return Level::None;
+    }
+    if (liking < 0.35) {
+        return Level::Low;
+    }
+    return liking < 0.75 ? Level::Normal : Level::High;
+}
+
+/**
+ * Dark Cloud 2's bite (GetUkiWaitTime, F:3783): as the float settles one roll chooses a fish in the
+ * water by its liking for the bait, or nothing (then another roll after retry ticks). The chosen fish
+ * swims over in at least wait ticks, nibbles for its liking's nibble, then holds the hook for its window;
+ * missed, it leaves and the roll starts again. The other fish leave the bait alone.
+ */
+class BriskBite final : public BiteStage {
+public:
+    static constexpr int   kLookAgain = 30;        // ticks, while no fish in the water likes the bait
+    static constexpr float kRetailSpeed = 0.1f;    // CFish's approach
+    static constexpr float kFastestSpeed = 0.6f;   // about retail's quickest swimming
+
+    explicit BriskBite(const Json &settings) {
+        const auto at = [&](const char *key) { return settings.contains(key) ? settings[key] : Json(); };
+        wait_ = ParseSpan(at("wait"), "bite: wait");
+        retry_ = Ticks(at("retry"), "bite: retry");
+        const Json nothing = at("nothing");
+        if (!nothing.is_number() || nothing.get<double>() < 0.0) {
+            throw std::runtime_error("bite: nothing must be a weight from 0");
+        }
+        nothing_ = nothing.get<double>();
+        const Json nibble = at("nibble");
+        if (!nibble.is_object()) {
+            throw std::runtime_error("bite: nibble needs low, normal and high");
+        }
+        nibble_low_ = ParseSpan(nibble.contains("low") ? nibble["low"] : Json(), "bite: nibble low");
+        nibble_normal_ = ParseSpan(nibble.contains("normal") ? nibble["normal"] : Json(), "bite: nibble normal");
+        nibble_high_ = ParseSpan(nibble.contains("high") ? nibble["high"] : Json(), "bite: nibble high");
+        window_ = ParseSpan(at("window"), "bite: window");
+        lose_early_ = Chance(settings, "lose_bait_early", "bite");
+        lose_escaped_ = settings.contains("lose_bait_escaped") ? Chance(settings, "lose_bait_escaped", "bite") : 0.0;
+    }
+
+    ActionStep Update(const FishView &fish, const BiteContext &context) const override {
+        BiteSession *session = context.session;
+        const bool   bait = !context.bait.empty() && context.radius > 0.0f;
+        const auto   away = [&](int ticks) {
+            return ActionStep{fish.action == FishAction::None || fish.action == FishAction::Leave ? FishAction::None : FishAction::Leave, ticks};
+        };
+        if (session == nullptr || !bait || !context.waiting) {
+            return away(30);
+        }
+        if (!session->rolled) {
+            if (context.now < session->until) {
+                return away(1);
+            }
+            Roll(*session, context);
+        }
+        if (context.fish_index != session->chosen) {
+            return away(1);
+        }
+        // A fish the roll has just chosen starts its own wait, whatever it was doing, and swims fast
+        // enough to reach the bait in it: Dark Cloud 2's fish are on the bait when the wait ends.
+        if (session->step == 0 || fish.action == FishAction::None || fish.action == FishAction::Leave) {
+            const int wait = wait_.Draw(context.random);
+            session->step = 1;
+            session->until = context.now + wait * 2;
+            session->speed = std::clamp(fish.distance / static_cast<float>(wait), kRetailSpeed, kFastestSpeed);
+            return {FishAction::Approach, wait};
+        }
+        switch (fish.action) {
+            case FishAction::Approach:
+                // Dark Cloud 1's fish can be seen: it nibbles once it is at the bait. One the water
+                // keeps from it for twice its wait swims off, and another roll comes.
+                if (fish.distance > 2.0f) {
+                    if (context.now < session->until) {
+                        return {FishAction::Approach, 10};
+                    }
+                    *session = {};
+                    return {FishAction::Leave, 60};
+                }
+                return {FishAction::Eat, NibbleFor(fish, context).Draw(context.random)};
+            case FishAction::Eat:
+                return {FishAction::Bite, window_.Draw(context.random)};
+            case FishAction::Bite:
+                // Missed: it swims off, and the next roll comes as it goes.
+                *session = {};
+                return {FishAction::Leave, 60};
+            default:
+                break;
+        }
+        return away(1);
+    }
+
+    bool LosesBait(LossCause cause, const BiteContext &context) const override {
+        return context.random() < (cause == LossCause::PressedEarly ? lose_early_ : lose_escaped_);
+    }
+
+    [[nodiscard]] bool ChoosesForTheCast() const override { return true; }
+
+private:
+    static double Weight(Level level) {
+        switch (level) {
+            case Level::Low:
+                return 0.5;
+            case Level::Normal:
+                return 1.0;
+            case Level::High:
+                return 1.5;
+            case Level::None:
+                break;
+        }
+        return 0.0;
+    }
+
+    static double Liking(const Species *species, const BiteContext &context) {
+        return species != nullptr ? species->Affinity(context.bait, context.default_affinity) : 0.0;
+    }
+
+    const Span &NibbleFor(const FishView &fish, const BiteContext &context) const {
+        switch (LevelOf(Liking(fish.species, context))) {
+            case Level::High:
+                return nibble_high_;
+            case Level::Normal:
+                return nibble_normal_;
+            default:
+                return nibble_low_;
+        }
+    }
+
+    // Any fish in the water can come, as in Dark Cloud 2: the chosen one swims over in its wait. A bait
+    // no fish here likes never brings one; the fish are looked at again now and then.
+    void Roll(BiteSession &session, const BiteContext &context) const {
+        std::vector<double> weights;
+        double              liked = 0.0;
+        for (const Species *species : context.fish) {
+            weights.push_back(Weight(LevelOf(Liking(species, context))));
+            liked += weights.back();
+        }
+        session = {};
+        if (liked <= 0.0) {
+            session.until = context.now + kLookAgain;
+            return;
+        }
+        double roll = context.random() * (liked + nothing_);
+        for (std::size_t index = 0; index < weights.size(); index++) {
+            if (roll < weights[index]) {
+                session.chosen = static_cast<int>(index);
+                break;
+            }
+            roll -= weights[index];
+        }
+        if (session.chosen < 0) {
+            session.until = context.now + retry_;
+            return;
+        }
+        session.rolled = true;
+    }
+
+    Span   wait_;
+    int    retry_ = 0;
+    double nothing_ = 0.0;
+    Span   nibble_low_;
+    Span   nibble_normal_;
+    Span   nibble_high_;
+    Span   window_;
+    double lose_early_ = 0.0;
+    double lose_escaped_ = 0.0;
+};
+
 bool Flag(const Json &settings, const char *key, std::string_view where) {
     if (!settings.contains(key)) {
         return false;
@@ -279,6 +480,7 @@ private:
 void RegisterBuiltinStages() {
     RegisterSpawnStage("retail", [](const Json &settings) { return std::make_unique<RetailSpawn>(settings); });
     RegisterBiteStage("retail", [](const Json &settings) { return std::make_unique<RetailBite>(settings); });
+    RegisterBiteStage("brisk", [](const Json &settings) { return std::make_unique<BriskBite>(settings); });
     RegisterFightStage("retail", [](const Json &settings) { return std::make_unique<RetailFight>(settings); });
     RegisterOutcomeStage("retail", [](const Json &) { return std::make_unique<RetailOutcome>(); });
     RegisterOutcomeStage("keep", [](const Json &settings) { return std::make_unique<KeepOutcome>(settings); });

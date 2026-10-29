@@ -76,6 +76,7 @@ public:
     virtual void LoseBait() = 0; /**< Says so and takes it off the hook, unless it is a lure. */
     virtual void UseBait() = 0;  /**< Off the hook as the fish takes it: eaten, or a lure back to the bag. */
     virtual void ResetFish() = 0;
+    virtual void RestartBite() = 0; /**< The bite stage's cast starts over: the float settled, or the angler moved. */
     virtual void WatchFish(int fish_no) = 0;
     virtual void HookFish(int fish_no) = 0; /**< Sets the hook and starts loading the fish's model. */
     virtual bool ModelReady() = 0;

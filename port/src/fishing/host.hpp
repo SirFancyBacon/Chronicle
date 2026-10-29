@@ -144,4 +144,10 @@ void StepSession(game::CMainChara &chara, game::CCameraFollow &camera, float *po
  */
 void UpdateFishAction(game::CFish &fish);
 
+/**
+ * How fast a fish swims to the bait: retail's 0.1, or the speed the bite stage gave the fish it chose
+ * for the cast (BiteSession::speed).
+ */
+float ApproachSpeed(const game::CFish &fish);
+
 } // namespace dc::fishing

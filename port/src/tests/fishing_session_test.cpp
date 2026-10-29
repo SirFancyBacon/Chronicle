@@ -2,8 +2,11 @@
 #include "fishing/session.hpp"
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <map>
+#include <random>
 #include <deque>
 #include <format>
 #include <optional>
@@ -63,6 +66,7 @@ public:
     void LoseBait() override { Record("bait lost"); }
     void UseBait() override { Record("bait used"); }
     void ResetFish() override {}
+    void RestartBite() override { Record("restart bite"); }
     void WatchFish(int) override {}
     void HookFish(int fish_no) override { Record(std::format("hook fish {}", fish_no)); }
     bool ModelReady() override { return model_ready; }
@@ -388,6 +392,161 @@ TEST_F(FishingSession, ThePlacesBiteHoldsTheHookForItsTicks) {
     EXPECT_EQ(bite.Update(fish, context).action, fishing::FishAction::Eat);
     rolls = {0.0};
     EXPECT_EQ(bite.Update(fish, {.random = context.random}).action, fishing::FishAction::Leave);
+}
+
+nlohmann::json Brisk() {
+    return {
+        {"stage",           "brisk"                                                                                     },
+        {"wait",            {240, 480}                                                                                  },
+        {"retry",           600                                                                                         },
+        {"nothing",         1.0                                                                                         },
+        {"nibble",          {{"low", {100, 160}}, {"normal", {50, 100}}, {"high", {30, 60}}}                             },
+        {"window",          {40, 75}                                                                                    },
+        {"lose_bait_early", 0.2                                                                                         }
+    };
+}
+
+TEST_F(FishingSession, BriskChoosesOneFishInTheWaterByItsLikingOrNothing) {
+    const auto bite = fishing::MakeBiteStage(Brisk());
+    // For the Potato Cake: kind 2 likes it 1 (high, x 1.5), kind 6 0.5 (normal, x 1), kind 1 not at all;
+    // the second kind 2 is far off, and comes all the same.
+    const std::vector<const fishing::Species *> water = {fishing::SpeciesOfKind(2), fishing::SpeciesOfKind(6), fishing::SpeciesOfKind(1),
+                                                         fishing::SpeciesOfKind(2), nullptr};
+    const std::vector<float>               distances = {10.0f, 20.0f, 5.0f, 40.0f, 0.0f};
+    std::mt19937                           engine(7);
+    std::uniform_real_distribution<double> uniform(0.0, 1.0);
+    std::map<int, double>                  chosen;
+    constexpr int                          kRolls = 40000;
+    for (int roll = 0; roll < kRolls; roll++) {
+        fishing::BiteSession session;
+        bite->Update({.species = water[0]}, {.bait = "vanilla:potato_cake", .radius = 25.0f, .random = [&] { return uniform(engine); },
+                                             .fish_index = 0, .fish = water, .distances = distances, .session = &session});
+        chosen[session.chosen] += 1.0 / kRolls;
+    }
+    // Weights 1.5, 1, 0 and 1.5 against nothing's 1.
+    EXPECT_NEAR(chosen[0], 1.5 / 5.0, 0.01);
+    EXPECT_NEAR(chosen[1], 1.0 / 5.0, 0.01);
+    EXPECT_NEAR(chosen[3], 1.5 / 5.0, 0.01);
+    EXPECT_NEAR(chosen[-1], 1.0 / 5.0, 0.01);
+    EXPECT_EQ(chosen.count(2), 0u);
+}
+
+TEST_F(FishingSession, BrisksChosenFishSwimsOverNibblesAndBitesForItsWindow) {
+    const auto bite = fishing::MakeBiteStage(Brisk());
+    const std::vector<const fishing::Species *> water = {fishing::SpeciesOfKind(2), fishing::SpeciesOfKind(6)};
+    fishing::BiteSession session{.rolled = true, .chosen = 1};
+    double               roll = 0.0;
+    const auto           context = [&](int index, int now = 0) {
+        return fishing::BiteContext{.bait = "vanilla:potato_cake", .radius = 25.0f, .random = [&] { return roll; }, .fish_index = index,
+                                    .fish = water, .distances = {5.0f, 10.0f}, .session = &session, .now = now};
+    };
+    // Chosen while it was nibbling another time: it starts a wait of its own.
+    fishing::FishView fish{.species = water[1], .action = fishing::FishAction::Eat, .distance = 10.0f};
+    roll = 0.9999;
+    const fishing::ActionStep start = bite->Update(fish, context(1));
+    EXPECT_EQ(start.action, fishing::FishAction::Approach);
+    EXPECT_EQ(start.ticks, 480);
+    EXPECT_EQ(session.speed, 0.1f); // near: retail's speed covers it
+    fish.action = fishing::FishAction::Approach;
+    EXPECT_EQ(bite->Update(fish, context(1)).action, fishing::FishAction::Approach); // still swimming over
+    fish.distance = 1.0f;
+    const fishing::ActionStep nibble = bite->Update(fish, context(1));
+    EXPECT_EQ(nibble.action, fishing::FishAction::Eat);
+    EXPECT_EQ(nibble.ticks, 100); // kind 6's normal liking: 50 to 100
+    fish.action = fishing::FishAction::Eat;
+    EXPECT_EQ(bite->Update(fish, context(1)).action, fishing::FishAction::Bite);
+    EXPECT_EQ(bite->Update(fish, context(1)).ticks, 75);
+    roll = 0.0;
+    EXPECT_EQ(bite->Update(fish, context(1)).ticks, 40);
+
+    // The other fish leaves the bait alone.
+    EXPECT_EQ(bite->Update({.species = water[0]}, context(0)).action, fishing::FishAction::None);
+
+    // Missed, the chosen fish leaves and the next roll comes.
+    fish.action = fishing::FishAction::Bite;
+    EXPECT_EQ(bite->Update(fish, context(1)).action, fishing::FishAction::Leave);
+    EXPECT_FALSE(session.rolled);
+}
+
+TEST_F(FishingSession, BrisksChosenFishSwimsFastEnoughToReachTheBaitInItsWait) {
+    const auto bite = fishing::MakeBiteStage(Brisk());
+    const std::vector<const fishing::Species *> water = {fishing::SpeciesOfKind(2)};
+    for (const auto &[distance, speed] : std::vector<std::pair<float, float>>{{60.0f, 0.25f}, {200.0f, 0.6f}}) {
+        fishing::BiteSession session{.rolled = true, .chosen = 0};
+        bite->Update({.species = water[0], .distance = distance},
+                     {.bait = "vanilla:potato_cake", .radius = 25.0f, .random = [] { return 0.0; }, .fish_index = 0, .fish = water,
+                      .distances = {distance}, .session = &session});
+        EXPECT_FLOAT_EQ(session.speed, speed) << distance; // a wait of 240, no faster than 0.6
+    }
+}
+
+TEST_F(FishingSession, BrisksChosenFishThatCannotReachTheBaitSwimsOff) {
+    const auto bite = fishing::MakeBiteStage(Brisk());
+    const std::vector<const fishing::Species *> water = {fishing::SpeciesOfKind(2)};
+    fishing::BiteSession session{.rolled = true, .chosen = 0};
+    const auto context = [&](int now) {
+        return fishing::BiteContext{.bait = "vanilla:potato_cake", .radius = 25.0f, .random = [] { return 0.0; }, .fish_index = 0, .fish = water,
+                                    .distances = {20.0f}, .session = &session, .now = now};
+    };
+    fishing::FishView fish{.species = water[0], .distance = 20.0f};
+    EXPECT_EQ(bite->Update(fish, context(0)).ticks, 240);
+    fish.action = fishing::FishAction::Approach;
+    EXPECT_EQ(bite->Update(fish, context(479)).action, fishing::FishAction::Approach);
+    EXPECT_EQ(bite->Update(fish, context(480)).action, fishing::FishAction::Leave); // twice its wait, never at the bait
+    EXPECT_FALSE(session.rolled);
+}
+
+TEST_F(FishingSession, BriskLooksAgainSoonWhileNoFishLikesTheBaitAndAfterItsRetryForNothing) {
+    const auto bite = fishing::MakeBiteStage(Brisk());
+    // Kind 5 likes only the Poisonous Apple.
+    const std::vector<const fishing::Species *> water = {fishing::SpeciesOfKind(5)};
+    fishing::BiteSession session;
+    int                  rolls = 0;
+    double               roll = 0.0;
+    fishing::BiteContext context{.bait = "vanilla:carrot", .radius = 25.0f, .random = [&] {
+                                     rolls++;
+                                     return roll;
+                                 }, .fish_index = 0, .fish = water, .distances = {5.0f}, .session = &session, .now = 100};
+    EXPECT_EQ(bite->Update({.species = water[0]}, context).action, fishing::FishAction::None);
+    EXPECT_EQ(session.chosen, -1);
+    EXPECT_EQ(session.until, 130);
+    EXPECT_EQ(rolls, 0); // nothing to roll for
+
+    // Liked, but the roll comes up nothing (its weight 1 against 1.5): another after the retry.
+    context.bait = "vanilla:poisonous_apple";
+    context.now = 130;
+    roll = 0.9;
+    bite->Update({.species = water[0]}, context);
+    EXPECT_EQ(session.chosen, -1);
+    EXPECT_EQ(session.until, 730);
+    context.now = 729;
+    bite->Update({.species = water[0]}, context);
+    EXPECT_EQ(rolls, 1);
+    context.now = 730;
+    roll = 0.0;
+    bite->Update({.species = water[0]}, context);
+    EXPECT_EQ(session.chosen, 0);
+}
+
+TEST_F(FishingSession, BriskLeavesTheBaitAloneUntilTheFloatIsOut) {
+    const auto bite = fishing::MakeBiteStage(Brisk());
+    const std::vector<const fishing::Species *> water = {fishing::SpeciesOfKind(2)};
+    fishing::BiteSession session;
+    const fishing::BiteContext context{.bait = "vanilla:potato_cake", .radius = 25.0f, .random = [] { return 0.0; }, .fish_index = 0,
+                                       .fish = water, .distances = {5.0f}, .waiting = false, .session = &session};
+    EXPECT_EQ(bite->Update({.species = water[0]}, context).action, fishing::FishAction::None);
+    EXPECT_EQ(session.chosen, -1);
+}
+
+TEST_F(FishingSession, TheSessionStartsTheBiteOverAsTheFloatSettlesAndTheAnglerMoves) {
+    CastAndWait();
+    EXPECT_TRUE(angler.Did("restart bite"));
+    angler.calls.clear();
+    Tick({.stick_x = 0.5f});
+    EXPECT_TRUE(angler.Did("restart bite"));
+    angler.calls.clear();
+    Tick({.cross = true});
+    EXPECT_TRUE(angler.Did("restart bite"));
 }
 
 } // namespace
