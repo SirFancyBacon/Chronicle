@@ -8,6 +8,7 @@
 #include "item/framework.hpp"
 #include "item/host.hpp"
 #include "itemdata.hpp"
+#include "menu_save.hpp"
 #include "runscript.hpp"
 
 namespace dc::test {
@@ -116,6 +117,34 @@ TEST_F(FishingBait, ACustomBaitIsPickedAttachedAndGivenBack) {
     FishingLoadEsa(lure, nullptr, 40);
     EXPECT_EQ(esa_type, index);
     EXPECT_EQ(FishingGetEsaItemNo(), lure);
+}
+
+TEST_F(FishingBait, ThePickerOffersOnlyBaitForFishing) {
+    const int lure = AddLure(true, 0.0f);
+    EXPECT_TRUE(EventItemListed(ITEM_CARROT, EVENT_ITEM_MODE_BAIT));
+    EXPECT_TRUE(EventItemListed(lure, EVENT_ITEM_MODE_BAIT));
+    EXPECT_FALSE(EventItemListed(ITEM_BREAD, EVENT_ITEM_MODE_BAIT));
+    EXPECT_FALSE(EventItemListed(ITEM_FISHING_ROD, EVENT_ITEM_MODE_BAIT));
+    // Outside fishing, every event item, as retail's.
+    EXPECT_TRUE(EventItemListed(ITEM_BREAD, EVENT_ITEM_MODE_EVENT));
+    EXPECT_FALSE(EventItemListed(ITEM_DUNGEON_START - 1, EVENT_ITEM_MODE_EVENT));
+}
+
+TEST_F(FishingBait, TheRodBoardOffersOnlyRods) {
+    const int rod = item::kCustomFirst + 41;
+    item::Unregister("chronicle:sea_rod");
+    item::Register(item::Def{.id = "chronicle:sea_rod", .number = rod}.With(item::Rod{.spring = 18.0f}));
+    EXPECT_TRUE(EventItemListed(ITEM_FISHING_ROD, EVENT_ITEM_MODE_ROD));
+    EXPECT_TRUE(EventItemListed(rod, EVENT_ITEM_MODE_ROD));
+    EXPECT_FALSE(EventItemListed(ITEM_CARROT, EVENT_ITEM_MODE_ROD));
+
+    fishing::ChooseRodNumber(rod);
+    EXPECT_EQ(fishing::ChosenRod(), "chronicle:sea_rod");
+    fishing::ChooseRodNumber(ITEM_CARROT); // not a rod: nothing changes
+    EXPECT_EQ(fishing::ChosenRod(), "chronicle:sea_rod");
+    fishing::ChooseRodNumber(ITEM_FISHING_ROD);
+    EXPECT_EQ(fishing::ChosenRod(), "");
+    item::Unregister("chronicle:sea_rod");
 }
 
 TEST_F(FishingBait, ASpeciesThatDoesNotNameABaitLikesItAtItsDefault) {

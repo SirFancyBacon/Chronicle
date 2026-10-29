@@ -34,7 +34,7 @@
       "model_size": 17.0,
       "name_msg": 40,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -87,7 +87,7 @@
       "model_size": 19.5,
       "name_msg": 41,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -140,7 +140,7 @@
       "model_size": 25.5,
       "name_msg": 42,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -181,7 +181,7 @@
       "model_size": 35.4,
       "name_msg": 43,
       "fight": {
-        "pull": 1.05
+        "pull": 0.7
       }
     },
     {
@@ -234,7 +234,7 @@
       "model_size": 28.0,
       "name_msg": 44,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -255,7 +255,7 @@
       "model_size": 21.0,
       "name_msg": 45,
       "fight": {
-        "pull": 2.4
+        "pull": 1.6
       }
     },
     {
@@ -308,7 +308,7 @@
       "model_size": 20.0,
       "name_msg": 46,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -361,7 +361,7 @@
       "model_size": 20.0,
       "name_msg": 47,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -377,7 +377,7 @@
       "model_size": 1.0,
       "name_msg": 48,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -398,7 +398,7 @@
       "model_size": 21.0,
       "name_msg": 49,
       "fight": {
-        "pull": 1.8
+        "pull": 1.2
       }
     },
     {
@@ -455,7 +455,7 @@
       "model_size": 20.0,
       "name_msg": 30,
       "fight": {
-        "pull": 1.2
+        "pull": 0.8
       }
     },
     {
@@ -508,7 +508,7 @@
       "model_size": 20.0,
       "name_msg": 31,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -561,7 +561,7 @@
       "model_size": 15.0,
       "name_msg": 32,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -598,7 +598,7 @@
       "model_size": 21.0,
       "name_msg": 33,
       "fight": {
-        "pull": 1.05
+        "pull": 0.7
       }
     },
     {
@@ -643,7 +643,7 @@
       "model_size": 21.0,
       "name_msg": 34,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -688,7 +688,7 @@
       "model_size": 20.0,
       "name_msg": 35,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -737,7 +737,7 @@
       "model_size": 20.0,
       "name_msg": 36,
       "fight": {
-        "pull": 0.75
+        "pull": 0.5
       }
     },
     {
@@ -758,7 +758,7 @@
       "model_size": 21.0,
       "name_msg": 37,
       "fight": {
-        "pull": 3.0
+        "pull": 2.0
       }
     }
   ],

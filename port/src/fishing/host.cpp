@@ -716,6 +716,10 @@ const SpeciesRecord *RecordOf(std::string_view species) {
     return found != g_records.end() ? &found->second : nullptr;
 }
 
+const std::map<std::string, SpeciesRecord, std::less<>> &AllRecords() {
+    return g_records;
+}
+
 void RecordCatch(const Catch &fish) {
     if (fish.species == nullptr) {
         return;
@@ -745,9 +749,11 @@ std::vector<int> RodsCarried() {
     }
     const ITEM_PACK &pack = SaveData->GetDngStatus()->item_pack;
     const auto       add = [&rods](int number) {
-        const item::Def *def = number > 0 ? item::Find(item::Definition(number)) : nullptr;
-        if (def != nullptr && def->Has<item::Rod>() && std::ranges::find(rods, def->number) == rods.end()) {
-            rods.push_back(def->number);
+        if (IsRod(number)) {
+            const int rod = item::Definition(number);
+            if (std::ranges::find(rods, rod) == rods.end()) {
+                rods.push_back(rod);
+            }
         }
     };
     std::ranges::for_each(pack.item, add);
@@ -757,6 +763,19 @@ std::vector<int> RodsCarried() {
 
 void ChooseRod(std::string id) {
     g_rod = std::move(id);
+}
+
+bool IsRod(int number) {
+    const item::Def *def = number > 0 ? item::Find(item::Definition(number)) : nullptr;
+    return def != nullptr && def->Has<item::Rod>();
+}
+
+void ChooseRodNumber(int number) {
+    if (!IsRod(number)) {
+        return;
+    }
+    const item::Def *rod = item::Find(item::Definition(number));
+    ChooseRod(rod->number == ITEM_FISHING_ROD ? std::string() : rod->id);
 }
 
 const std::string &ChosenRod() {

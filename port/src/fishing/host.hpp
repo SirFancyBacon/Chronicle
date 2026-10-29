@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <map>
 
 #include "item/framework.hpp"
 #include <string>
@@ -88,6 +89,11 @@ struct SpeciesRecord {
 const SpeciesRecord *RecordOf(std::string_view species);
 
 /**
+ * Every custom species' record, by ID.
+ */
+const std::map<std::string, SpeciesRecord, std::less<>> &AllRecords();
+
+/**
  * Adds a catch of a custom species to its record.
  */
 void RecordCatch(const Catch &fish);
@@ -164,6 +170,17 @@ item::Rod RodInUse();
  */
 void               ChooseRod(std::string id);
 const std::string &ChosenRod();
+
+/**
+ * Chooses the rod by item number (a copy's handle, or the Fishing Rod's); nothing for an item that
+ * is not a rod.
+ */
+void ChooseRodNumber(int number);
+
+/**
+ * Whether an item (or a copy's handle) is a rod.
+ */
+bool IsRod(int number);
 
 /**
  * Every rod (the Rod trait) the bag holds, each once, by item number.

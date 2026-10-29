@@ -3520,6 +3520,25 @@ int _TEST(RS_STACKDATA *stack, int argument_count) {
     return 1;
 }
 
+// The answer EdAnswerScriptQuestion waits to give: asked once the script makes its message, then
+// given a press a tick.
+struct ScriptAnswer {
+    int  window = -1;
+    int  mes_no = -1;
+    int  row = 0;
+    bool asked = false;
+};
+
+ScriptAnswer g_script_answer;
+
+} // namespace
+
+void EdAnswerScriptQuestion(int window, int mes_no, int row) {
+    g_script_answer = {.window = window, .mes_no = mes_no, .row = row};
+}
+
+namespace {
+
 int exch_ok_cancel(int buttons) {
     int confirm = buttons & ED_PAD_CONFIRM;
     int cancel = buttons & ED_PAD_CANCEL;
@@ -3550,7 +3569,19 @@ int _GET_PADDOWN(RS_STACKDATA *stack, int argument_count) {
         return 0;
     }
 
-    SetStack(stack, exch_ok_cancel(GamePad.GetPadDown()));
+    int pressed = exch_ok_cancel(GamePad.GetPadDown());
+
+    if (g_script_answer.asked) {
+        if (g_script_answer.row > 0) {
+            g_script_answer.row--;
+            pressed = PAD_DOWN;
+        } else {
+            g_script_answer = {};
+            pressed = ED_PAD_CONFIRM;
+        }
+    }
+
+    SetStack(stack, pressed);
     return 1;
 }
 
@@ -5262,7 +5293,8 @@ ClsMes *GetMes(int index) {
 }
 
 int _MES_MAKE(RS_STACKDATA *stack, int argument_count) {
-    ClsMes *message = GetMes(GetStackInt(stack++));
+    const int window = GetStackInt(stack++);
+    ClsMes   *message = GetMes(window);
 
     if (message == nullptr) {
         return 0;
@@ -5292,6 +5324,12 @@ int _MES_MAKE(RS_STACKDATA *stack, int argument_count) {
             message->mes_no[i - 4] = slot_message;
             std::println("{} {}", i - 4, slot_message);
         }
+    }
+
+    // A question the port has answered already is not shown.
+    if (g_script_answer.window == window && g_script_answer.mes_no == message_no) {
+        g_script_answer.asked = true;
+        return 1;
     }
 
     message->MakeMesWin(message_no);

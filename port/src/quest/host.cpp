@@ -26,6 +26,7 @@
 #include "itemdata.hpp"
 #include "localize/localize.hpp"
 #include "main.hpp"
+#include "menuetc.hpp"
 #include "menu_save.hpp"
 #include "platform/files.hpp"
 #include "quest/custom_shop.hpp"
@@ -34,6 +35,7 @@
 #include "runscript.hpp"
 #include "savedata.hpp"
 #include "stockitem.hpp"
+#include "text/gametext.hpp"
 
 namespace dc::quest {
 
@@ -280,6 +282,18 @@ public:
 
     [[nodiscard]] std::string TalkLine(int message) const override {
         return DialogNpcTalkLine(message);
+    }
+
+    [[nodiscard]] std::string SystemText(int message) const override {
+        if (SystemMes == nullptr) {
+            return {};
+        }
+        short *saved = CommonMenuMes3.buff;
+        CommonMenuMes3.buff = SystemMes;
+        const short *codes = CommonMenuMes3.GetTextLineDataTop(message);
+        CommonMenuMes3.buff = saved;
+        std::string text = codes != nullptr ? text::GameTextDecode(codes) : std::string();
+        return text.substr(0, text.find('\n'));
     }
 
     void OpenShop(ShopSpec shop) override;

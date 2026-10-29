@@ -46,6 +46,7 @@ enum EdMenuKind {
     ED_MENU_FISHING_EXCHANGE = 8,  /**< Fish point exchange. */
     ED_MENU_CHANGE_ESA       = 9,  /**< Bait selection. */
     ED_MENU_FISH_RANKING     = 10, /**< Fishing record. */
+    ED_MENU_CHANGE_ROD       = 11, /**< The port's: the rods in the bag, on the event item board. */
 };
 
 // clang-format on
@@ -439,6 +440,11 @@ void EnterPartsEffect(CMapParts *parts, EPARTS_FUNC_DATA *func_data, EDIT_EFFECT
  * Clears the editor's pending used-item selection.
  */
 void EdUseItemInit();
+
+/**
+ * The mode the town goes back to as a menu closes: fishing after the rod board, else walking.
+ */
+int EdMenuAfter();
 
 /**
  * Supplies the item list available to editor menus.

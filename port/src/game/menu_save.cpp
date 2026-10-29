@@ -959,7 +959,25 @@ CTexture *FishFoodBoard;
  */
 ITEM_PACK *EventItemPackPt;
 
+bool Listed(int item) {
+    return EventItemListed(item, MiniMenu.fish_mode);
+}
+
 } // namespace
+
+bool EventItemListed(int item, int fish_mode) {
+    if (item < ITEM_DUNGEON_START) {
+        return false;
+    }
+    switch (fish_mode) {
+        case EVENT_ITEM_MODE_BAIT:
+            return fishing::BaitIndex(item) >= 0;
+        case EVENT_ITEM_MODE_ROD:
+            return fishing::IsRod(item);
+        default:
+            return true;
+    }
+}
 
 void InitEventItemSelect(int block, int *usable, ITEM_PACK *pack, int x, int y, int vanish, int fish_mode) {
     GamePad.SetAutoRepeat(PAD_DPAD, 0x1E, 5);
@@ -975,7 +993,7 @@ void InitEventItemSelect(int block, int *usable, ITEM_PACK *pack, int x, int y, 
     MiniMenu.event_item_num = 0;
 
     for (int i = 0; i < pack->num; i++) {
-        if (pack->item[i] >= ITEM_DUNGEON_START) {
+        if (Listed(pack->item[i])) {
             MiniMenu.event_item_num++;
         }
     }
@@ -1243,7 +1261,7 @@ int EventItemSelectKey(int *result) {
                     slot = EventItemPackPt->item;
 
                     for (pack_index = 0; pack_index < EventItemPackPt->num; pack_index++) {
-                        if (*slot >= ITEM_DUNGEON_START) {
+                        if (Listed(*slot)) {
                             if (MiniMenu.cursor == event_no) {
                                 *result = *slot;
                                 break;
@@ -1260,8 +1278,9 @@ int EventItemSelectKey(int *result) {
                     }
                 }
 
-                // The bait picker takes every bait the fishing framework knows, more than usable holds.
-                int accepted = slot != nullptr && MiniMenu.fish_mode != 0 && fishing::BaitIndex(*result) >= 0 ? 1 : 0;
+                // Fishing's boards take whatever they list (every bait the fishing framework knows, more
+                // than usable holds; every rod).
+                int accepted = slot != nullptr && MiniMenu.fish_mode != 0 && Listed(*result) ? 1 : 0;
 
                 if (accepted != 0 && MiniMenu.vanish != 0 && 0 <= pack_index && pack_index < EventItemPackPt->num) {
                     EventItemPackPt->item[pack_index] = 0;
@@ -1312,7 +1331,7 @@ int EventItemSelectKey(int *result) {
         item = EventItemPackPt->item;
 
         for (int j = 0; j < EventItemPackPt->num; j++) {
-            if (*item >= ITEM_DUNGEON_START) {
+            if (Listed(*item)) {
                 if (MiniMenu.cursor == event_no) {
                     break;
                 }
@@ -1409,7 +1428,7 @@ void EventItemSelectDraw() {
     const float left = EventBoardPos[0];
     const float top = EventBoardPos[1];
     int         y = top;
-    CTexture   *board = (MiniMenu.fish_mode != 0) ? FishFoodBoard : MiniEventBoard;
+    CTexture   *board = (MiniMenu.fish_mode == EVENT_ITEM_MODE_BAIT) ? FishFoodBoard : MiniEventBoard;
     const float row_top = 56.0f + top;
     const int   clip_top = row_top;
     const int   clip_bottom = 136.0f + top;
@@ -1434,7 +1453,7 @@ void EventItemSelectDraw() {
     int                  item_count = 0;
 
     for (int j = 0; j < EventItemPackPt->num; j++) {
-        if (EventItemPackPt->item[j] >= ITEM_DUNGEON_START) {
+        if (Listed(EventItemPackPt->item[j])) {
             items[item_count++] = EventItemPackPt->item[j];
         }
     }
@@ -1512,8 +1531,10 @@ void DrawEventItemBoard(int x, int y, int top, int bottom, int alpha, CTexture *
     int clip_height = 0x28;
     MenuTextureClip(clip_y, clip_v, clip_height, top, bottom);
 
+    // Retail draws each row a pixel low: the rows below hide it, but the board's first line of slots
+    // was left uncovered, a dark line of the town behind the menu above the top row.
     for (int i = 0; i < 5; i++) {
-        DrawMenu2DSprite(texture, CRect_i_(pos_x, clip_y + 1, 0x28, clip_height), CRect_i_(0x116, clip_v, 0x28, clip_height), alpha);
+        DrawMenu2DSprite(texture, CRect_i_(pos_x, clip_y, 0x28, clip_height), CRect_i_(0x116, clip_v, 0x28, clip_height), alpha);
         pos_x += 0x2A;
     }
 }

@@ -177,6 +177,12 @@ public:
     virtual std::string TalkLine(int message) const = 0;
 
     /**
+     * A system message (meswin/system: a town's name is 10 for Norune, 12 for Matataki), as the
+     * player's data and language have it; empty where there is none.
+     */
+    virtual std::string SystemText(int message) const = 0;
+
+    /**
      * Opens the shop once the conversation it was chosen in has ended.
      */
     virtual void OpenShop(ShopSpec shop) = 0;

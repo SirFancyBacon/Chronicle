@@ -112,8 +112,9 @@ fish points, which are only a number.
 ## Baits
 
 Any item with the `Bait` trait is a bait: retail's thirteen, and custom items whose document has a
-`bait` (docs/ITEM_FRAMEWORK.md, "Custom items"). The bait picker offers every one the player carries,
-and the town's script attaches the one chosen with its own code, the port putting a bait its list
+`bait` (docs/ITEM_FRAMEWORK.md, "Custom items"). The bait picker (retail's event item board) offers
+every one the player carries and nothing else (`EventItemListed`; the board's first row of slots is
+drawn where retail drew it a pixel low, which left a line of the town showing above it), and the town's script attaches the one chosen with its own code, the port putting a bait its list
 lacks on it (`ListBaitForScript`, which fixed PAL's five baits that were eaten and never attached).
 `esa_type` and a fish's `food_kind` index the framework's list of baits (`fishing::BaitAt`): retail's
 in `esa_info`'s order, then the custom ones.
@@ -205,11 +206,15 @@ better rods are custom items with a `rod` (docs/ITEM_FRAMEWORK.md). The rod in u
 from the fishing menu while it is in the bag, else the Fishing Rod (`fishing::RodInUse`); the choice is
 kept in `chronicle.dat`'s `FISH` chunk.
 
-**The fishing menu.** Where the place's fight reads rods (Enhanced), Circle while standing at the water
-opens the port's menu in the message window (`dialog::DialogNpcOpenMenu`): Change rod, which lists the
-rods in the bag with the one in use marked; Look for fish, which redraws the fish in the water with the
-place's odds, as leaving and coming back does; and More..., which opens the town's own menu (the bait,
-the records, the exchange) as Circle does in Original. The angler stands still while it is up.
+**The fishing menu.** Circle while standing at the water asks retail's "Continue fishing / Quit
+fishing", which every fishing town's script asks (event 0x85) as message 22 of its window 1. Where the
+place's fight reads rods (Enhanced), the dialog framework draws that question instead, in the same
+paper window (`dialog::DialogNpcOpenMenu`), with retail's two rows in the town's language and Change
+rod between them. Change rod opens the item board with only the rods in the bag (`ED_MENU_CHANGE_ROD`,
+`EVENT_ITEM_MODE_ROD`), which goes back to fishing as it closes; the rod picked is the rod in use.
+Quit fishing raises event 0x85 with its answer given (`EdAnswerScriptQuestion`: the script's window is
+not made, and its own choice helper is handed Down and confirm), so each town's own way out of fishing
+plays. The angler stands still while the menu is up.
 
 | Stat | Retail's rod | Does (`fishing::EffectOf`) |
 |---|---|---|
@@ -227,14 +232,23 @@ without it fishing is the port's base. For now it is copied into `datapacks/` by
 
 - `places.json`: every place with the `brisk` bite and the `tension` fight, its spawns and outcomes
   retail's.
-- `fish.json`: each species' `fight.pull` with retail's rod, from 0.75 for most small fish to 3 for the
+- `fish.json`: each species' `fight.pull` with retail's rod, from 0.5 for most small fish to 2 for the
   Baron Garayan.
 - Ruty's three rods, custom items with the `Rod` trait (retail's model and icon): the Sea Rod (Spring
-  19, the Baron barely catchable), the Garayan Rod (33, catchable) and the Baron Rod (100, with Control
-  100 to tire it).
+  18, the Baron at 1.7: barely catchable), the Garayan Rod (33, at 1.3: catchable) and the Baron Rod
+  (80, at 0.8, with Control 100 to tire it).
 - `modpack.json`, its name, description and version, for the menu that will list packs.
 
 `FishingDocuments.TheIncludedEnhancedFishingPackLoadsWhole` loads it whole.
+
+**Ruty's rods** (`port/src/quest/rutys_rods.cpp`) is the pack's quest, registered only where its rods
+are. Ruty keeps Queens' fish store and studies fish: she has seen the sea fish that come through the
+port but none from inland. Once her store is open and Toan has caught a fish, she asks him to catch
+every kind in Norune and Matataki (the Sea Rod), then a Mardan Garayan (the Garayan Rod), then the
+Baron Garayan from her oldest fish book (the Baron Rod). The catches count only while she waits for
+them (`fishing::CountSpecies`, `CountCatches` with the stages). She names the two towns from the
+system messages (10 and 12), so each region and language has its own names (Nolun on PAL, Norune on
+NTSC). Her lines are `quest.rutys_rods.*`, in the four languages as first drafts.
 
 ## Kept fish
 

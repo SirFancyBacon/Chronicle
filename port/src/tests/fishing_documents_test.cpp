@@ -301,12 +301,12 @@ TEST_F(FishingDocuments, TheIncludedEnhancedFishingPackLoadsWhole) {
         EXPECT_TRUE(fishing::PlaceAtSpot(spot)->bite->ChoosesForTheCast()) << spot; // brisk
         EXPECT_TRUE(fishing::PlaceAtSpot(spot)->fight->ReadsRods()) << spot;         // tension
     }
-    EXPECT_EQ(fishing::SpeciesOfKind(17)->pull, 3.0f);
+    EXPECT_EQ(fishing::SpeciesOfKind(17)->pull, 2.0f);
     // The Baron's pull with each of Ruty's rods: barely, catchable, and the first test fight's feel.
-    const auto baron_with = [](std::string_view rod) { return 3.0f / fishing::EffectOf(*item::Find(rod)->Get<item::Rod>()).pull_divisor; };
-    EXPECT_NEAR(baron_with("chronicle:sea_rod"), 2.5f, 0.05f);
-    EXPECT_NEAR(baron_with("chronicle:garayan_rod"), 2.0f, 0.05f);
-    EXPECT_NEAR(baron_with("chronicle:baron_rod"), 1.0f, 0.05f);
+    const auto baron_with = [](std::string_view rod) { return 2.0f / fishing::EffectOf(*item::Find(rod)->Get<item::Rod>()).pull_divisor; };
+    EXPECT_NEAR(baron_with("chronicle:sea_rod"), 1.71f, 0.02f);
+    EXPECT_NEAR(baron_with("chronicle:garayan_rod"), 1.33f, 0.02f);
+    EXPECT_NEAR(baron_with("chronicle:baron_rod"), 0.78f, 0.02f);
 }
 
 TEST_F(FishingDocuments, EachPlaceSpawnsWithRetailsOdds) {

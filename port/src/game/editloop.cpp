@@ -1715,7 +1715,7 @@ int EditLoop() {
             EditPartsObjectOnOff();
 
             if (EdMenuMode() != 0) {
-                GameMode = ED_MODE_WALK;
+                GameMode = EdMenuAfter();
                 EdExitMenu();
 
                 if (MenuMapJumpMode >= 0) {

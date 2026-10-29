@@ -55,7 +55,9 @@ file statics). The copies are retail's, with one addition in `EdTalkMode`:
    which doubles the colour, would brighten it. A page with no text is choices only, as retail's
    prompts are. The villager's own message file
    goes back into `EditMes1` when the session ends. `dialog::DrawSession`'s own renderer is not
-   used here; it remains for sessions opened elsewhere (`OpenCustomSession`).
+   used here; it remains for sessions opened elsewhere (`OpenCustomSession`). Fishing's menu opens a
+   session of its own in this window (`DialogNpcOpenMenu`), stepped and placed by the fishing session
+   as `EdTalkMode` does a conversation (docs/FISHING_FRAMEWORK.md, "The fishing menu").
 5. "Talk" ends the session with `SessionEnd::PlayOriginal` (the context has `host_plays_original`).
    The next tick, retail's conversation starts from the beginning in its own window, with its own
    choice prompts, shops and events.

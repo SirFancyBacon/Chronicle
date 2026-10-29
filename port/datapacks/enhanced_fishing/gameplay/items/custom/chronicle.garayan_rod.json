@@ -13,6 +13,22 @@
     "en_gb": {
       "name": "Garayan Rod",
       "description": "\"Garayan Rod\"\nRuty was saving it for\nsomething special."
+    },
+    "de_de": {
+      "name": "Garayan-Angel",
+      "description": "\"Garayan-Angel\"\nRuty hat sie für etwas\nBesonderes aufgehoben."
+    },
+    "es_es": {
+      "name": "Caña Garayan",
+      "description": "\"Caña Garayan\"\nRuty la guardaba para\nalgo especial."
+    },
+    "fr_fr": {
+      "name": "Canne Garayan",
+      "description": "\"Canne Garayan\"\nRuty la gardait pour\nune occasion spéciale."
+    },
+    "it_it": {
+      "name": "Canna Garayan",
+      "description": "\"Canna Garayan\"\nRuty la teneva da parte\nper qualcosa di speciale."
     }
   },
   "rod": {
