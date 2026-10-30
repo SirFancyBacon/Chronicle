@@ -116,14 +116,17 @@ void OpenRodBoard() {
     EdEventMenu(ED_MENU_CHANGE_ROD);
 }
 
+// The town's own scripts ask them, a house's never, and Circle's only while fishing (where the place
+// is the one being fished).
 bool AskFishingQuestion(const dialog::QuestionContext &question, std::vector<dialog::QuestionRow> &rows) {
-    if (question.window != kQuestionWindow || std::ranges::find(kFishingTowns, question.town) == kFishingTowns.end()) {
+    if (question.window != kQuestionWindow || question.interior ||
+        std::ranges::find(kFishingTowns, question.town) == kFishingTowns.end()) {
         return false;
     }
     if (question.message == kSignMessage) {
         return true;
     }
-    if (question.message != kStandingMessage) {
+    if (question.message != kStandingMessage || EdMoveCharaInfo.fishing == 0) {
         return false;
     }
     if (CurrentPlace().fight->ReadsRods()) {

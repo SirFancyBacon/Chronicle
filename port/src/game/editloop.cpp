@@ -53,6 +53,7 @@
 #include "effectgroup.hpp"
 #include "effectmacro.hpp"
 #include "fishing.hpp"
+#include "dialog/script_question.hpp"
 #include "fishing/host.hpp"
 #include "frame.hpp"
 #include "framevu1.hpp"
@@ -1017,6 +1018,7 @@ int EditInit(void * /*param*/) {
     EdEventInfo.messages[0] = &EditMes1;
     EdEventInfo.messages[1] = &EditEventMes1;
     EdEventInfo.messages[4] = &EditSystemMes;
+    dialog::ScriptQuestionReset();
     EdInitEventParam();
     EdEventData = nullptr;
     simple_event = 0;
@@ -1975,6 +1977,8 @@ int EditLoop() {
     if (settled && goto_menu == 0) {
         if (const int menu = app::GameTakeTownMenu(); menu != 0) {
             std::vector<int> items = menu == ED_MENU_CHANGE_ROD ? fishing::RodsCarried() : fishing::BaitItems();
+            // The menus' list holds 32 with its end.
+            items.resize(std::min<std::size_t>(items.size(), 31));
             items.push_back(-1);
             EdUseItemInit();
             EdSetUseItem(items.data());

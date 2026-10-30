@@ -31,9 +31,10 @@ struct QuestionRow {
  * The question about to be asked.
  */
 struct QuestionContext {
-    std::string_view town;    /**< The folder the town's scripts load from: "e01", "s09". */
-    int              window;  /**< The script's window. */
-    int              message; /**< Its message. */
+    std::string_view town;     /**< The folder the town's scripts load from: "e01", "s09". */
+    bool             interior; /**< Asked inside a house, whose scripts and messages are its own. */
+    int              window;   /**< The script's window. */
+    int              message;  /**< Its message. */
 };
 
 /**
@@ -82,6 +83,12 @@ bool ScriptQuestionHolds(const game::ClsMes *mes);
  * _MES_CLOSE: mes closed; a taken question in it ends.
  */
 void ScriptQuestionClosed(const game::ClsMes *mes);
+
+/**
+ * An event began or ended, or a town started: a question left taken is forgotten, so that no script's
+ * pad or stick stays the framework's.
+ */
+void ScriptQuestionReset();
 
 /**
  * The mouse over a taken question, ahead of the game's read of the pad: a hover puts the cursor on a

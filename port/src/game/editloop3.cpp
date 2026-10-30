@@ -8606,6 +8606,7 @@ int EdEventInit(int event_number, CDataAlloc2<1> *arena, char *program) {
         return 0;
     }
 
+    dialog::ScriptQuestionReset();
     run_system_event = 0;
 
     for (auto *message : EdEventInfo.messages) {
@@ -8777,6 +8778,7 @@ int EdEventAllClear() {
 }
 
 int EdEventFinish() {
+    dialog::ScriptQuestionReset();
     EdEventInfo.suppress_background = false;
     EdEventInfo.suppress_shadows = false;
     EdEventInfo.screen_filter = false;

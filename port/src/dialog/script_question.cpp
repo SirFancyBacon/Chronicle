@@ -113,7 +113,7 @@ bool ScriptQuestionMake(ClsMes &mes, int window, int message) {
     if (g_question) {
         Finish();
     }
-    const QuestionContext    context{.town = Town(), .window = window, .message = message};
+    const QuestionContext    context{.town = Town(), .interior = EdInteriorFlag != 0, .window = window, .message = message};
     std::vector<QuestionRow> added;
     const auto               taker = std::ranges::find_if(g_providers, [&](const QuestionProvider &provider) {
         return provider(context, added);
@@ -122,20 +122,21 @@ bool ScriptQuestionMake(ClsMes &mes, int window, int message) {
         return false;
     }
 
+    // A message with no rows the framework can read is left to the script, which can answer it.
+    std::vector<std::string> lines = Lines(mes, message);
+    if (lines.empty()) {
+        return false;
+    }
+
     Question question{.mes = &mes};
+    for (int row = 0; row < static_cast<int>(lines.size()); row++) {
+        question.rows.push_back({.answer = row, .then = {}});
+    }
     if (added.empty()) {
         // Retail's own message, as the script would have made it.
-        const std::vector<std::string> lines = Lines(mes, message);
-        for (int row = 0; row < static_cast<int>(lines.size()); row++) {
-            question.rows.push_back({.answer = row, .then = {}});
-        }
         mes.MakeMesWin(message);
     } else {
         // Retail's rows with the providers' among them, laid over the window's own messages.
-        std::vector<std::string> lines = Lines(mes, message);
-        for (int row = 0; row < static_cast<int>(lines.size()); row++) {
-            question.rows.push_back({.answer = row, .then = {}});
-        }
         for (QuestionRow &row : added) {
             const int at = row.before < 0 ? static_cast<int>(lines.size()) : std::min(row.before, static_cast<int>(lines.size()));
             lines.insert(lines.begin() + at, row.label);
@@ -185,6 +186,10 @@ bool ScriptQuestionPad(int read, int &pressed) {
     if ((read & kScriptDown) != 0) {
         step = 1;
     }
+    // Once confirm is pressed, the row stays the one confirmed while the script's cursor catches up.
+    if (question.confirm) {
+        step = 0;
+    }
     const int last = static_cast<int>(question.rows.size()) - 1;
     question.cursor = std::clamp(question.cursor + step, 0, std::max(last, 0));
     question.mes->cursor_row = question.cursor;
@@ -228,7 +233,13 @@ bool ScriptQuestionHolds(const ClsMes *mes) {
 }
 
 void ScriptQuestionClosed(const ClsMes *mes) {
-    if (g_question && g_question->mes == mes && g_question->answered) {
+    if (g_question && g_question->mes == mes) {
+        Finish();
+    }
+}
+
+void ScriptQuestionReset() {
+    if (g_question) {
         Finish();
     }
 }
@@ -250,7 +261,7 @@ bool ScriptQuestionPointerUpdate() {
         return true;
     }
     const int row = RowAt(mes, static_cast<int>(question.rows.size()), g_pointer.x, g_pointer.y);
-    if (row >= 0 && take.moved) {
+    if (row >= 0 && take.moved && !question.confirm) {
         question.cursor = row;
         question.mes->cursor_row = row;
     }
