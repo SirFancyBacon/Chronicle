@@ -369,13 +369,15 @@ int StickCalibration(int axis, int other) {
     if (!platform::ConfigGet().radial_dead_zone) {
         return AxisCalibration(axis);
     }
-    // The sticks reach the square's edge at full tilt, so the larger offset is the tilt.
+    // The sticks reach the square's edge at full tilt, so the larger offset is the tilt: the game's own curve
+    // reads it, and each axis takes its share of the result.
     const int offset = axis - 128;
-    const int tilt = std::min(std::max(std::abs(offset), std::abs(other - 128)), 127);
-    if (tilt < 50) {
+    const int lead = std::abs(other - 128) > std::abs(offset) ? other - 128 : offset;
+    const int tilt = std::abs(AxisCalibration(lead + 128));
+    if (tilt == 0) {
         return 0;
     }
-    return offset * ((tilt - 49) * 128 / 78) / tilt;
+    return offset * tilt / std::abs(lead);
 }
 
 int CGamePad::GetRX() {

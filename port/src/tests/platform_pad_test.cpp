@@ -316,6 +316,12 @@ TEST(PlatformPad, DebugToggleWorksAfterOrdinaryBoot) {
 }
 
 TEST(PlatformPad, AxesGoThroughCalibration) {
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / ("chronicle-axial-test-" + std::to_string(dc::test::ProcessId()));
+    PathsSetSaveRoot(root);
+    Config config;
+    config.radial_dead_zone = false;
+    ASSERT_TRUE(ConfigChange(config));
     OpenPads();
     Unplug(1);
     SetPad(0, 0);
@@ -342,6 +348,9 @@ TEST(PlatformPad, AxesGoThroughCalibration) {
     SetPad(0, 0);
     GamePad.UpDate();
     ASSERT_TRUE(GamePad.GetLX() == 0 && GamePad.GetLY() == 0 && GamePad.GetRX() == 0 && GamePad.GetRY() == 0);
+    ConfigChange(Config{});
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
 }
 
 TEST(PlatformPad, RadialDeadZoneMeasuresFromTheCentre) {
@@ -359,11 +368,15 @@ TEST(PlatformPad, RadialDeadZoneMeasuresFromTheCentre) {
     }
 
     // On an axis it reads as axial does.
-    SetPad(0, 0, 255, 128, 128, 128 - 50);
+    SetPad(0, 0, 255, 128, 128, 128 - 51);
     GamePad.UpDate();
     EXPECT_EQ(GamePad.GetLX(), 128);
     EXPECT_EQ(GamePad.GetLY(), 0);
     EXPECT_EQ(GamePad.GetRY(), -1);
+    SetPad(0, 0, 0, 128, 128, 128 - 50);
+    GamePad.UpDate();
+    EXPECT_EQ(GamePad.GetLX(), -128);
+    EXPECT_EQ(GamePad.GetRY(), 0);
 
     // 15 degrees off right at full tilt: axial reads straight right, radial keeps the slant.
     SetPad(0, 0, 128 + 127, 128 + 34);
@@ -378,11 +391,11 @@ TEST(PlatformPad, RadialDeadZoneMeasuresFromTheCentre) {
     EXPECT_EQ(GamePad.GetLX(), 0);
     EXPECT_EQ(GamePad.GetLY(), 0);
 
-    // A diagonal past the dead zone reads equal on both axes, scaled as an axis is.
+    // A diagonal past the dead zone reads each axis as that axis alone would.
     SetPad(0, 0, 128 + 88, 128 - 88);
     GamePad.UpDate();
     EXPECT_EQ(GamePad.GetLX(), AxisCalibration(128 + 88));
-    EXPECT_EQ(GamePad.GetLY(), -AxisCalibration(128 + 88));
+    EXPECT_EQ(GamePad.GetLY(), AxisCalibration(128 - 88));
 
     SetPad(0, 0);
     GamePad.UpDate();
