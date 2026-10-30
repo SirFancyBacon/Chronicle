@@ -358,21 +358,21 @@ TEST(PlatformPad, RadialDeadZoneMeasuresFromTheCentre) {
         GamePad.UpDate();
     }
 
-    // On an axis it reads as the original does.
+    // On an axis it reads as axial does.
     SetPad(0, 0, 255, 128, 128, 128 - 50);
     GamePad.UpDate();
     EXPECT_EQ(GamePad.GetLX(), 128);
     EXPECT_EQ(GamePad.GetLY(), 0);
     EXPECT_EQ(GamePad.GetRY(), -1);
 
-    // 15 degrees off right at full tilt: the original reads straight right, radial keeps the slant.
+    // 15 degrees off right at full tilt: axial reads straight right, radial keeps the slant.
     SetPad(0, 0, 128 + 127, 128 + 34);
     GamePad.UpDate();
     EXPECT_EQ(GamePad.GetLX(), 128);
     EXPECT_EQ(GamePad.GetLY(), 34);
     EXPECT_EQ(AxisCalibration(128 + 34), 0);
 
-    // Both axes inside the original dead zone but far enough together: still nothing, as the larger offset is the tilt.
+    // Both axes inside the axial dead zone but far enough together: still nothing, as the larger offset is the tilt.
     SetPad(0, 0, 128 + 45, 128 + 45);
     GamePad.UpDate();
     EXPECT_EQ(GamePad.GetLX(), 0);
