@@ -229,8 +229,9 @@ rod in use, and fishing goes on as Continue fishing goes on.
 ## Enhanced fishing
 
 Enhanced fishing is a datapack, `port/datapacks/enhanced_fishing/`: having it is having Enhanced, and
-without it fishing is the port's base. For now it is copied into `datapacks/` by hand and named in
-`datapacks.json`. It holds:
+without it fishing is the port's base. Nothing builds or installs it: it is copied by hand into the
+`datapacks/` folder beside the data folder (docs/ITEM_FRAMEWORK.md, "Datapacks";
+`port/datapacks/README.md` has the steps) and named in `datapacks.json`. It holds:
 
 - `places.json`: every place with the `brisk` bite and the `tension` fight, its spawns and outcomes
   retail's.
@@ -239,7 +240,7 @@ without it fishing is the port's base. For now it is copied into `datapacks/` by
 - Ruty's three rods, custom items with the `Rod` trait (retail's model and icon): the Sea Rod (Spring
   18, the Baron at 1.7: barely catchable), the Garayan Rod (33, at 1.3: catchable) and the Baron Rod
   (80, at 0.8, with Control 100 to tire it).
-- `modpack.json`, its name, description and version, for the menu that will list packs.
+- `modpack.json`: its name, description and version.
 
 `FishingDocuments.TheIncludedEnhancedFishingPackLoadsWhole` loads it whole.
 
