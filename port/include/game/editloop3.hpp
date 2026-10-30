@@ -228,11 +228,10 @@ struct ED_SPRITE {
 STATIC_ASSERT(sizeof(ED_SPRITE) == 0x88);
 
 /**
- * Answers a question a town script is about to ask, for a port window that asked it already (fishing's
- * Quit): when the script makes message mes_no in window, the window is not made, and the script's own
- * choice helper, which reads the pad, is handed Down row times and then the confirm button.
+ * Opens a menu (an EdMenuKind) from the running event, as the town scripts' menu commands do: the
+ * script waits until it closes.
  */
-void EdAnswerScriptQuestion(int window, int mes_no, int row);
+void EdEventMenu(int menu);
 
 /**
  * Toggles whether advancement of the current editor event is paused.

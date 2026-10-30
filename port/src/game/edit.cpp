@@ -1910,10 +1910,6 @@ void EdSetUseItem(int *items) {
     }
 }
 
-int EdMenuAfter() {
-    return menu_mode == ED_MENU_CHANGE_ROD ? ED_MODE_FISHING : ED_MODE_WALK;
-}
-
 int EdGetUseItem() {
     return InvertItemNo(use_item);
 }

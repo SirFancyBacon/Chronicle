@@ -442,11 +442,6 @@ void EnterPartsEffect(CMapParts *parts, EPARTS_FUNC_DATA *func_data, EDIT_EFFECT
 void EdUseItemInit();
 
 /**
- * The mode the town goes back to as a menu closes: fishing after the rod board, else walking.
- */
-int EdMenuAfter();
-
-/**
  * Supplies the item list available to editor menus.
  */
 void EdSetUseItem(int *items);

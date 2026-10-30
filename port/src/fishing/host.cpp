@@ -605,6 +605,7 @@ TimeOfDay TimeFrom(int time_of_day) {
 void Load() {
     CompiledPrizes();
     RegisterBuiltinStages();
+    RegisterQuestions();
     Clear();
     g_info.clear();
     g_current = nullptr;

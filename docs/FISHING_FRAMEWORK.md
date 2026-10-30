@@ -206,15 +206,17 @@ better rods are custom items with a `rod` (docs/ITEM_FRAMEWORK.md). The rod in u
 from the fishing menu while it is in the bag, else the Fishing Rod (`fishing::RodInUse`); the choice is
 kept in `chronicle.dat`'s `FISH` chunk.
 
-**The fishing menu.** Circle while standing at the water asks retail's "Continue fishing / Quit
-fishing", which every fishing town's script asks (event 0x85) as message 22 of its window 1. Where the
-place's fight reads rods (Enhanced), the dialog framework draws that question instead, in the same
-paper window (`dialog::DialogNpcOpenMenu`), with retail's two rows in the town's language and Change
-rod between them. Change rod opens the item board with only the rods in the bag (`ED_MENU_CHANGE_ROD`,
-`EVENT_ITEM_MODE_ROD`), which goes back to fishing as it closes; the rod picked is the rod in use.
-Quit fishing raises event 0x85 with its answer given (`EdAnswerScriptQuestion`: the script's window is
-not made, and its own choice helper is handed Down and confirm), so each town's own way out of fishing
-plays. The angler stands still while the menu is up.
+**The fishing menus.** Fishing's screens are the UI framework's in every game, Enhanced fishing or
+not, and look and sound as retail's (docs/UI_FRAMEWORK.md, section 3): the bait board, the fish
+exchange and the fishing records. Its two questions are the towns' scripts' own, which every fishing
+town asks in its window 1 (Norune's, Matataki's, Muska Lacka's and the sea's): the sign's "Fish /
+Exchange FP / Fishing log / Quit fishing" (message 20) and Circle's "Continue fishing / Quit fishing"
+(message 22, event 0x85, Circle while standing at the water). The dialog framework asks both
+(`fishing::RegisterQuestions`, docs/DIALOG_FRAMEWORK.md, "A town script's question"), the same as
+retail's and with the mouse. Where the place's fight reads rods (Enhanced), Change rod goes between
+Circle's two: the item board with only the rods in the bag (`ED_MENU_CHANGE_ROD`,
+`EVENT_ITEM_MODE_ROD`), opened from Circle's event as Square opens the bait's; the rod picked is the
+rod in use, and fishing goes on as Continue fishing goes on.
 
 | Stat | Retail's rod | Does (`fishing::EffectOf`) |
 |---|---|---|

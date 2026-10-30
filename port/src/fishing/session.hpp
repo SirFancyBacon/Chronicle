@@ -72,7 +72,6 @@ public:
     virtual void BiteCue() = 0;
     virtual void Help(bool waiting) = 0; /**< The help line: standing, or waiting for a bite. */
     virtual void OpenMenu(int event) = 0;
-    virtual void OpenFishingMenu() = 0; /**< The port's: the rod, Look for fish, and the town's own menu. */
     virtual void FollowLine() = 0;
     virtual void CatchCamera(float distance) = 0;
     virtual void FadeMusic(bool out) = 0;

@@ -55,9 +55,7 @@ file statics). The copies are retail's, with one addition in `EdTalkMode`:
    which doubles the colour, would brighten it. A page with no text is choices only, as retail's
    prompts are. The villager's own message file
    goes back into `EditMes1` when the session ends. `dialog::DrawSession`'s own renderer is not
-   used here; it remains for sessions opened elsewhere (`OpenCustomSession`). Fishing's menu opens a
-   session of its own in this window (`DialogNpcOpenMenu`), stepped and placed by the fishing session
-   as `EdTalkMode` does a conversation (docs/FISHING_FRAMEWORK.md, "The fishing menu").
+   used here; it remains for sessions opened elsewhere (`OpenCustomSession`).
 5. "Talk" ends the session with `SessionEnd::PlayOriginal` (the context has `host_plays_original`).
    The next tick, retail's conversation starts from the beginning in its own window, with its own
    choice prompts, shops and events.
@@ -107,6 +105,30 @@ conversation (`Close`). A page with no choices goes back to the page under it wh
 confirmed.
 
 Quests (`docs/QUEST_FRAMEWORK.md`) are a provider: their choices come through `quest::CollectOptions`.
+
+### A town script's question
+
+Some of the towns' questions are not a villager's: a script makes a message of rows in one of its
+windows (`_MES_MAKE`) and reads the pad itself to move a cursor (`_SET_MES_CURSOR`) until the confirm
+button, then goes on by the row (fishing's sign and Circle are two). A `QuestionProvider`
+(`dialog/script_question.hpp`, `RegisterQuestionProvider`) is offered each such message with the
+town's folder (`e01`), the window and the message number, and takes it by returning true, adding
+`QuestionRow`s if it likes. The framework then asks the question in the script's own window:
+
+- Retail's rows are the window's own message, made as the script would have made it; rows a
+  provider adds go among them, laid over the window's messages (`ClsMesSetMessageOverlay`).
+- The cursor is the framework's (`ClsMesSetChoiceRows` marks the window, which changes nothing for
+  its white rows): the pad and the stick move it as the script's helper would, silently as it does,
+  and the mouse works it as it works a conversation (`ScriptQuestionPointerUpdate`).
+- The script's helper still reads the pad, and reads what the framework gives it: an Up or Down on
+  the same tick the player's cursor changes which of the script's rows it answers with, and the
+  confirm button on the tick the player presses it. A question without added rows is so the same
+  as retail's, tick for tick and pixel for pixel. The script's `_SET_MES_CURSOR` is left alone but
+  for hiding the cursor; the stick it reads (`_GET_APAD`) is centred.
+- A row a provider adds answers with one of the script's rows. Its `then` runs as it is chosen,
+  the window closing as `_MES_CLOSE` closes it, while the script still waits; a menu `then` opens
+  (`EdEventMenu`, as the scripts' menu commands open theirs) is up before the script goes on, and
+  the script hears the answer once it closes.
 
 ---
 

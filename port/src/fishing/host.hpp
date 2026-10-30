@@ -194,9 +194,10 @@ bool  FightSteers();
 float BattleHeading();
 
 /**
- * Whether the fishing menu is up, holding the angler still.
+ * Has the dialog framework ask fishing's questions (the sign's, and Circle's with Change rod in
+ * Enhanced); once, however often it is called.
  */
-bool MenuOpen();
+void RegisterQuestions();
 
 /**
  * Draws a fight's gauges in the town's 2D pass (a fight that steers: tension, the line still out,

@@ -1349,7 +1349,7 @@ int foot = 0;
 int PortEdMoveCheck(float *pos, float *velocity, float *out_pos, MoveCheckInfo *out_info, CCPoly *polys, int poly_num, int mode) {
     auto move = InputGetKeyboardMovement();
     bool walking = viewMode && (move.x || move.y) && !(chara_mode & 3) &&
-                   !EdMoveCharaInfo.key_lock && PortEdCheckKeyMode(1) && chara_fishing <= ED_FISHING_STAND && !fishing::MenuOpen();
+                   !EdMoveCharaInfo.key_lock && PortEdCheckKeyMode(1) && chara_fishing <= ED_FISHING_STAND;
     if (walking) {
         float heading = MouseLookEyeAngleH(viewAngleH);
         velocity[0] = 0.6f * (move.x * cosf(heading) - move.y * sinf(heading));
@@ -1410,8 +1410,7 @@ void EdMoveChara() {
     float lx = GetLXf();
     float ly = GetLYf();
 
-    // The fishing menu's cursor doesn't walk the angler.
-    if (key_lock != 0 || chara_fishing > ED_FISHING_STAND || fishing::MenuOpen()) {
+    if (key_lock != 0 || chara_fishing > ED_FISHING_STAND) {
         lx = ly = 0.0f;
     }
 

@@ -33,6 +33,7 @@
 #include "dataset.hpp"
 #include "debugfont.hpp"
 #include "dialog/npc.hpp"
+#include "dialog/script_question.hpp"
 #include "dngstatusdata.hpp"
 #include "ebattle.hpp"
 #include "edit.hpp"
@@ -2790,6 +2791,10 @@ int menu_mode_status;
 
 } // namespace
 
+void EdEventMenu(int menu) {
+    menu_mode = menu;
+}
+
 /** Item-list string supplied to the editor's use-item menu. */
 char *p_use_item;
 
@@ -3520,25 +3525,6 @@ int _TEST(RS_STACKDATA *stack, int argument_count) {
     return 1;
 }
 
-// The answer EdAnswerScriptQuestion waits to give: asked once the script makes its message, then
-// given a press a tick.
-struct ScriptAnswer {
-    int  window = -1;
-    int  mes_no = -1;
-    int  row = 0;
-    bool asked = false;
-};
-
-ScriptAnswer g_script_answer;
-
-} // namespace
-
-void EdAnswerScriptQuestion(int window, int mes_no, int row) {
-    g_script_answer = {.window = window, .mes_no = mes_no, .row = row};
-}
-
-namespace {
-
 int exch_ok_cancel(int buttons) {
     int confirm = buttons & ED_PAD_CONFIRM;
     int cancel = buttons & ED_PAD_CANCEL;
@@ -3570,17 +3556,8 @@ int _GET_PADDOWN(RS_STACKDATA *stack, int argument_count) {
     }
 
     int pressed = exch_ok_cancel(GamePad.GetPadDown());
-
-    if (g_script_answer.asked) {
-        if (g_script_answer.row > 0) {
-            g_script_answer.row--;
-            pressed = PAD_DOWN;
-        } else {
-            g_script_answer = {};
-            pressed = ED_PAD_CONFIRM;
-        }
-    }
-
+    // A question the dialog framework asks answers in the player's place.
+    dialog::ScriptQuestionPad(pressed, pressed);
     SetStack(stack, pressed);
     return 1;
 }
@@ -3595,12 +3572,15 @@ int _GET_PADUP(RS_STACKDATA *stack, int argument_count) {
 }
 
 int _GET_APAD(RS_STACKDATA *stack, int argument_count) {
+    // The stick is the dialog framework's while it asks a question for the script.
+    const bool held = dialog::ScriptQuestionActive();
+
     if (argument_count > 0) {
-        SetStack(stack++, GamePad.GetLXf());
+        SetStack(stack++, held ? 0.0f : GamePad.GetLXf());
     }
 
     if (argument_count > 1) {
-        SetStack(stack++, GamePad.GetLYf());
+        SetStack(stack++, held ? 0.0f : GamePad.GetLYf());
     }
 
     if (argument_count > 2) {
@@ -5326,9 +5306,8 @@ int _MES_MAKE(RS_STACKDATA *stack, int argument_count) {
         }
     }
 
-    // A question the port has answered already is not shown.
-    if (g_script_answer.window == window && g_script_answer.mes_no == message_no) {
-        g_script_answer.asked = true;
+    // A question a provider takes, the dialog framework asks in this window.
+    if (dialog::ScriptQuestionMake(*message, window, message_no)) {
         return 1;
     }
 
@@ -5346,6 +5325,7 @@ int _MES_CLOSE(RS_STACKDATA *stack, int argument_count) {
     message->text_rate = message->text_rate_set;
     message->mes_made = -1;
     message->fade_in = false;
+    dialog::ScriptQuestionClosed(message);
     return 1;
 }
 
@@ -5456,7 +5436,13 @@ int _SET_MES_CURSOR(RS_STACKDATA *stack, int argument_count) {
         return 0;
     }
 
-    message->cursor_row = GetStackInt(next);
+    const int row = GetStackInt(next);
+
+    // A question the dialog framework asks keeps its own cursor until the script hides it.
+    if (!dialog::ScriptQuestionHolds(message) || row < 0) {
+        message->cursor_row = row;
+    }
+
     return 1;
 }
 
