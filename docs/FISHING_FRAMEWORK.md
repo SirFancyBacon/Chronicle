@@ -228,10 +228,10 @@ rod in use, and fishing goes on as Continue fishing goes on.
 
 ## Enhanced fishing
 
-Enhanced fishing is a datapack, `port/datapacks/enhanced_fishing/`: having it is having Enhanced, and
-without it fishing is the port's base. Nothing builds or installs it: it is copied by hand into the
-`datapacks/` folder beside the data folder (docs/ITEM_FRAMEWORK.md, "Datapacks";
-`port/datapacks/README.md` has the steps) and named in `datapacks.json`. It holds:
+Enhanced fishing is a datapack, `port/datapacks/enhanced_fishing/`, which the game ships off: it
+installs in `assets/datapacks/` beside the executable, and naming it in `datapacks/datapacks.json`
+beside the data folder turns it on (docs/ITEM_FRAMEWORK.md, "Datapacks"; `port/datapacks/README.md`
+has the steps). Without it fishing is the port's base. It holds:
 
 - `places.json`: every place with the `brisk` bite and the `tension` fight, its spawns and outcomes
   retail's.

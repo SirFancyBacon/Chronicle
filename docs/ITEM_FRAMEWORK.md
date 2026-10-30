@@ -89,7 +89,9 @@ What a change reaches:
 ## Datapacks
 
 A datapack is a folder in `datapacks/` beside the data folder, holding files at the paths they
-replace. `datapacks/datapacks.json` lists the active packs, later ones winning:
+replace. The game also ships packs of its own, in `assets/datapacks/` beside the executable; a listed
+pack the player's `datapacks/` lacks is taken from there, and a player's copy wins over the game's.
+`datapacks/datapacks.json` lists the active packs, later ones winning:
 
 ```json
 { "schema_version": 1, "load_order": ["lures", "bakery"] }

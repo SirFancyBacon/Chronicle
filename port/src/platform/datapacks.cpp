@@ -31,6 +31,7 @@ void Diagnostic(const std::filesystem::path &path, std::string_view message) {
 }
 
 std::vector<std::shared_ptr<const vfs::Mount>> ReadConfig(const std::filesystem::path &directory,
+                                                          const std::filesystem::path &shipped,
                                                           const std::filesystem::path &config) {
     std::ifstream stream(config, std::ios::binary);
     const auto    root = nlohmann::json::parse(stream, nullptr, false);
@@ -49,19 +50,26 @@ std::vector<std::shared_ptr<const vfs::Mount>> ReadConfig(const std::filesystem:
         if (!vfs::SafeRelative(folder) || std::distance(name.begin(), name.end()) != 1) {
             throw std::runtime_error("load_order contains an unsafe pack name");
         }
+        // The player's own copy of a pack the game ships wins over the game's.
         std::error_code error;
-        if (!std::filesystem::is_directory(directory / name, error)) {
+        if (std::filesystem::is_directory(directory / name, error)) {
+            configured.push_back(vfs::OpenDirectory(directory / name, true));
+        } else if (!shipped.empty() && std::filesystem::is_directory(shipped / name, error)) {
+            configured.push_back(vfs::OpenDirectory(shipped / name, true));
+        } else {
             Diagnostic(directory / name, "pack is missing or not a folder; skipped");
-            continue;
         }
-        configured.push_back(vfs::OpenDirectory(directory / name, true));
     }
     return configured;
 }
 
 } // namespace
 
-void Load(const std::filesystem::path &data_root) {
+std::filesystem::path ShippedDirectory() {
+    return PathsExecutable().parent_path() / "assets" / "datapacks";
+}
+
+void Load(const std::filesystem::path &data_root, const std::filesystem::path &shipped) {
     Clear();
     std::error_code error;
     const auto      data = std::filesystem::weakly_canonical(data_root, error);
@@ -75,7 +83,7 @@ void Load(const std::filesystem::path &data_root) {
         return;
     }
     try {
-        packs = ReadConfig(directory, config);
+        packs = ReadConfig(directory, shipped, config);
     } catch (const std::exception &exception) {
         Diagnostic(config, std::string(exception.what()) + "; packs disabled");
     }
