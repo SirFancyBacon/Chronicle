@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
 #include <memory>
 #include <span>
 #include <string_view>
@@ -15,6 +16,8 @@
 #include "platform/config.hpp"
 #include "platform/input.hpp"
 #include "platform/input_script.hpp"
+#include "platform/paths.hpp"
+#include "platform_fixture.hpp"
 
 namespace dc::test {
 
@@ -339,6 +342,53 @@ TEST(PlatformPad, AxesGoThroughCalibration) {
     SetPad(0, 0);
     GamePad.UpDate();
     ASSERT_TRUE(GamePad.GetLX() == 0 && GamePad.GetLY() == 0 && GamePad.GetRX() == 0 && GamePad.GetRY() == 0);
+}
+
+TEST(PlatformPad, RadialDeadZoneMeasuresFromTheCentre) {
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / ("chronicle-dead-zone-test-" + std::to_string(dc::test::ProcessId()));
+    PathsSetSaveRoot(root);
+    Config config;
+    config.radial_dead_zone = true;
+    ASSERT_TRUE(ConfigChange(config));
+    OpenPads();
+    Unplug(1);
+    SetPad(0, 0);
+    for (int i = 0; i < 4; ++i) {
+        GamePad.UpDate();
+    }
+
+    // On an axis it reads as the original does.
+    SetPad(0, 0, 255, 128, 128, 128 - 50);
+    GamePad.UpDate();
+    EXPECT_EQ(GamePad.GetLX(), 128);
+    EXPECT_EQ(GamePad.GetLY(), 0);
+    EXPECT_EQ(GamePad.GetRY(), -1);
+
+    // 15 degrees off right at full tilt: the original reads straight right, radial keeps the slant.
+    SetPad(0, 0, 128 + 127, 128 + 34);
+    GamePad.UpDate();
+    EXPECT_EQ(GamePad.GetLX(), 128);
+    EXPECT_EQ(GamePad.GetLY(), 34);
+    EXPECT_EQ(AxisCalibration(128 + 34), 0);
+
+    // Both axes inside the original dead zone but far enough together: still nothing, as the larger offset is the tilt.
+    SetPad(0, 0, 128 + 45, 128 + 45);
+    GamePad.UpDate();
+    EXPECT_EQ(GamePad.GetLX(), 0);
+    EXPECT_EQ(GamePad.GetLY(), 0);
+
+    // A diagonal past the dead zone reads equal on both axes, scaled as an axis is.
+    SetPad(0, 0, 128 + 88, 128 - 88);
+    GamePad.UpDate();
+    EXPECT_EQ(GamePad.GetLX(), AxisCalibration(128 + 88));
+    EXPECT_EQ(GamePad.GetLY(), -AxisCalibration(128 + 88));
+
+    SetPad(0, 0);
+    GamePad.UpDate();
+    ConfigChange(Config{});
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
 }
 
 TEST(PlatformPad, VibrationDrivesRumble) {

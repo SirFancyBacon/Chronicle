@@ -4,11 +4,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <memory>
 #include <print>
 
 #include "input/dualsense.hpp"
 #include "mainselect.hpp"
+#include "platform/config.hpp"
 #include "platform/input.hpp"
 #include "ui/menu_pointer.hpp"
 
@@ -363,38 +365,51 @@ int AxisCalibration(int axis) {
     return (offset + 50) * 128 / 78;
 }
 
+int StickCalibration(int axis, int other) {
+    if (!platform::ConfigGet().radial_dead_zone) {
+        return AxisCalibration(axis);
+    }
+    // The sticks reach the square's edge at full tilt, so the larger offset is the tilt.
+    const int offset = axis - 128;
+    const int tilt = std::min(std::max(std::abs(offset), std::abs(other - 128)), 127);
+    if (tilt < 50) {
+        return 0;
+    }
+    return offset * ((tilt - 49) * 128 / 78) / tilt;
+}
+
 int CGamePad::GetRX() {
-    return AxisCalibration(pad[0].input.status.right_x);
+    return StickCalibration(pad[0].input.status.right_x, pad[0].input.status.right_y);
 }
 
 int CGamePad::GetRY() {
-    return AxisCalibration(pad[0].input.status.right_y);
+    return StickCalibration(pad[0].input.status.right_y, pad[0].input.status.right_x);
 }
 
 int CGamePad::GetLX() {
     InputNoteLeftStickRead();
-    return AxisCalibration(pad[0].input.status.left_x);
+    return StickCalibration(pad[0].input.status.left_x, pad[0].input.status.left_y);
 }
 
 int CGamePad::GetLY() {
     InputNoteLeftStickRead();
-    return AxisCalibration(pad[0].input.status.left_y);
+    return StickCalibration(pad[0].input.status.left_y, pad[0].input.status.left_x);
 }
 
 int CGamePad::GetRX2() {
-    return AxisCalibration(pad[1].input.status.right_x);
+    return StickCalibration(pad[1].input.status.right_x, pad[1].input.status.right_y);
 }
 
 int CGamePad::GetRY2() {
-    return AxisCalibration(pad[1].input.status.right_y);
+    return StickCalibration(pad[1].input.status.right_y, pad[1].input.status.right_x);
 }
 
 int CGamePad::GetLX2() {
-    return AxisCalibration(pad[1].input.status.left_x);
+    return StickCalibration(pad[1].input.status.left_x, pad[1].input.status.left_y);
 }
 
 int CGamePad::GetLY2() {
-    return AxisCalibration(pad[1].input.status.left_y);
+    return StickCalibration(pad[1].input.status.left_y, pad[1].input.status.left_x);
 }
 
 int CGamePad::AllOn() {
