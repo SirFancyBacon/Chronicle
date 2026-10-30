@@ -39,6 +39,8 @@
 #include "localize/localize.hpp"
 #include "main.hpp"
 #include "mainselect.hpp"
+#include "edit.hpp"
+#include "memcard.hpp"
 #include "memorycardaccess.hpp"
 #include "menu_save.hpp"
 #include "mglib.hpp"
@@ -188,9 +190,13 @@ struct Jump {
     bool preset = false;
     int  mode = GAME_MODE_MENU;
     int  map = 0;
+    bool load = false; // a save to start from, read once the game's data is
+    int  file_no = 0;  // its slot, as the save screen numbers it from 0
 };
 
 Jump g_jump;
+int  g_town_menu;
+int  g_town_event;
 bool g_fast_load;
 bool g_autosave;
 int  g_developer_return_mode = GAME_MODE_TITLE;
@@ -348,7 +354,7 @@ void ApplyJump() {
     OldMapNo = -1;
     NextMapNo = -1;
     GamePad.AutoRepeatOff();
-    switch (g_jump.mode) {
+    switch (g_jump.load ? GAME_MODE_MENU : g_jump.mode) {
         case GAME_MODE_EDIT:
             main_select_menu_no = g_jump.map;
             MapNo = g_jump.map;
@@ -649,6 +655,37 @@ bool GameSetGive(const char *list) {
     return !g_give.empty();
 }
 
+namespace {
+
+bool PositiveNumber(const char *text, int &number) {
+    const std::string_view digits = text;
+    auto [end, error] = std::from_chars(digits.data(), digits.data() + digits.size(), number);
+    return error == std::errc{} && end == digits.data() + digits.size() && number > 0;
+}
+
+} // namespace
+
+bool GameSetTownMenu(const char *number) {
+    int menu = 0;
+    if (!PositiveNumber(number, menu) || menu < ED_MENU_FISHING_EXCHANGE || menu > ED_MENU_CHANGE_ROD) {
+        return false;
+    }
+    g_town_menu = menu;
+    return true;
+}
+
+int GameTakeTownMenu() {
+    return std::exchange(g_town_menu, 0);
+}
+
+bool GameSetTownEvent(const char *number) {
+    return PositiveNumber(number, g_town_event);
+}
+
+int GameTakeTownEvent() {
+    return std::exchange(g_town_event, 0);
+}
+
 bool GameSetJump(const char *spec) {
     std::string_view text = spec;
     std::string_view name = text.substr(0, text.find(':'));
@@ -661,7 +698,7 @@ bool GameSetJump(const char *spec) {
             return false;
         }
     }
-    bool numbered = name == "edit" || name == "dungeon";
+    bool numbered = name == "edit" || name == "dungeon" || name == "load";
     if (!numbered && !number.empty()) {
         return false;
     }
@@ -685,6 +722,10 @@ bool GameSetJump(const char *spec) {
         jump.mode = GAME_MODE_OPENING;
     } else if (name == "menu") {
         jump.mode = GAME_MODE_MENU;
+    } else if ((name == "load" && jump.map >= 1) || name == "autosave") {
+        jump.mode = GAME_MODE_EDIT;
+        jump.load = true;
+        jump.file_no = name == "autosave" ? kSaveSlotAutosave : jump.map - 1;
     } else {
         return false;
     }
@@ -892,6 +933,22 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
         if (mode != GAME_MODE_UNUSED_12 && !data_loaded) {
             initialize_data();
             data_loaded = true;
+        }
+        // A save to start from is read as the save screen's Load reads it, now that the items it holds
+        // are known, and its town starts as a load from the title does.
+        if (std::exchange(g_jump.load, false) && data_loaded) {
+            McAccess.Initialize();
+            if (McAccess.LoadFromMc(g_jump.file_no) != 1) {
+                std::println(stderr, "--jump: no save to load in {}", PathsDisplay(SaveSlotPath(g_jump.file_no)));
+                return kExitUsage;
+            }
+            const int loaded_map = SaveData->GetMapNo();
+            MapNo = (loaded_map >= 0 && loaded_map < DUNGEON_MAP_BASE) ? loaded_map : 0;
+            LocalMapNo = MapNo;
+            OldMapNo = -1;
+            NextMapNo = -1;
+            StartEventNo = -1;
+            GameApplyLoopResult(GAME_MODE_TITLE, 2);
         }
         GameLoadTraceCheckpoint("common_data_done");
         InitReadBG();

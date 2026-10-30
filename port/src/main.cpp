@@ -86,6 +86,8 @@ struct Options {
     int          display_per_tick = 0;
     const char  *jump = nullptr;
     const char  *give = nullptr;
+    const char  *town_menu = nullptr;
+    const char  *town_event = nullptr;
     bool         fast_load = false;
     bool         show_fps = false;
     bool         screenshot_fps = false;
@@ -146,10 +148,14 @@ float g_switch_render_scale = 0.0f;
                  "  --perf-log         log tick, render and GPU timings once a second\n"
                  "test hooks:\n"
                  "  --jump MODE[:MAP]  start in edit:<map>, e01/e03/e04 (populated presets), dungeon:<0-6>, title, rush, opening or menu,\n"
+                 "                     or a save's town: load:<slot> or autosave\n"
                  "                     skipping the warm-up (DC_JUMP); see docs/PC.md\n"
                  "  --fast-load        loading-screen holds and fades of a few ticks (DC_FAST_LOAD=1)\n"
                  "  --give ITEM,...    give the party these item and weapon numbers, or custom item IDs, when a\n"
-                 "                     town or dungeon starts, unless it holds them (DC_GIVE); see docs/PC.md\n",
+                 "                     town or dungeon starts, unless it holds them (DC_GIVE); see docs/PC.md\n"
+                 "  --town-menu N      open town menu N once a town walks: 8 fish exchange, 9 bait board,\n"
+                 "                     10 fishing records, 11 rods board (DC_TOWN_MENU)\n"
+                 "  --town-event N     raise town program N the first time Cross goes down in a town (DC_TOWN_EVENT)\n",
                  program);
 #ifdef __SWITCH__
     std::fprintf(stderr, "  --switch-core-affinity separate|auto  pin game and render to separate cores "
@@ -199,6 +205,10 @@ Options ParseOptions(int argc, const char **argv) {
             options.jump = value();
         } else if (arg == "--give") {
             options.give = value();
+        } else if (arg == "--town-menu") {
+            options.town_menu = value();
+        } else if (arg == "--town-event") {
+            options.town_event = value();
         } else if (arg == "--fast-load") {
             options.fast_load = true;
         } else if (arg == "--export-text") {
@@ -568,6 +578,20 @@ int Run(int argc, const char **argv) {
     }
     if (options.give != nullptr && *options.give != '\0' && !GameSetGive(options.give)) {
         std::fprintf(stderr, "bad --give: %s\n", options.give);
+        std::exit(kExitUsage);
+    }
+    if (options.town_menu == nullptr) {
+        options.town_menu = std::getenv("DC_TOWN_MENU");
+    }
+    if (options.town_menu != nullptr && *options.town_menu != '\0' && !GameSetTownMenu(options.town_menu)) {
+        std::fprintf(stderr, "bad --town-menu: %s\n", options.town_menu);
+        std::exit(kExitUsage);
+    }
+    if (options.town_event == nullptr) {
+        options.town_event = std::getenv("DC_TOWN_EVENT");
+    }
+    if (options.town_event != nullptr && *options.town_event != '\0' && !GameSetTownEvent(options.town_event)) {
+        std::fprintf(stderr, "bad --town-event: %s\n", options.town_event);
         std::exit(kExitUsage);
     }
     if (options.jump != nullptr && *options.jump != '\0' && !GameSetJump(options.jump)) {

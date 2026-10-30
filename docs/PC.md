@@ -103,6 +103,7 @@ a language the data lacks, and its English button reads as the disc's art does.
 | `--width W`, `--height H` | window size in pixels, over `config.json` (default: the monitor's resolution) |
 | `--jump MODE[:MAP]` | test hook: start in a mode (see "Test hooks"); also `DC_JUMP` |
 | `--fast-load` | test hook: loading-screen holds and fades of a few ticks; also `DC_FAST_LOAD=1` |
+| `--town-menu N`, `--town-event N` | test hooks: open a town menu, or raise a town program (see "Test hooks") |
 | `--give ITEM,...` | test hook: items and weapons the party is given when a town or dungeon starts (see "Test hooks"); also `DC_GIVE` |
 | `--display-per-tick N` | headless test aid: render N interpolated display frames per tick (offscreen, not presented) before presenting the tick's canonical image |
 | `--show-fps` | draw the FPS counter when headless too (a headless run leaves `show_fps` off) |
@@ -583,8 +584,12 @@ For tests and debugging only; nothing the game does depends on them.
   `edit:<map>` (the game's `MapNo`: 0-4 the five towns, 11 and up the sub maps,
   99 the interior), `e01`, `e03` or `e04` (populated Norune, Queens or Muska Lacka developer presets),
   `dungeon:<n>` (dungeon n, 0-6, as `MapJump(200 + n)`, at its
-  floor select), `title`, `rush` (the attract movie), `opening`, or `menu` (the
-  developer menu itself). A bad value exits with status 2.
+  floor select), `title`, `rush` (the attract movie), `opening`, `menu` (the
+  developer menu itself), or a save's town: `load:<slot>` (the slot as the save screen numbers it,
+  the folder `saves/<slot>`) or `autosave`, read as the save screen's Load reads it and started as a
+  load from the title (a save in a dungeon starts in Norune, as the pause menu's Load does). A bad
+  value exits with status 2, and so does a slot with no save. Pair it with `--seed-save` to keep
+  the player's saves untouched: loading a numbered slot remembers it in `saves/state.json`.
 - `--fast-load` (or `DC_FAST_LOAD=1`) cuts the loading screen's start delay to
   one tick, its fades to two or four ticks and its holds (PAL 120, 183 and 83
   ticks) to two. The modes' own fades are untouched.
@@ -595,6 +600,13 @@ For tests and debugging only; nothing the game does depends on them.
   would: an item into the dungeon inventory, a weapon to the character it
   belongs to. One already held is skipped. `--give 210,211` gives the Sun and
   Moon Signets. A bad list exits with status 2.
+- `--town-menu N` (or `DC_TOWN_MENU`) opens a town menu once the town walks, set up as the
+  town's scripts set it up: `8` the fish exchange, `9` the bait board (every bait), `10` the
+  fishing records, `11` the rods board (the rods carried). Anything else exits with status 2.
+- `--town-event N` (or `DC_TOWN_EVENT`) raises town program `N` the first time Cross goes down in
+  the town, as stepping onto its spot and pressing Cross does: `133` asks fishing's "Continue
+  fishing / Quit fishing", and `11` is Norune's fishing sign. With `--jump autosave` and a script
+  pressing Cross, these reach the fishing screens without walking to the water.
 
 `darkcloud --headless --jump dungeon:0 --fast-load --frames 60` shows the first
 dungeon's floor select after about five seconds on lavapipe.

@@ -1969,6 +1969,25 @@ int EditLoop() {
         }
     }
 
+    // Test hooks (docs/PC.md): a town menu, set up as the script that opens it sets it up, or a town
+    // program raised as its spot's Cross raises it, once the town has settled as a player's press finds it.
+    const bool settled = GameMode == ED_MODE_WALK && key_lock == 0 && loop_counter > 30;
+    if (settled && goto_menu == 0) {
+        if (const int menu = app::GameTakeTownMenu(); menu != 0) {
+            std::vector<int> items = menu == ED_MENU_CHANGE_ROD ? fishing::RodsCarried() : fishing::BaitItems();
+            items.push_back(-1);
+            EdUseItemInit();
+            EdSetUseItem(items.data());
+            goto_menu = menu;
+        }
+    }
+
+    if (settled && EdPadDown(0x40, 1) != 0) {
+        if (const int program = app::GameTakeTownEvent(); program != 0) {
+            RunEvent(program, &MainCamera);
+        }
+    }
+
     if (GameMode == ED_MODE_WALK && (EdPadDown(0x10, 1) != 0 || goto_menu != 0 || (SystemMesCheck() == 0 && EdCheckItemOver() != 0))) {
         int menu_no = ED_MENU_BATTLE;
 
