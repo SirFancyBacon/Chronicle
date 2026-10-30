@@ -1,6 +1,7 @@
 #include "fishing/session.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace dc::fishing {
 
@@ -10,13 +11,16 @@ void Session::Reset() {
     message_ = Message::Evaluate;
     ticks_ = 0;
     wait_ = 0;
+    held_cross_ = false;
 }
 
-// The bite: which fish, and the bait it took, kept for the catch or the loss.
+// The bite: which fish, and the bait it took, kept for the catch or the loss. Cross pressed on the
+// bite's own tick sets the hook on the next, rather than counting as early or as reeling in.
 void Session::Hook(Angler &angler, const Input &input) {
     step_ = Step::Hooked;
     hooked_ = angler.FishSpecies(input.fish_no);
     bait_ = std::string(angler.Bait().bait);
+    held_cross_ = input.cross;
     angler.BiteCue();
 }
 
@@ -94,18 +98,15 @@ void Session::Tick(Angler &angler, const Input &input) {
                 angler.Motion(13, 0);
                 angler.RestartBite();
             }
-            if (input.cross || (ticks_ > 30 && angler.FloatCaught())) {
+            if (input.fish_status == 8) {
+                Hook(angler, input);
+            } else if (input.cross || (ticks_ > 30 && angler.FloatCaught())) {
                 step_ = Step::ReelIn;
                 angler.Motion(7, 6);
                 ticks_ = 0;
                 angler.RestartBite();
-            } else {
-                if (input.fish_status == 7) {
-                    step_ = Step::BiteCheck;
-                }
-                if (input.fish_status == 8) {
-                    Hook(angler, input);
-                }
+            } else if (input.fish_status == 7) {
+                step_ = Step::BiteCheck;
             }
             wait_++;
             follow = true;
@@ -128,7 +129,10 @@ void Session::Tick(Angler &angler, const Input &input) {
             angler.Help(true);
             if (input.fish_status == 8) {
                 Hook(angler, input);
-            } else if (input.fish_status != 7) {
+                follow = true;
+                break;
+            }
+            if (input.fish_status != 7) {
                 step_ = Step::WaitBite;
                 ticks_ = 0;
                 wait_ = 0;
@@ -156,8 +160,9 @@ void Session::Tick(Angler &angler, const Input &input) {
             follow = true;
             break;
         }
-        case Step::Hooked:
+        case Step::Hooked: {
             angler.Help(true);
+            const bool pressed = input.cross || std::exchange(held_cross_, false);
             if (input.fish_status != 8) {
                 step_ = Step::WaitBite;
                 wait_ = 0;
@@ -168,7 +173,7 @@ void Session::Tick(Angler &angler, const Input &input) {
                 Publish(Lost{.species = hooked_, .place = &place, .bait = bait_, .why = LossCause::LetGo, .bait_lost = lost});
                 ticks_ = 0;
             } else {
-                if (input.cross || input.debug) {
+                if (pressed || input.debug) {
                     angler.Play(Sound::Cast);
                     // Retail deleted the bait every tick of the fight; it is taken once, here unless
                     // the fight can be lost.
@@ -194,6 +199,7 @@ void Session::Tick(Angler &angler, const Input &input) {
                 follow = true;
             }
             break;
+        }
         case Step::Battle: {
             const FightContext context{
                 .ticks = ticks_,

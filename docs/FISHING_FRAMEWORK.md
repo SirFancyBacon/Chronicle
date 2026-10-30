@@ -265,7 +265,8 @@ a pack's `places.json`.
 `fishing::Session` (`session.cpp`) is retail's `EdMoveChara` fishing block, one tick at a time:
 standing (Cross casts, Circle and Square open the town's menus, events 0x85 and 0x86), casting,
 waiting with its idle motions, the nibble, the bite, reeling in, the fight, the result and putting the
-fish away. It has no game headers: everything it does in the game goes through `fishing::Angler`,
+fish away. Cross on the bite's own tick sets the hook (retail counted it as early from a nibble, or as
+reeling in from the wait). It has no game headers: everything it does in the game goes through `fishing::Angler`,
 which `angler.cpp` implements with the angler, the line, the fish, the camera, the sounds and the
 messages, and tests implement with a record of what was asked (`FishingSession.*`). `EdMoveChara`
 calls `fishing::StepSession`, and `chara_fishing` still holds the step for the game's code that reads

@@ -369,6 +369,36 @@ TEST_F(FishingSession, CrossWhileWaitingReelsIn) {
     EXPECT_EQ(session.CurrentStep(), Step::Stand);
 }
 
+TEST_F(FishingSession, CrossOnTheBitesOwnTickSetsTheHook) {
+    // From a nibble: not an early press.
+    CastAndWait();
+    Tick({.fish_status = 7, .fish_no = 3});
+    Tick({.cross = true, .fish_status = 8, .fish_no = 3});
+    EXPECT_EQ(session.CurrentStep(), Step::Hooked);
+    EXPECT_FALSE(angler.Did("motion 6 6"));
+    Tick({.fish_status = 8, .fish_no = 3});
+    EXPECT_EQ(session.CurrentStep(), Step::Battle);
+}
+
+TEST_F(FishingSession, CrossOnABiteStraightFromTheWaitSetsTheHook) {
+    // From waiting: not reeling in.
+    CastAndWait();
+    Tick({.cross = true, .fish_status = 8, .fish_no = 3});
+    EXPECT_EQ(session.CurrentStep(), Step::Hooked);
+    Tick({.fish_status = 8, .fish_no = 3});
+    EXPECT_EQ(session.CurrentStep(), Step::Battle);
+}
+
+TEST_F(FishingSession, AnEarlyPressIsKeptNoLongerThanTheBite) {
+    CastAndWait();
+    Tick({.cross = true, .fish_status = 8, .fish_no = 3});
+    Tick({.fish_status = -1});
+    EXPECT_EQ(session.CurrentStep(), Step::WaitBite);
+    Tick({.fish_status = 8, .fish_no = 3});
+    Tick({.fish_status = 8, .fish_no = 3});
+    EXPECT_EQ(session.CurrentStep(), Step::Hooked); // the press went with the first fish
+}
+
 TEST_F(FishingSession, CircleAndSquareOpenTheTownsMenus) {
     Tick();
     Tick({.circle = true});

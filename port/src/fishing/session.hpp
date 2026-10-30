@@ -134,6 +134,7 @@ private:
     const Species         *hooked_ = nullptr; /**< The fish on the hook. */
     std::unique_ptr<Fight> fight_;            /**< The hooked fish's fight, from the place's fight stage. */
     std::string    bait_;             /**< The bait it took, for the catch. */
+    bool           held_cross_ = false; /**< Cross pressed on the bite's tick, for the Hooked step. */
     float   float_weight_ = -1.0f;
     float   hook_weight_ = -1.0f;
 };
