@@ -560,9 +560,9 @@ void StepSession(CMainChara &chara, CCameraFollow &camera, float *position, floa
     GameAngler angler(chara, camera, position);
     int          fish_no = -1;
     const Input  input{.cross = EdPadDown(0x40, 0xFFFF) != 0,
+                       .cross_held = EdPadOn(0x40, 0xFFFF) != 0,
                        .circle = EdPadDown(0x20, 0xFFFF) != 0,
                        .square = EdPadDown(0x80, 0xFFFF) != 0,
-                       .cross_held = EdPadOn(0x40, 0xFFFF) != 0,
                        .stick_x = GamePad.GetLXf(),
                        .stick_y = -GamePad.GetLYf(),
                        .fish_status = FishingFishStatus(&fish_no),
