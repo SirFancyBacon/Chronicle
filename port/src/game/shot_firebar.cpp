@@ -5,6 +5,7 @@
 #include <cstdlib>
 
 #include "collisiondata.hpp"
+#include "combat/hits.hpp"
 #include "dun/gameloop.hpp"
 #include "itemdata.hpp"
 #include "mglib.hpp"
@@ -102,6 +103,7 @@ void CSHOT_FIREBAR::Step() {
         if (hit_timer == 0) {
             NowColData->Set(position[particle], damage[particle], 2, 4.0f, 1.0f, 2, 2, 0, 0);
             NowColData->SetUserID(5, 6);
+            combat::Describe(NowColData->now_hit, {.attacker = combat::Attacker::Character, .who = 5, .move = combat::Move::Shot});
             NowColData->hit[NowColData->now_hit].weapon_flags = NowWeaponHave->flags;
             NowColData->hit[NowColData->now_hit].vs_monster = NowWeaponHave->vs_monster;
             NowColData->hit[NowColData->now_hit].flags = GetWeaponElementAttr(NowWeaponHave->best_elem);

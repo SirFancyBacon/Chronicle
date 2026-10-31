@@ -18,6 +18,7 @@
 #include "camerafollow.hpp"
 #include "clsmes.hpp"
 #include "collisiondata.hpp"
+#include "combat/hits.hpp"
 #include "dataalloc.hpp"
 #include "dataread.hpp"
 #include "dngstatusdata.hpp"
@@ -935,7 +936,7 @@ int _SET_STATUS_ERR(RS_STACKDATA *stack, int /*argument_count*/) {
     BtSetStatusErr(GetStackInt(stack));
     sceVu0CopyVector(pos, CharaMain.pos);
     pos[1] += 16.0f;
-    NowColData->Set(pos, 2, 2, 5.0f, 0.0f, 1, 2, 0, 0);
+    combat::Describe(NowColData->Set(pos, 2, 2, 5.0f, 0.0f, 1, 2, 0, 0), {.attacker = combat::Attacker::Floor, .move = combat::Move::Trap});
     return 1;
 }
 

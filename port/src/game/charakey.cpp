@@ -12,6 +12,7 @@
 #include "character.hpp"
 #include "clothread.hpp"
 #include "collisiondata.hpp"
+#include "combat/hits.hpp"
 #include "dataread.hpp"
 #include "dun/gameloop.hpp"
 #include "frame.hpp"
@@ -35,8 +36,9 @@ void sound_play(float from, float to, float now, int se_no) {
     }
 }
 
-// Tags the hit just set on NowColData with the held weapon's stats, its owner and attack kind.
-void basic_damage(int kind, int owner) {
+// Tags the hit just set on NowColData with the held weapon's stats, its owner and attack kind, and
+// describes the move for the combat framework.
+void basic_damage(int kind, int owner, combat::Move move, int step) {
     auto &hit = NowColData->hit[NowColData->now_hit];
 
     hit.vs_monster = NowWeaponHave->vs_monster;
@@ -44,6 +46,7 @@ void basic_damage(int kind, int owner) {
     hit.flags = GetWeaponElementAttr(NowWeaponHave->best_elem);
     hit.owner = owner;
     hit.attack_no = kind;
+    combat::Describe(NowColData->now_hit, {.attacker = combat::Attacker::Character, .who = owner, .move = move, .step = step});
 }
 
 } // namespace
@@ -108,46 +111,46 @@ void ToanKey_Play() {
 
     if (time >= 825 && time <= 828.0f) {
         NowColData->Set(hit_pos, damage, 1, 2.8f, 0.0f, 2, 2, 0, 0);
-        basic_damage(0, 0);
+        basic_damage(0, 0, combat::Move::Combo, 1);
         NowColData->SetKickBack(chara_pos, 1.2f, 0.2f, 2);
     }
 
     if (time >= 833 && time <= 835) {
         NowColData->Set(hit_pos, damage, 1, 5.3f, 0.0f, 2, 2, 0, 0);
-        basic_damage(0, 0);
+        basic_damage(0, 0, combat::Move::Combo, 2);
         NowColData->SetKickBack(chara_pos, 1.2f, 0.2f, 2);
     }
 
     if (time >= 842 && time <= 844.0f) {
         NowColData->Set(hit_pos, damage, 1, 6.2f, 0.0f, 2, 2, 0, 0);
-        basic_damage(0, 0);
+        basic_damage(0, 0, combat::Move::Combo, 3);
         NowColData->SetKickBack(chara_pos, 1.5f, 0.3f, 2);
     }
 
     if (time >= 851 && time <= 854) {
         NowColData->Set(hit_pos, damage, 1, 6.2f, 0.0f, 2, 2, 0, 0);
-        basic_damage(0, 0);
+        basic_damage(0, 0, combat::Move::Combo, 4);
         NowColData->SetKickBack(chara_pos, 2.0f, 0.4f, 2);
     }
 
     if (time >= 862 && time <= 866) {
         damage = static_cast<int>(static_cast<float>(damage) * 1.8f);
         NowColData->Set(hit_pos, damage, 1, 6.2f, 0.0f, 2, 2, 0, 0);
-        basic_damage(0, 0);
+        basic_damage(0, 0, combat::Move::Finisher, 5);
         NowColData->SetKickBack(chara_pos, 3.0f, 0.3f, 2);
     }
 
     if (time >= 193.0f && time <= 196.0f) {
         damage = static_cast<int>(damage * 1.5);
         NowColData->Set(hit_pos, damage, 1, 6.0f, 0.0f, 2, 2, 0, 0);
-        basic_damage(2, 0);
+        basic_damage(2, 0, combat::Move::Charged, 1);
         NowColData->SetKickBack(chara_pos, 3.0f, 0.3f, 2);
     }
 
     if (time >= 720.0f && time <= 722) {
         damage = static_cast<int>(damage * 1.5);
         NowColData->Set(hit_pos, damage, 1, 12.0f, 0.0f, 2, 2, 0, 0);
-        basic_damage(3, 0);
+        basic_damage(3, 0, combat::Move::Charged, 2);
         NowColData->SetKickBack(chara_pos, 3.0f, 0.3f, 2);
     }
 
@@ -642,28 +645,28 @@ void UngagaKey_Play() {
 
     if (time >= 674 && time <= 677) {
         NowColData->Set(hit_left, damage, 1, 6.0f, 0, 2, 2, 0, 0);
-        basic_damage(0, 4);
+        basic_damage(0, 4, combat::Move::Combo, 1);
         NowColData->SetKickBack(chara_pos, 1.2f, 0.1f, 2);
         NowColData->Set(hit_right, damage, 1, 6.0f, 0.0f, 2, 2, 0, 0);
-        basic_damage(0, 4);
+        basic_damage(0, 4, combat::Move::Combo, 1);
         NowColData->SetKickBack(chara_pos, 1.2f, 0.1f, 2);
     }
 
     if (time >= 686 && time <= 692.0f) {
         NowColData->Set(hit_left, damage, 1, 6.0f, 0.0f, 2, 2, 0, 0);
-        basic_damage(0, 4);
+        basic_damage(0, 4, combat::Move::Combo, 2);
         NowColData->SetKickBack(chara_pos, 1.5f, 0.1f, 2);
         NowColData->Set(hit_right, damage, 1, 6.0f, 0.0f, 2, 2, 0, 0);
-        basic_damage(0, 4);
+        basic_damage(0, 4, combat::Move::Combo, 2);
         NowColData->SetKickBack(chara_pos, 1.5f, 0.1f, 2);
     }
 
     if (time >= 700.0f && time <= 704.0f) {
         NowColData->Set(hit_left, damage, 1, 6.0f, 0.0f, 2, 2, 0, 0);
-        basic_damage(0, 4);
+        basic_damage(0, 4, combat::Move::Finisher, 3);
         NowColData->SetKickBack(chara_pos, 2.0f, 0.1f, 2);
         NowColData->Set(hit_right, damage, 1, 6.0f, 0.0f, 2, 2, 0, 0);
-        basic_damage(0, 4);
+        basic_damage(0, 4, combat::Move::Finisher, 3);
         NowColData->SetKickBack(chara_pos, 2.0f, 0.1f, 2);
     }
 
@@ -953,7 +956,7 @@ void GoroKey_Play() {
 
     if (time >= 99.0f && time <= 102.0f) {
         NowColData->Set(hit_pos, damage, 1, 5.0f, 0.0f, 2, 2, 0, 0);
-        basic_damage(0, 2);
+        basic_damage(0, 2, combat::Move::Combo, 1);
         NowColData->SetKickBack(chara_pos, 2.5f, 0.1f, 2);
     }
 
@@ -961,7 +964,7 @@ void GoroKey_Play() {
         damage = static_cast<int>(damage * 1.5);
         NowColData->Set(hit_pos, damage, 1, 5.0f, 0.0f, 2, 2, 0, 0);
 
-        basic_damage(1, 2);
+        basic_damage(1, 2, combat::Move::Charged, 1);
     }
 
     if (time >= 482.0f && time < 482.4f) {

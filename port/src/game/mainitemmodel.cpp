@@ -9,6 +9,7 @@
 #include "btitem.hpp"
 #include "character.hpp"
 #include "collisiondata.hpp"
+#include "combat/hits.hpp"
 #include "data/data_read.hpp"
 #include "dataalloc.hpp"
 #include "dun/gameloop.hpp"
@@ -229,18 +230,22 @@ void CMainItemModel::Step() {
         switch (item_no) {
             case ITEM_STONE:
                 NowColData->Set(position, 8, 5, 8.0f, 1.0f, 2, 2, 0, 0);
+                combat::Describe(NowColData->now_hit, {.attacker = combat::Attacker::Item, .move = combat::Move::Thrown});
                 DeleteModel(slot);
                 break;
             case ITEM_GOOEY_PEACH:
                 NowColData->Set(position, 8, 5, 8.0f, 1.0f, 2, 2, 0x800, 0);
+                combat::Describe(NowColData->now_hit, {.attacker = combat::Attacker::Item, .move = combat::Move::Thrown});
                 DeleteModel(slot);
                 break;
             case ITEM_THROBBING_CHERRY:
                 NowColData->Set(position, 2, 5, 8.0f, 1.0f, 2, 2, 0x100, 0);
+                combat::Describe(NowColData->now_hit, {.attacker = combat::Attacker::Item, .move = combat::Move::Thrown});
                 DeleteModel(slot);
                 break;
             case ITEM_POISONOUS_APPLE:
                 NowColData->Set(position, 2, 5, 8.0f, 1.0f, 2, 2, 0x200, 0);
+                combat::Describe(NowColData->now_hit, {.attacker = combat::Attacker::Item, .move = combat::Move::Thrown});
                 DeleteModel(slot);
                 break;
             case ITEM_BOMB:

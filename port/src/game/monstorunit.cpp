@@ -13,6 +13,7 @@
 #include "btactstatus.hpp"
 #include "character.hpp"
 #include "collisiondata.hpp"
+#include "combat/hits.hpp"
 #include "dataalloc.hpp"
 #include "dataread.hpp"
 #include "dataset.hpp"
@@ -853,6 +854,25 @@ void CMonstorUnit::DrawMonstorCursor() {
     }
 }
 
+void DescribeMonsterHit(int slot, int monster_no, const char *frame) {
+    if (NowMonstorUnit == nullptr || monster_no < 0 || monster_no >= 16) {
+        return;
+    }
+
+    const CMonstorUnit &unit = *NowMonstorUnit;
+    const int           model = unit.monster[monster_no].base_model;
+    std::string_view    name = frame != nullptr ? frame : "shot";
+
+    // A frame's name carries attribute flags after "__"; the key is its name alone.
+    name = name.substr(0, name.find("__"));
+    combat::Describe(slot, {.attacker = combat::Attacker::Monster,
+                            .who = monster_no,
+                            .move = combat::Move::Attack,
+                            .model = model >= 0 && model < 9 ? unit.model[model].model_name[0] : "",
+                            .motion = frame != nullptr ? unit.chara[monster_no][0].motion_no : -1,
+                            .frame = std::string(name)});
+}
+
 void InitBee(CFrame *frame, int count) {
     int frame_num = frame->GetFrameNum();
     std::println("bee num = {}", frame_num);
@@ -1081,6 +1101,7 @@ MonsterDamageResult CMonstorUnit::CheckDmg() {
 
                     int hit = NowColData->Set(effect2[current_monster].position[i], damage, 2, effect2[current_monster].radius[i], 0.0f, 1, effect2[current_monster].kind[i], effect2[current_monster].flags[i], 0);
                     NowColData->SetUserID(current_monster * 5 + 200, i);
+                    DescribeMonsterHit(hit, current_monster, effect2[current_monster].frame[i] != nullptr ? effect2[current_monster].frame[i]->name : "");
 
                     if (effect2[current_monster].kind[i] == 3) {
                         float angle = effect2[current_monster].angle[i];
@@ -1584,6 +1605,11 @@ MonsterDamageResult CMonstorUnit::CheckDmg() {
 
                     BtActStatus.monstor_target = owner;
                     monster[current_monster].hp -= amount;
+
+                    if (combat::Tracing()) {
+                        const int model_no = monster[current_monster].base_model;
+                        combat::TraceLanded(hit, std::format("{}[{}]", model_no >= 0 && model_no < 9 ? model[model_no].model_name[0] : "?", current_monster), amount);
+                    }
 
                     if (monster[current_monster].hp <= 0) {
                         monster[current_monster].last_attacker = owner;

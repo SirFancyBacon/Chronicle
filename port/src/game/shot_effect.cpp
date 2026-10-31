@@ -7,6 +7,7 @@
 #include <string>
 
 #include "collisiondata.hpp"
+#include "combat/hits.hpp"
 #include "dataread.hpp"
 #include "dun/gameloop.hpp"
 #include "framevu1.hpp"
@@ -16,6 +17,7 @@
 #include "mathutil.hpp"
 #include "mds.hpp"
 #include "mglib.hpp"
+#include "monstorunit.hpp"
 #include "motionmodel.hpp"
 #include "nowload.hpp"
 #include "shot_effect_pack.hpp"
@@ -24,6 +26,22 @@
 #include "texture.hpp"
 
 namespace dc::game {
+
+namespace {
+
+// The shot effects carry the party's weapon effects and spells (owners 0 to 5), the gems (no owner) and
+// the monsters' projectiles (monster_no, from SetUserID2).
+void DescribeShot(int slot, int owner, int monster_no) {
+    if (monster_no >= 0) {
+        DescribeMonsterHit(slot, monster_no, nullptr);
+    } else if (owner >= 0 && owner <= 5) {
+        combat::Describe(slot, {.attacker = combat::Attacker::Character, .who = owner, .move = combat::Move::Shot});
+    } else {
+        combat::Describe(slot, {.attacker = combat::Attacker::Item, .move = combat::Move::Shot});
+    }
+}
+
+} // namespace
 
 void CSHOT::draw() {
     for (int shot = 0; shot < 12; shot++) {
@@ -58,6 +76,7 @@ void CSHOT::step() {
             } else {
                 NowColData->Set(pos[shot], damage[shot], 1, 3.0f, 0.0f, 2, 2, 0, 0);
                 NowColData->SetUserID(1, 0);
+                combat::Describe(NowColData->now_hit, {.attacker = combat::Attacker::Character, .who = 1, .move = combat::Move::Shot});
                 s8              weapon_element = NowWeaponHave->best_elem;
                 CCollisionData *attr_col = NowColData;
                 attr_col->hit[attr_col->now_hit].flags = GetWeaponElementAttr(weapon_element);
@@ -169,6 +188,7 @@ void CSHOT_EFFECT::Step() {
 
                 if (hit != -1) {
                     NowColData->SetUserID(user_id[slot], user_sub_id[slot]);
+                    DescribeShot(hit, user_id[slot], user_id_2[slot]);
                     NowColData->hit[NowColData->now_hit].weapon_flags = weapon_status[slot];
                     NowColData->hit[NowColData->now_hit].vs_monster = vs_monster[slot];
                     NowColData->hit[NowColData->now_hit].monster_no = user_id_2[slot];
@@ -628,6 +648,7 @@ void CSHOT_MACHINGUN::Step() {
             CCollisionData *target = NowColData;
             target->hit[target->now_hit].owner = 5;
             target->hit[target->now_hit].attack_no = 6;
+            combat::Describe(target->now_hit, {.attacker = combat::Attacker::Character, .who = 5, .move = combat::Move::Shot});
             age[slot] = 0;
         }
 

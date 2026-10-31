@@ -29,6 +29,7 @@
 #include "clsmes.hpp"
 #include "collision.hpp"
 #include "collisiondata.hpp"
+#include "combat/hits.hpp"
 #include "dataalloc.hpp"
 #include "dataread.hpp"
 #include "dataset.hpp"
@@ -3967,6 +3968,13 @@ int BtCheckDamageProc() {
             // A hit that halves takes half of what the player can hold.
             if (hit->flags & 0x80000) {
                 damage = UserStatus->max_hp[static_cast<int>(UserStatus->cur_chara)] >> 1;
+            }
+
+            if (combat::Tracing()) {
+                // The guard stops a hit of kind 3 once it is up (action 9), and one of kind 2 or 4 from the
+                // moment it is raised (blown: the guard's action_on 6, cleared above).
+                const bool blocked = (hit->kind == 3 && BtActStatus.action_no == 9) || ((hit->kind == 2 || hit->kind == 4) && blown != 0);
+                combat::TraceLanded(hit_no, std::format("{}{}", combat::CharacterName(static_cast<int>(UserStatus->cur_chara)), blocked ? " (blocked)" : ""), blocked ? 0 : damage);
             }
 
             if (hit->kind == 3) {

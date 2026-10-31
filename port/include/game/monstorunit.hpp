@@ -581,6 +581,13 @@ STATIC_ASSERT(sizeof(BT_ENEMY_FLOOR) == 0x70);
  */
 void InitBee(CFrame *frame, int count);
 
+/**
+ * Describes the hit in slot for the combat framework as monster_no's attack: the motion it is playing,
+ * and frame, the frame its damage collision rides on. A null frame is a projectile, keyed "shot": by the
+ * time it lands the monster may be playing another motion.
+ */
+void DescribeMonsterHit(int slot, int monster_no, const char *frame);
+
 /** Model, script and combat parameters of every kind of monster. */
 extern "C" MONSTOR_MODEL MonstorTable[167];
 

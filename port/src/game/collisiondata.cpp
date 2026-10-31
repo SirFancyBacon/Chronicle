@@ -8,6 +8,7 @@
 #include <string>
 
 #include "camerafollow.hpp"
+#include "combat/hits.hpp"
 #include "debugfont.hpp"
 #include "dngmessageman.hpp"
 #include "dun/gameloop.hpp"
@@ -718,6 +719,8 @@ int CCollisionData::Set(float *position, int damage, int life, float radius, flo
         record.knockback_decay = 0.0f;
         record.knockback_mode = 0;
         record.phase = record.ready_phase = 0;
+        // A reused slot's old description would name the wrong move.
+        combat::Reset(i);
         now_hit = i;
         return i;
     }

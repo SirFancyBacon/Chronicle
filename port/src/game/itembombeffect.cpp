@@ -6,6 +6,7 @@
 
 #include "camera.hpp"
 #include "collisiondata.hpp"
+#include "combat/hits.hpp"
 #include "dun/gameloop.hpp"
 #include "itemdata.hpp"
 #include "mglib.hpp"
@@ -123,6 +124,7 @@ int SetBombEffect(float *position, int owner, int damage, float scale) {
             CCollisionData *collision = NowColData;
             collision->hit[collision->now_hit].phase = 10;
             collision->hit[collision->now_hit].ready_phase = 10;
+            combat::Describe(collision_slot, {.attacker = combat::Attacker::Bomb, .move = combat::Move::Blast});
         }
 
         if (scale > 1.0f) {
