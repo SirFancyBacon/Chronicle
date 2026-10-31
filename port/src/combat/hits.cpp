@@ -2,6 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdlib>
@@ -21,7 +22,8 @@ namespace {
 struct State {
     std::array<Hit, kHitSlots>                      hits;
     ValueSource                                     source;
-    std::map<std::string, std::vector<std::string>> motion_names; // by model, as its key table orders them
+    std::map<std::string, std::vector<MotionKey>>   motion_keys;  // by model, as its key table orders them
+    std::map<std::string, std::vector<std::string>> motion_names; // the same keys' names
 };
 
 State &Get() {
@@ -31,38 +33,6 @@ State &Get() {
 
 bool InRange(int slot) {
     return slot >= 0 && slot < kHitSlots;
-}
-
-// A monster's motion names, in its key table's order: the KEY commands of its model's sidecar. Retail's
-// own model script numbers its motions only, so the names come from the extracted data, read once a model.
-const std::vector<std::string> &MotionNames(const std::string &model) {
-    auto &cache = Get().motion_names;
-    if (auto found = cache.find(model); found != cache.end()) {
-        return found->second;
-    }
-    std::vector<std::string>  names;
-    std::vector<std::uint8_t> bytes;
-    const std::string         path = dcdata::PublishedPath("dun/monstor/" + model + ".game.json",
-                                                           [](std::string_view prefix) { return data::DataFileExists(prefix); });
-    if (!model.empty() && data::DataReadReadFile(path, bytes)) {
-        const nlohmann::json document = nlohmann::json::parse(bytes.begin(), bytes.end(), nullptr, false);
-        if (!document.is_discarded()) {
-            const std::string     profile = document.value("default_profile", std::string("info"));
-            const nlohmann::json *commands = nullptr;
-            if (document.contains("profiles") && document["profiles"].contains(profile)) {
-                commands = &document["profiles"][profile]["commands"];
-            }
-            for (const nlohmann::json &command : commands != nullptr && commands->is_array() ? *commands : nlohmann::json::array()) {
-                if (command.value("command", "") != "KEY") {
-                    continue;
-                }
-                const nlohmann::json &args = command["args"];
-                const bool            named = args.is_array() && !args.empty() && args[0].contains("value") && args[0]["value"].is_string();
-                names.push_back(named ? args[0]["value"].get<std::string>() : std::string());
-            }
-        }
-    }
-    return cache.emplace(model, std::move(names)).first->second;
 }
 
 constexpr std::array<std::string_view, 6> kCharacters = {"Toan", "Xiao", "Goro", "Ruby", "Ungaga", "Osmond"};
@@ -92,6 +62,61 @@ std::string_view MoveName(Move move) {
 }
 
 } // namespace
+
+const std::vector<MotionKey> &MotionKeys(const std::string &model) {
+    auto &cache = Get().motion_keys;
+    if (auto found = cache.find(model); found != cache.end()) {
+        return found->second;
+    }
+    std::vector<MotionKey>    keys;
+    std::vector<std::uint8_t> bytes;
+    const std::string         path = dcdata::PublishedPath("dun/monstor/" + model + ".game.json",
+                                                           [](std::string_view prefix) { return data::DataFileExists(prefix); });
+    if (!model.empty() && data::DataReadReadFile(path, bytes)) {
+        const nlohmann::json document = nlohmann::json::parse(bytes.begin(), bytes.end(), nullptr, false);
+        if (!document.is_discarded()) {
+            const std::string     profile = document.value("default_profile", std::string("info"));
+            const nlohmann::json *commands = nullptr;
+            if (document.contains("profiles") && document["profiles"].contains(profile)) {
+                commands = &document["profiles"][profile]["commands"];
+            }
+            for (const nlohmann::json &command : commands != nullptr && commands->is_array() ? *commands : nlohmann::json::array()) {
+                if (command.value("command", "") != "KEY") {
+                    continue;
+                }
+                // KEY name, first frame, frame after the last, speed.
+                const nlohmann::json &args = command["args"];
+                auto                  value = [&](std::size_t i) -> const nlohmann::json                  *{
+                    return args.is_array() && i < args.size() && args[i].contains("value") ? &args[i]["value"] : nullptr;
+                };
+                MotionKey key;
+                if (const nlohmann::json *name = value(0); name != nullptr && name->is_string()) {
+                    key.name = name->get<std::string>();
+                }
+                if (const nlohmann::json *start = value(1); start != nullptr && start->is_number()) {
+                    key.start = start->get<int>();
+                }
+                if (const nlohmann::json *end = value(2); end != nullptr && end->is_number()) {
+                    key.end = end->get<int>();
+                }
+                keys.push_back(std::move(key));
+            }
+        }
+    }
+    return cache.emplace(model, std::move(keys)).first->second;
+}
+
+const std::vector<std::string> &MotionNames(const std::string &model) {
+    auto &cache = Get().motion_names;
+    if (auto found = cache.find(model); found != cache.end()) {
+        return found->second;
+    }
+    std::vector<std::string> names;
+    for (const MotionKey &key : MotionKeys(model)) {
+        names.push_back(key.name);
+    }
+    return cache.emplace(model, std::move(names)).first->second;
+}
 
 void SetValueSource(ValueSource source) {
     Get().source = std::move(source);
@@ -126,6 +151,12 @@ std::string AttackKey(int motion, std::string_view frame, std::span<const std::s
     return std::format("{}/{}", named ? names[static_cast<std::size_t>(motion)] : std::to_string(motion), frame);
 }
 
+int MotionIndex(const std::string &model, std::string_view name) {
+    const std::vector<std::string> &names = MotionNames(model);
+    const auto                      found = std::ranges::find(names, name);
+    return found == names.end() ? -1 : static_cast<int>(found - names.begin());
+}
+
 std::string AttackKey(const Hit &hit) {
     return AttackKey(hit.motion, hit.frame, MotionNames(hit.model));
 }
@@ -157,6 +188,12 @@ std::string Name(const Hit &hit) {
 bool Tracing() {
     static const bool on = std::getenv("DC_COMBAT_TRACE") != nullptr;
     return on;
+}
+
+void Trace(std::string_view line) {
+    if (Tracing()) {
+        std::println(stderr, "combat-trace: {}", line);
+    }
 }
 
 void TraceLanded(int slot, std::string_view target, int damage) {

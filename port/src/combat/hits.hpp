@@ -5,6 +5,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 /**
  * What each hit is (the combat framework's part 1, roadmap/COMBAT_FRAMEWORK.md). The game's hit records
@@ -104,6 +105,32 @@ const Hit *Find(int slot);
 std::string AttackKey(int motion, std::string_view frame, std::span<const std::string> names);
 
 /**
+ * A motion in a model's key table.
+ */
+struct MotionKey {
+    std::string name;
+    int         start = 0; /**< Its first frame. */
+    int         end = 0;   /**< The frame after its last. */
+};
+
+/**
+ * A monster's motions in its key table's order, which is how its script numbers them: the KEY commands
+ * of its model's extracted sidecar (dun/monstor/<model>.game.json), read once a model. Retail's own model
+ * script numbers its motions only. Empty when the data has no sidecar.
+ */
+const std::vector<MotionKey> &MotionKeys(const std::string &model);
+
+/**
+ * The names of MotionKeys(model), in the same order.
+ */
+const std::vector<std::string> &MotionNames(const std::string &model);
+
+/**
+ * The number of model's motion called name, or -1.
+ */
+int MotionIndex(const std::string &model, std::string_view name);
+
+/**
  * A monster attack's key, naming the motion from its model's key table in the data.
  */
 std::string AttackKey(const Hit &hit);
@@ -122,6 +149,11 @@ std::string Name(const Hit &hit);
  * Whether DC_COMBAT_TRACE is set.
  */
 bool Tracing();
+
+/**
+ * DC_COMBAT_TRACE=1: reports line, something combat did ("e03a[3] down").
+ */
+void Trace(std::string_view line);
 
 /**
  * DC_COMBAT_TRACE=1: reports the hit in slot landing on target for damage.

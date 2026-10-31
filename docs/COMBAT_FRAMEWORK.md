@@ -2,7 +2,8 @@
 
 Dark Cloud's hits say how much damage they do, but not what made them. The combat framework
 (`port/src/combat/`, `dc::combat`) keeps a description beside every hit: who dealt it and with which
-move. Later parts build poise, the guard's stamina and damage rules on it.
+move. It can also take a monster from its script to play a reaction, such as a knockdown. Later
+parts build poise, the guard's stamina and damage rules on these.
 
 With no datapacks the game behaves exactly as retail: nothing here changes a number.
 
@@ -64,6 +65,60 @@ key gives the motion's number.
 A hit's `poise` and `stamina` come from the value source (`dc::combat::SetValueSource`), called as
 the hit is described. None is set yet, so both are 0.
 
+## Enemy control
+
+`port/src/combat/control.hpp` lets the framework take a monster from its script, play a sequence of
+its own motions by name, and hand it back. A knockdown and a stagger are built on it.
+
+**How a monster runs.** Each tick, `CMonstorUnit::Step`:
+1. checks hits (`CheckDmg`). A hit starts the script's hit handler (program 110) and a kill its
+   death handler (120), dropping whatever the script was doing;
+2. runs a step of the script, unless the stop status holds it. A finished script starts its loop
+   (program 100) again.
+
+A monster's attacks are damage collisions its script makes once, each hurting only while the
+motion's frame is in its window. Playing another motion stops an attack without cleaning anything
+up.
+
+**A hold** (`dc::combat::Hold`) takes a slot's monster from its script:
+- **The script is stopped.**
+  - It doesn't step.
+  - A hit doesn't start the hit handler. The hit still deals its damage, with its number, sound and
+    red flash.
+  - Each hit gives 8 steps of immunity, as a common monster's hit handler would. One swing makes a
+    hit every tick of its window, so this keeps it from landing more than once.
+- **The monster stands still:** no walking, turning or knockback.
+- **It plays the reaction's steps,** each a motion by its name in the model's key table
+  (`dc::combat::MotionIndex`). A step plays once or loops for a number of ticks:
+  - the first step snaps into its motion and holds its last frame, as a hit reaction does (mode 6);
+  - later steps blend in (mode 2);
+  - loops loop (mode 0).
+- **A reaction can move the lock-on** to a frame of its own while it lasts.
+- **At the end, the script starts its loop again,** as after its hit handler.
+- **A kill ends the hold** and runs the death handler as usual. A stop status pauses the hold with
+  the script.
+- **Holds are dropped** when the floor's monsters are cleared (`CleanViewMonstor`) or a slot takes a
+  new monster (`SetupViewMonstor`).
+
+**Reactions:**
+
+| Reaction | For | Steps |
+|---|---|---|
+| Down (`DownReaction`) | a model whose `damage_2` and `get_up` have frames of their own | `damage_2`, then `get_up` |
+| Stagger (`StaggerReaction`) | Master Utan (`c14a`) | `damage_left_foot_enter`, `panting_loop` for 120 ticks, `damage_left_foot_return`; the lock-on on his `face`, as in retail when he is hit on a foot |
+| Stagger | another model with a hit reaction | its first of `damage_1`, `damage`, `damage_6_1`, `damage_face`, `damage_eye`, then 50 ticks of its idle |
+
+Many models keep `damage_2` and `get_up` as placeholders on their idle frames (the Dasher, the Golem,
+the Lich, the Gemron...). A reaction uses a motion only when it has frames of its own: some, and not
+the idle's (the key table's first, from `dc::combat::MotionKeys`), so those models stagger instead of
+falling. The models that can fall are the Master Jacket, the Skeleton Soldier, the weekday enemies
+(Sunday to Saturday), the card soldiers (Heart, Club, Diamond, Spade, Joker), the Mummy, the Curse
+Dancer, the Hell Pockle, the King Prickly, the Horn Head, the Bishop Q, the Silver Gear and Gacious.
+
+**Nothing starts a reaction in play yet;** poise will. `DC_COMBAT_TEST=down` shows them: a
+character's finisher or charged attack that leaves a monster standing downs it if it can fall, and
+staggers it otherwise.
+
 ## Trace
 
 `DC_COMBAT_TRACE=1` prints each hit as it lands, on standard error:
@@ -75,6 +130,7 @@ combat-trace: e03a[3] attack_1/dcol0 -> Toan (blocked): 0 dmg, 0 poise, 0 stamin
 ```
 
 A monster is named by its model and slot. A hit on the player says when the guard stopped it.
+Enemy control adds a line as a monster is held (`e03a[3] down`) and as it goes back to its script.
 
 ## Tests
 
@@ -84,5 +140,11 @@ A monster is named by its model and slot. A hit on the player says when the guar
 - values come from the source, and are 0 without one;
 - attack keys from a synthetic key table;
 - the trace's names.
+
+`port/src/tests/combat_control_test.cpp`:
+- the down and stagger reactions from the Skeleton Soldier's and Master Utan's key tables;
+- a hold's steps: one played once ends at its motion's end, but never on its first tick; a loop
+  ends after its ticks; then the hold releases;
+- releasing one slot or all.
 
 The tags at each attack window are checked in play, with the trace.

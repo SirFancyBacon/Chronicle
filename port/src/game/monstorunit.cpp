@@ -13,6 +13,7 @@
 #include "btactstatus.hpp"
 #include "character.hpp"
 #include "collisiondata.hpp"
+#include "combat/control.hpp"
 #include "combat/hits.hpp"
 #include "dataalloc.hpp"
 #include "dataread.hpp"
@@ -97,6 +98,152 @@ void set3DCellModel(float *world, char *name, float size, int x, int y, int widt
  */
 std::string MonstorFilePath(const char *name, const char *extension) {
     return std::format("dun/monstor/{}.{}", name, extension);
+}
+
+// A reaction the hit that just landed asks for (DC_COMBAT_TEST), taken up after the damage check.
+std::array<bool, 16> PendingReaction{};
+
+// Where each held monster's lock-on stood before its reaction moved it.
+struct SavedLockOn {
+    bool    saved = false;
+    CFrame *frame = nullptr;
+    float   scale_x = 1.0f;
+    float   scale_y = 1.0f;
+};
+
+std::array<SavedLockOn, 16> HeldLockOn{};
+
+std::string ModelName(const CMonstorUnit &unit, int monster_no) {
+    const int model_no = unit.monster[monster_no].base_model;
+    return model_no >= 0 && model_no < 9 ? unit.model[model_no].model_name[0] : "";
+}
+
+// Plays a reaction's step as _SET_MOTION does, attachments included: the first snaps into its motion and
+// holds its last frame, as a hit reaction does (mode 6); later ones blend in and hold (2); a loop loops (0).
+void PlayStep(CMonstorUnit &unit, int monster_no, const combat::MotionStep &step, bool first) {
+    const int motion = combat::MotionIndex(ModelName(unit, monster_no), step.motion);
+
+    if (motion < 0) {
+        return;
+    }
+
+    const int mode = step.loop_ticks > 0 ? 0 : (first ? 6 : 2);
+    float     speed = step.speed;
+
+    if (unit.monster[monster_no].slow_timer > 0) {
+        speed *= 0.5f;
+    }
+
+    unit.chara[monster_no][0].SetMotion(motion, mode);
+    unit.chara[monster_no][0].SetMotionSpeed(speed);
+    unit.monster[monster_no].requested_motion = motion;
+    unit.monster[monster_no].requested_motion_flags = mode;
+    unit.monster[monster_no].requested_motion_speed = speed;
+
+    for (int i = 0; i < unit.monster[monster_no].attachment_count; i++) {
+        unit.chara[monster_no][i + 1].SetMotion(motion, mode);
+        unit.chara[monster_no][i + 1].SetMotionSpeed(speed);
+    }
+}
+
+// A swing makes a fresh hit every tick of its window; a common monster's hit handler keeps it from
+// landing more than once with 6 to 9 steps of immunity. A held monster's handler doesn't run, so the hold
+// gives a hit that much itself, in place of whatever immunity the script would have given.
+constexpr int kHeldHitImmunity = 8;
+
+// A held monster stands where it is: no walking, turning or knockback.
+void StillHeld(CMonstorUnit &unit, int monster_no) {
+    unit.monster[monster_no].movement_speed = 0.0f;
+    unit.monster[monster_no].turn_speed = 0.0f;
+    unit.monster[monster_no].knockback[0] = 0.0f;
+}
+
+// Ends a hold; give_back starts the monster's script at its loop again, as after its hit handler.
+void EndHold(CMonstorUnit &unit, int monster_no, bool give_back) {
+    SavedLockOn &saved = HeldLockOn[static_cast<std::size_t>(monster_no)];
+
+    if (saved.saved) {
+        unit.monster[monster_no].lockon_frame = saved.frame;
+        unit.monster[monster_no].lockon_scale_x = saved.scale_x;
+        unit.monster[monster_no].lockon_scale_y = saved.scale_y;
+        saved = SavedLockOn{};
+    }
+
+    combat::Release(monster_no);
+
+    if (give_back) {
+        unit.script_state[monster_no] = 0;
+    }
+
+    if (combat::Tracing()) {
+        combat::Trace(std::format("{}[{}] {}", ModelName(unit, monster_no), monster_no, give_back ? "back to its script" : "released"));
+    }
+}
+
+bool BeginHold(CMonstorUnit &unit, int monster_no, combat::Reaction reaction) {
+    std::string            lock_on = reaction.lock_on; // SearchFrame takes a char *
+    const std::string      name = reaction.name;
+    const combat::HoldTick tick = combat::Hold(monster_no, std::move(reaction));
+
+    if (tick.action != combat::HoldAction::Play) {
+        return false;
+    }
+
+    StillHeld(unit, monster_no);
+    unit.monster[monster_no].invincible_timer = kHeldHitImmunity;
+
+    if (!lock_on.empty()) {
+        CFrame *frame = unit.chara[monster_no][0].frame->SearchFrame(lock_on.data());
+
+        if (frame != nullptr) {
+            HeldLockOn[static_cast<std::size_t>(monster_no)] = {.saved = true,
+                                                                .frame = unit.monster[monster_no].lockon_frame,
+                                                                .scale_x = unit.monster[monster_no].lockon_scale_x,
+                                                                .scale_y = unit.monster[monster_no].lockon_scale_y};
+            unit.monster[monster_no].lockon_frame = frame;
+        }
+    }
+
+    PlayStep(unit, monster_no, combat::HeldReaction(monster_no)->steps[tick.step], true);
+
+    if (combat::Tracing()) {
+        combat::Trace(std::format("{}[{}] {}", ModelName(unit, monster_no), monster_no, name));
+    }
+
+    return true;
+}
+
+// The hit that just landed asked for a reaction: the monster is held in place of its hit handler.
+bool TakeReaction(CMonstorUnit &unit, int monster_no) {
+    if (!PendingReaction[static_cast<std::size_t>(monster_no)]) {
+        return false;
+    }
+
+    PendingReaction[static_cast<std::size_t>(monster_no)] = false;
+    const std::string                     model = ModelName(unit, monster_no);
+    const std::vector<combat::MotionKey> &keys = combat::MotionKeys(model);
+    std::optional<combat::Reaction>       reaction = combat::DownReaction(keys);
+
+    if (!reaction) {
+        reaction = combat::StaggerReaction(model, keys);
+    }
+
+    return reaction && BeginHold(unit, monster_no, std::move(*reaction));
+}
+
+// One tick of a held monster in place of its script.
+void StepHeld(CMonstorUnit &unit, int monster_no) {
+    StillHeld(unit, monster_no);
+    const CCharacter      &chara = unit.chara[monster_no][0];
+    const float            end = static_cast<float>(chara.motion_type.motion_info[chara.motion_no].end);
+    const bool             ended = !(chara.motion_type.state.time < end - 1.0f);
+    const combat::HoldTick tick = combat::StepHold(monster_no, ended);
+
+    if (tick.action == combat::HoldAction::Play) {
+        PlayStep(unit, monster_no, combat::HeldReaction(monster_no)->steps[tick.step], false);
+    } else if (tick.action == combat::HoldAction::Release) {
+        EndHold(unit, monster_no, true);
+    }
 }
 
 } // namespace
@@ -1607,8 +1754,18 @@ MonsterDamageResult CMonstorUnit::CheckDmg() {
                     monster[current_monster].hp -= amount;
 
                     if (combat::Tracing()) {
-                        const int model_no = monster[current_monster].base_model;
-                        combat::TraceLanded(hit, std::format("{}[{}]", model_no >= 0 && model_no < 9 ? model[model_no].model_name[0] : "?", current_monster), amount);
+                        combat::TraceLanded(hit, std::format("{}[{}]", ModelName(*this, current_monster), current_monster), amount);
+                    }
+
+                    // DC_COMBAT_TEST=down: a finisher or a charged attack that leaves the monster standing
+                    // downs or staggers it, until poise decides.
+                    if (combat::TestMode() == "down" && monster[current_monster].hp > 0) {
+                        const combat::Hit *landed = combat::Find(hit);
+
+                        if (landed != nullptr && landed->attacker == combat::Attacker::Character &&
+                            (landed->move == combat::Move::Finisher || landed->move == combat::Move::Charged)) {
+                            PendingReaction[static_cast<std::size_t>(current_monster)] = true;
+                        }
                     }
 
                     if (monster[current_monster].hp <= 0) {
@@ -2018,10 +2175,27 @@ void CMonstorUnit::Step(int pause) {
                     case MonsterDamageResult::None:
                         break;
                     case MonsterDamageResult::Hit:
+                        // A held monster takes the damage and keeps its reaction, which the hit handler would
+                        // end; a hit asking for a reaction starts one in place of the hit handler.
+                        if (combat::Held(current_monster)) {
+                            monster[current_monster].invincible_timer = kHeldHitImmunity;
+                            break;
+                        }
+
+                        if (TakeReaction(*this, current_monster)) {
+                            break;
+                        }
+
                         interpreter[current_monster].run(110);
                         script_state[current_monster] = 1;
                         break;
                     case MonsterDamageResult::Killed:
+                        PendingReaction[static_cast<std::size_t>(current_monster)] = false;
+
+                        if (combat::Held(current_monster)) {
+                            EndHold(*this, current_monster, false);
+                        }
+
                         interpreter[current_monster].run(120);
                         script_state[current_monster] = 1;
                         break;
@@ -2034,7 +2208,9 @@ void CMonstorUnit::Step(int pause) {
                         monster[current_monster].invincible_timer--;
                     }
                 } else {
-                    if (script_state[current_monster] == 0) {
+                    if (combat::Held(current_monster)) {
+                        StepHeld(*this, current_monster);
+                    } else if (script_state[current_monster] == 0) {
                         if (monster[current_monster].revealed == 1) {
                             interpreter[current_monster].run(50);
                             monster[current_monster].revealed = -1;
@@ -2315,6 +2491,10 @@ void CMonstorUnit::Step(int pause) {
 }
 
 void CMonstorUnit::CleanViewMonstor(int back_floor) {
+    combat::ReleaseAll();
+    PendingReaction.fill(false);
+    HeldLockOn.fill(SavedLockOn{});
+
     for (int i = 0; i < 16; i++) {
         monster[i].state = -1;
         monster[i].stop_timer = 0;
@@ -2482,6 +2662,11 @@ int CMonstorUnit::SetupViewMonstor(int model_no, float *position, int event_flag
     if (current_monster == -1) {
         return 0;
     }
+
+    // A monster that held the slot before can't leave its reaction behind.
+    combat::Release(current_monster);
+    PendingReaction[static_cast<std::size_t>(current_monster)] = false;
+    HeldLockOn[static_cast<std::size_t>(current_monster)] = SavedLockOn{};
 
     script[current_monster]->Reset();
     BtSetEventScript(&interpreter[current_monster], script_data[model_no], script[current_monster]);

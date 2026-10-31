@@ -114,7 +114,8 @@ device), `DC_AUDIO_WAV` and `DC_AUDIO_TRACE` (see "Audio"), `DC_VULKAN_VALIDATIO
 release build; a debug build always asks for it), `DC_PRESENT_STATS=1` (print
 draws per tick and render times at exit, and what the FPS counter said last
 when it is on), `DC_COMBAT_TRACE=1` (print each hit as it lands: see
-[Combat Framework](COMBAT_FRAMEWORK.md#trace)), and SDL's own variables.
+[Combat Framework](COMBAT_FRAMEWORK.md#trace)), `DC_COMBAT_TEST=down` (finishers and charged attacks
+down or stagger monsters: see [Combat Framework](COMBAT_FRAMEWORK.md#enemy-control)), and SDL's own variables.
 
 Exit statuses (`port/src/app/exitcodes.hpp`): 0 when the window was closed or
 `--frames` ran out, 1 when the window, the renderer or the screenshot failed,
