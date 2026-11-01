@@ -119,6 +119,11 @@ A down's frames (where it reaches the ground, lies still and is back on its feet
 families of models, read off the height of their heads: `e01a`, `e03a`, `e50a`, `e129a`, `e131a`; `e44a`
 to `e48a`, `e132a`, `e138a`, `e144a`, `e150a`, `e161a`; and `e52a` (`kDownMarks` in `control.cpp`).
 
+**A downed monster is hit as columns.** Its spheres follow its bones, so lying down puts them on the
+floor, under Toan's level swings. While it is down, each sphere reaches any hit as near across the
+ground as the two radii and at any height its spheres spanned as it stood when it went down
+(`ReachesDowned`), as retail tests the player's body.
+
 **Nothing starts a reaction in play yet;** poise will. `DC_COMBAT_TEST=down` shows them: a
 character's finisher or charged attack that leaves a monster standing downs it if it can fall, and
 staggers it otherwise.

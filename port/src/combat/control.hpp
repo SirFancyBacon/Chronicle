@@ -113,6 +113,13 @@ std::optional<Reaction> DownReaction(std::string_view model, std::span<const Mot
 std::optional<Reaction> StaggerReaction(std::string_view model, std::span<const MotionKey> keys);
 
 /**
+ * Whether a hit's sphere reaches a downed monster's sphere. A lying monster's spheres lie on the floor,
+ * under most swings, so while it is down each is a column, as the player's body is: as near across the
+ * ground as the two radii, and at any height from low to high, the span its body stood in.
+ */
+bool ReachesDowned(const float *hit, float hit_radius, const float *sphere, float sphere_radius, float low, float high);
+
+/**
  * DC_COMBAT_TEST: "down" has a finisher or a charged attack down a monster that can fall and stagger one
  * that can't, to see enemy control before poise decides it. Empty when unset.
  */

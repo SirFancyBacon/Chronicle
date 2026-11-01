@@ -2,6 +2,7 @@
 
 #include <libvu0.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdlib>
@@ -113,6 +114,56 @@ struct SavedLockOn {
 
 std::array<SavedLockOn, 16> HeldLockOn{};
 
+// The heights a downed monster's spheres spanned as it stood when it went down, from its feet.
+struct StandingSpan {
+    float low = 0.0f;
+    float high = 0.0f;
+};
+
+std::array<StandingSpan, 16> DownSpan{};
+
+// Notes the span of monster_no's spheres as it stands.
+void NoteStandingSpan(CMonstorUnit &unit, int monster_no) {
+    sceVu0FVECTOR feet;
+    unit.chara[monster_no][0].GetPosition(feet);
+    StandingSpan span{.low = 0.0f, .high = 0.0f};
+
+    for (int i = 0; i < 16; i++) {
+        if (unit.effect[monster_no].timer[i] != 0) {
+            span.low = std::min(span.low, unit.effect[monster_no].position[i][1] - unit.effect[monster_no].radius[i] - feet[1]);
+            span.high = std::max(span.high, unit.effect[monster_no].position[i][1] + unit.effect[monster_no].radius[i] - feet[1]);
+        }
+    }
+
+    DownSpan[static_cast<std::size_t>(monster_no)] = span;
+}
+
+// The hit that reaches monster_no's sphere i, as FindMonsterHit finds it; while the monster is down, the
+// sphere reaches anywhere in the span the monster stood in.
+int FindHitOn(CMonstorUnit &unit, int monster_no, int i) {
+    float *const            position = unit.effect[monster_no].position[i];
+    const float             radius = unit.effect[monster_no].radius[i];
+    const combat::Reaction *held = combat::HeldReaction(monster_no);
+
+    if (held == nullptr || held->name != "down") {
+        return NowColData->FindMonsterHit(position, radius);
+    }
+
+    sceVu0FVECTOR       feet;
+    const StandingSpan &span = DownSpan[static_cast<std::size_t>(monster_no)];
+    unit.chara[monster_no][0].GetPosition(feet);
+
+    for (int h = 0; h < 96; h++) {
+        const COLLISION_HIT &hit = NowColData->hit[h];
+
+        if (NowColData->active[h] != 0 && (hit.target_mask & 2) && hit.phase == hit.ready_phase && combat::ReachesDowned(hit.pos, hit.radius, position, radius, feet[1] + span.low, feet[1] + span.high)) {
+            return h;
+        }
+    }
+
+    return -1;
+}
+
 std::string ModelName(const CMonstorUnit &unit, int monster_no) {
     const int model_no = unit.monster[monster_no].base_model;
     return model_no >= 0 && model_no < 9 ? unit.model[model_no].model_name[0] : "";
@@ -198,6 +249,10 @@ bool BeginHold(CMonstorUnit &unit, int monster_no, combat::Reaction reaction) {
 
     StillHeld(unit, monster_no);
     unit.monster[monster_no].invincible_timer = kHeldHitImmunity;
+
+    if (name == "down") {
+        NoteStandingSpan(unit, monster_no);
+    }
 
     if (!lock_on.empty()) {
         CFrame *frame = unit.chara[monster_no][0].frame->SearchFrame(lock_on.data());
@@ -1390,7 +1445,7 @@ MonsterDamageResult CMonstorUnit::CheckDmg() {
             }
 
             if (active) {
-                int hit = NowColData->FindMonsterHit(effect[current_monster].position[i], effect[current_monster].radius[i]);
+                int hit = FindHitOn(*this, current_monster, i);
                 int rejected = 0;
 
                 if (hit != -1) {

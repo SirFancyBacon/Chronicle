@@ -169,6 +169,18 @@ TEST(CombatControl, AStepEndsAtItsFrame) {
     EXPECT_EQ(StepHold(4, 20.1f, false).action, HoldAction::Release);
 }
 
+// A swing at chest height passes over a lying monster's sphere, but reaches it as a column of the height
+// it stood; one beside it, or above that height, still misses.
+TEST(CombatControl, ADownedSphereIsAColumn) {
+    const float lying[3] = {0.0f, 0.5f, 0.0f};
+    const float swing[3] = {1.0f, 8.0f, 0.5f};
+    EXPECT_TRUE(ReachesDowned(swing, 1.0f, lying, 1.5f, 0.0f, 12.0f));
+    const float wide[3] = {4.0f, 8.0f, 0.0f};
+    EXPECT_FALSE(ReachesDowned(wide, 1.0f, lying, 1.5f, 0.0f, 12.0f));
+    const float high[3] = {1.0f, 15.0f, 0.5f};
+    EXPECT_FALSE(ReachesDowned(high, 1.0f, lying, 1.5f, 0.0f, 12.0f));
+}
+
 TEST(CombatControl, ReleasingForgetsTheHold) {
     Hold(1, Reaction{.steps = {{.motion = "damage_1"}}});
     Hold(2, Reaction{.steps = {{.motion = "damage_1"}}});

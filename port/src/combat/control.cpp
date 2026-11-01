@@ -208,6 +208,16 @@ std::optional<Reaction> StaggerReaction(std::string_view model, std::span<const 
     return reaction;
 }
 
+bool ReachesDowned(const float *hit, float hit_radius, const float *sphere, float sphere_radius, float low, float high) {
+    const float across = hit[0] - sphere[0];
+    const float along = hit[2] - sphere[2];
+    const float reach = hit_radius + sphere_radius;
+    if ((across * across) + (along * along) > reach * reach) {
+        return false;
+    }
+    return hit[1] + hit_radius >= low && hit[1] - hit_radius <= high;
+}
+
 std::string_view TestMode() {
     static const char *mode = std::getenv("DC_COMBAT_TEST");
     return mode != nullptr ? std::string_view(mode) : std::string_view();
