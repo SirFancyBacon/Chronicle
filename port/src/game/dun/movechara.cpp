@@ -950,6 +950,12 @@ void DunMoveChara() {
                                                         SndSePlay(SE_CHARA_RECOVER, -1, 0);
                                                     }
 
+                                                    if (activeItem.CheckStatusType() == ACTIVE_ITEM_REPAIR && used != 0 && slots[itemNowSel + 3] > 0) {
+                                                        RepairEquippedWeapon(UserStatus);
+                                                        DelActiveItem(itemNowSel);
+                                                        SndSePlay(SE_WEAPON_REPAIR, -1, 0);
+                                                    }
+
                                                     if (activeItem.CheckStatusType() == ACTIVE_ITEM_ACTION && BtActStatus.can_act != 0 && used != 0 && BtActStatus.action_on != 2 && slots[itemNowSel + 3] > 0) {
                                                         printf("throw !!\n");
 

@@ -317,6 +317,9 @@ int CActiveItemPack::CheckStatusType() {
         case ITEM_CHEESE:
         case ITEM_MELLOW_BANANA:
             return ACTIVE_ITEM_EAT;
+        case ITEM_REPAIR_POWDER:
+            // Retail never lets it into a quick slot; a datapack's item patch can (docs/QOL.md).
+            return ACTIVE_ITEM_REPAIR;
         default:
             break;
     }

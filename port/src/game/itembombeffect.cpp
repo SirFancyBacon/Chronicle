@@ -4,11 +4,14 @@
 #include <array>
 #include <cmath>
 
+#include "battlemenu.hpp"
 #include "camera.hpp"
 #include "collisiondata.hpp"
 #include "dun/gameloop.hpp"
 #include "item/host.hpp"
 #include "itemdata.hpp"
+#include "menu_dungeon.hpp"
+#include "menu_inventory.hpp"
 #include "mglib.hpp"
 #include "rect.hpp"
 #include "shot_freefuncs.hpp"
@@ -62,8 +65,25 @@ int checkItemUsed(int slot) {
         case ITEM_CHEESE:
         case ITEM_MELLOW_BANANA:
             return hp < max_hp ? 1 : 0;
+        case ITEM_REPAIR_POWDER: {
+            const WEAPON_HAVE &weapon = UserStatus->chara_weapons[character][UserStatus->equipped_weapon_slot[character]];
+            return weapon.durability_f < weapon.durability ? 1 : 0;
+        }
         default:
             return 1;
+    }
+}
+
+void RepairEquippedWeapon(CUserStatus *status) {
+    const int    character = status->cur_chara;
+    WEAPON_HAVE *weapon = &status->chara_weapons[character][status->equipped_weapon_slot[character]];
+    weapon->durability_f = weapon->durability;
+
+    // As PersonalBoardWeaponPush repairs: the broken starting weapon is the default one, a number below it.
+    if (weapon->item_no == GetDefaultWeaponNo(character)) {
+        weapon->item_no++;
+        WepDataListToHaveCopy(weapon->item_no, weapon);
+        SetWeaponAttachStatus(NowWeaponHave);
     }
 }
 

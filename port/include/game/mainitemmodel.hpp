@@ -30,6 +30,7 @@ enum ActiveItemUseType {
     ACTIVE_ITEM_DRINK   = 2, /**< Drunk. */
     ACTIVE_ITEM_FEATHER = 3, /**< Feather. */
     ACTIVE_ITEM_EAT     = 4, /**< Eaten. */
+    ACTIVE_ITEM_REPAIR  = 5, /**< Port: repairs the equipped weapon (docs/QOL.md). */
 };
 
 // clang-format on

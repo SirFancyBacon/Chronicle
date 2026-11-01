@@ -36,6 +36,7 @@
 #include "monstorunit.hpp"
 #include "motionmodel.hpp"
 #include "nowload.hpp"
+#include "qol/features.hpp"
 #include "rect.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
@@ -246,6 +247,17 @@ void HealingWater() {
             const int chara = UserStatus->cur_chara;
             UserStatus->AddDrink(chara, 0xFF, 255.0f);
             UserStatus->AddNowLife(chara, 0xFF, 255.0f);
+
+            // QoL (docs/QOL.md): the rest of the party drinks and heals too, though not one who has fallen.
+            if (qol::Get().party_pool_restoration) {
+                for (int member = 0; member < UserStatus->party_size; member++) {
+                    if (member != chara && UserStatus->hp[member] > 0) {
+                        UserStatus->AddDrink(member, 0xFF, 255.0f);
+                        UserStatus->AddNowLife(member, 0xFF, 255.0f);
+                    }
+                }
+            }
+
             healingSpeed = 10;
         } else {
             healingSpeed--;
