@@ -27,19 +27,19 @@
 #include "dngstatusdata.hpp"
 #include "dun/gameloop.hpp"
 #include "ebattle.hpp"
+#include "edit.hpp"
 #include "editground.hpp"
 #include "editloop.hpp"
 #include "editloop3.hpp"
+#include "fishing/host.hpp"
 #include "gamemode.hpp"
 #include "gamepad.hpp"
 #include "item/framework.hpp"
-#include "fishing/host.hpp"
 #include "item/host.hpp"
 #include "langset.hpp"
 #include "localize/localize.hpp"
 #include "main.hpp"
 #include "mainselect.hpp"
-#include "edit.hpp"
 #include "memcard.hpp"
 #include "memorycardaccess.hpp"
 #include "menu_save.hpp"
@@ -51,6 +51,7 @@
 #include "platform/datapacks.hpp"
 #include "platform/input.hpp"
 #include "platform/paths.hpp"
+#include "qol/features.hpp"
 #include "quest/host.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
@@ -859,6 +860,7 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
     datapacks::Load(PathsDataRoot());
     item::Load();
     fishing::Load();
+    qol::Load();
     // With one language there is nothing to choose: the game starts in it, past the language
     // select, as retail NTSC does. With several the select offers retail's five.
     std::vector<s32> languages = SupportedLanguages();

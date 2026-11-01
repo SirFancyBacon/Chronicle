@@ -74,7 +74,7 @@ data extracted before, writes them into the data under `gameplay/`. They hold th
 (`ItemDocuments.TheTrackedDocumentsHoldTheCompiledTables`).
 
 `darkcloud --export-gameplay <directory>` writes the documents as compiled (the fishing ones too,
-docs/FISHING_FRAMEWORK.md), so changing one item means copying its table's document into a pack and
+docs/FISHING_FRAMEWORK.md, and the quality-of-life switches, docs/QOL.md), so changing one item means copying its table's document into a pack and
 editing a line.
 
 What a change reaches:

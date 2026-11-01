@@ -88,6 +88,12 @@ void usedActiveItem(CUserStatus *status, int item);
 int checkItemUsed(int slot);
 
 /**
+ * Repairs the current character's equipped weapon as Repair Powder does on the item board, a broken
+ * starting weapon coming back whole (docs/QOL.md).
+ */
+void RepairEquippedWeapon(CUserStatus *status);
+
+/**
  * Starts a bomb effect at a position and returns its collision slot, or -1.
  */
 int SetBombEffect(float *position, int owner, int damage, float scale);

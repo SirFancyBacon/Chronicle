@@ -283,9 +283,11 @@ if(NOT ANDROID)
     add_custom_target(dc_datapacks
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/datapacks/enhanced_fishing
                 $<TARGET_FILE_DIR:darkcloud>/assets/datapacks/enhanced_fishing
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/datapacks/qol
+                $<TARGET_FILE_DIR:darkcloud>/assets/datapacks/qol
         COMMENT "Copying the packs the game ships")
     add_dependencies(${darkcloud_target} dc_datapacks)
-    install(DIRECTORY datapacks/enhanced_fishing DESTINATION ${CMAKE_INSTALL_BINDIR}/assets/datapacks)
+    install(DIRECTORY datapacks/enhanced_fishing datapacks/qol DESTINATION ${CMAKE_INSTALL_BINDIR}/assets/datapacks)
 endif()
 
 # The tests use an installed GoogleTest, or fetch one at configure time; a build with neither turns them off.
