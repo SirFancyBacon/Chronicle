@@ -104,7 +104,7 @@ up.
 
 | Reaction | For | Steps |
 |---|---|---|
-| Down (`DownReaction`) | a model whose `damage_2` and `get_up` have frames of their own | `damage_2`, then `get_up` |
+| Down (`DownReaction`) | a model whose `damage_2` and `get_up` have frames of their own | `damage_2`, then `get_up`. For a model whose frames are known, 2 s in all: the fall and the rise at their own speed, the roll on the ground sped up (at most 3×), the lying still left out, and the monster back to its script once on its feet. Another model plays both whole |
 | Stagger (`StaggerReaction`) | Master Utan (`c14a`) | `damage_left_foot_enter`, `panting_loop` for 120 ticks, `damage_left_foot_return`; the lock-on on his `face`, as in retail when he is hit on a foot |
 | Stagger | another model with a hit reaction | its first of `damage_1`, `damage`, `damage_6_1`, `damage_face`, `damage_eye`, then 50 ticks of its idle |
 
@@ -114,6 +114,10 @@ the idle's (the key table's first, from `dc::combat::MotionKeys`), so those mode
 falling. The models that can fall are the Master Jacket, the Skeleton Soldier, the weekday enemies
 (Sunday to Saturday), the card soldiers (Heart, Club, Diamond, Spade, Joker), the Mummy, the Curse
 Dancer, the Hell Pockle, the King Prickly, the Horn Head, the Bishop Q, the Silver Gear and Gacious.
+
+A down's frames (where it reaches the ground, lies still and is back on its feet) are known for three
+families of models, read off the height of their heads: `e01a`, `e03a`, `e50a`, `e129a`, `e131a`; `e44a`
+to `e48a`, `e132a`, `e138a`, `e144a`, `e150a`, `e161a`; and `e52a` (`kDownMarks` in `control.cpp`).
 
 **Nothing starts a reaction in play yet;** poise will. `DC_COMBAT_TEST=down` shows them: a
 character's finisher or charged attack that leaves a monster standing downs it if it can fall, and

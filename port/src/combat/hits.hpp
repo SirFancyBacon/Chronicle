@@ -111,6 +111,7 @@ struct MotionKey {
     std::string name;
     int         start = 0; /**< Its first frame. */
     int         end = 0;   /**< The frame after its last. */
+    float       speed = 0; /**< Frames a tick, as the model plays it; 0 when the table doesn't say. */
 };
 
 /**

@@ -120,6 +120,7 @@ std::string ModelName(const CMonstorUnit &unit, int monster_no) {
 
 // Plays a reaction's step as _SET_MOTION does, attachments included: the first snaps into its motion and
 // holds its last frame, as a hit reaction does (mode 6); later ones blend in and hold (2); a loop loops (0).
+// A step that carries on only changes the speed of the motion playing.
 void PlayStep(CMonstorUnit &unit, int monster_no, const combat::MotionStep &step, bool first) {
     const int motion = combat::MotionIndex(ModelName(unit, monster_no), step.motion);
 
@@ -134,14 +135,20 @@ void PlayStep(CMonstorUnit &unit, int monster_no, const combat::MotionStep &step
         speed *= 0.5f;
     }
 
-    unit.chara[monster_no][0].SetMotion(motion, mode);
+    if (!step.carry_on) {
+        unit.chara[monster_no][0].SetMotion(motion, mode);
+        unit.monster[monster_no].requested_motion = motion;
+        unit.monster[monster_no].requested_motion_flags = mode;
+    }
+
     unit.chara[monster_no][0].SetMotionSpeed(speed);
-    unit.monster[monster_no].requested_motion = motion;
-    unit.monster[monster_no].requested_motion_flags = mode;
     unit.monster[monster_no].requested_motion_speed = speed;
 
     for (int i = 0; i < unit.monster[monster_no].attachment_count; i++) {
-        unit.chara[monster_no][i + 1].SetMotion(motion, mode);
+        if (!step.carry_on) {
+            unit.chara[monster_no][i + 1].SetMotion(motion, mode);
+        }
+
         unit.chara[monster_no][i + 1].SetMotionSpeed(speed);
     }
 }
@@ -222,7 +229,7 @@ bool TakeReaction(CMonstorUnit &unit, int monster_no) {
     PendingReaction[static_cast<std::size_t>(monster_no)] = false;
     const std::string                     model = ModelName(unit, monster_no);
     const std::vector<combat::MotionKey> &keys = combat::MotionKeys(model);
-    std::optional<combat::Reaction>       reaction = combat::DownReaction(keys);
+    std::optional<combat::Reaction>       reaction = combat::DownReaction(model, keys);
 
     if (!reaction) {
         reaction = combat::StaggerReaction(model, keys);
@@ -235,9 +242,10 @@ bool TakeReaction(CMonstorUnit &unit, int monster_no) {
 void StepHeld(CMonstorUnit &unit, int monster_no) {
     StillHeld(unit, monster_no);
     const CCharacter      &chara = unit.chara[monster_no][0];
-    const float            end = static_cast<float>(chara.motion_type.motion_info[chara.motion_no].end);
-    const bool             ended = !(chara.motion_type.state.time < end - 1.0f);
-    const combat::HoldTick tick = combat::StepHold(monster_no, ended);
+    const MOTION_INFO     &info = chara.motion_type.motion_info[chara.motion_no];
+    const float            time = chara.motion_type.state.time;
+    const bool             ended = !(time < static_cast<float>(info.end) - 1.0f);
+    const combat::HoldTick tick = combat::StepHold(monster_no, time - static_cast<float>(info.start), ended);
 
     if (tick.action == combat::HoldAction::Play) {
         PlayStep(unit, monster_no, combat::HeldReaction(monster_no)->steps[tick.step], false);

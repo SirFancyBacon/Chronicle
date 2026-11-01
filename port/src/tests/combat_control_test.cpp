@@ -11,22 +11,22 @@ using namespace dc::combat;
 namespace {
 
 // The Skeleton Soldier's key table (e03a), as its scripts number its motions: name, first frame, frame
-// after the last.
+// after the last, and for its down, the speed it plays at.
 const std::vector<MotionKey> kSkeleton = {
-    {"idle",         10,  20 },
-    {"walk",         25,  45 },
-    {"back_step",    295, 305},
-    {"right_step",   230, 250},
-    {"left_step",    255, 275},
-    {"guard_enter",  100, 105},
-    {"guard_loop",   105, 115},
+    {"idle", 10, 20},
+    {"walk", 25, 45},
+    {"back_step", 295, 305},
+    {"right_step", 230, 250},
+    {"left_step", 255, 275},
+    {"guard_enter", 100, 105},
+    {"guard_loop", 105, 115},
     {"guard_return", 115, 120},
-    {"damage_1",     125, 135},
-    {"damage_2",     140, 165},
-    {"get_up",       165, 185},
-    {"die",          205, 225},
-    {"death_loop",   225, 225},
-    {"attack_1",     50,  70 }
+    {"damage_1", 125, 135},
+    {"damage_2", 140, 165, 0.2f},
+    {"get_up", 165, 185, 0.2f},
+    {"die", 205, 225},
+    {"death_loop", 225, 225},
+    {"attack_1", 50, 70}
 };
 
 // The Dasher's (e06a): its damage_2 and get_up are placeholders on its idle frames.
@@ -64,18 +64,46 @@ const std::vector<MotionKey> kUtan = {
 
 } // namespace
 
-TEST(CombatControl, DownIsTheHeavyHitThenTheGetUp) {
-    const auto down = DownReaction(kSkeleton);
+// The Skeleton falls to the ground, rolls on it until it lies still, then gets up as far as its feet.
+TEST(CombatControl, DownIsTheFallTheRollAndTheGetUp) {
+    const auto down = DownReaction("e03a", kSkeleton);
+    ASSERT_TRUE(down);
+    ASSERT_EQ(down->steps.size(), 3u);
+    EXPECT_EQ(down->steps[0].motion, "damage_2");
+    EXPECT_EQ(down->steps[0].until, 4);
+    EXPECT_EQ(down->steps[1].motion, "damage_2");
+    EXPECT_TRUE(down->steps[1].carry_on);
+    EXPECT_EQ(down->steps[1].until, 20);
+    EXPECT_EQ(down->steps[2].motion, "get_up");
+    EXPECT_EQ(down->steps[2].until, 9);
+    EXPECT_FALSE(DownReaction("c14a", kUtan));
+}
+
+// Only the roll is sped up: the fall's 4 frames and the get-up's 9 keep their own speed, and the roll's 16
+// fill what is left of the two seconds.
+TEST(CombatControl, DownLastsTwoSecondsOnlyTheGroundGivingWay) {
+    const auto down = DownReaction("e03a", kSkeleton);
+    ASSERT_TRUE(down);
+    EXPECT_LT(down->steps[0].speed, 0.0f);
+    EXPECT_LT(down->steps[2].speed, 0.0f);
+    const float roll = down->steps[1].speed;
+    EXPECT_GT(roll, 0.2f);
+    EXPECT_FLOAT_EQ((4.0f / 0.2f) + (16.0f / roll) + (9.0f / 0.2f), 120.0f);
+}
+
+// A model whose frames aren't known plays its fall and get-up whole, at their own speed.
+TEST(CombatControl, AnUnknownModelFallsWhole) {
+    const auto down = DownReaction("e999a", kSkeleton);
     ASSERT_TRUE(down);
     ASSERT_EQ(down->steps.size(), 2u);
-    EXPECT_EQ(down->steps[0].motion, "damage_2");
+    EXPECT_LT(down->steps[0].until, 0);
+    EXPECT_LT(down->steps[0].speed, 0.0f);
     EXPECT_EQ(down->steps[1].motion, "get_up");
-    EXPECT_FALSE(DownReaction(kUtan));
 }
 
 // A model whose damage_2 and get_up sit on its idle frames can't fall: it staggers with damage_1.
 TEST(CombatControl, PlaceholderKeysAreNotADown) {
-    EXPECT_FALSE(DownReaction(kDasher));
+    EXPECT_FALSE(DownReaction("e06a", kDasher));
     const auto stagger = StaggerReaction("e06a", kDasher);
     ASSERT_TRUE(stagger);
     EXPECT_EQ(stagger->steps[0].motion, "damage_1");
@@ -115,18 +143,30 @@ TEST(CombatControl, AHoldPlaysItsStepsThenReleases) {
     EXPECT_TRUE(Held(3));
 
     // A step played once doesn't end on the tick it started, whatever the motion's frame says.
-    EXPECT_EQ(StepHold(3, true).action, HoldAction::None);
-    EXPECT_EQ(StepHold(3, false).action, HoldAction::None);
-    const HoldTick second = StepHold(3, true);
+    EXPECT_EQ(StepHold(3, 0, true).action, HoldAction::None);
+    EXPECT_EQ(StepHold(3, 1, false).action, HoldAction::None);
+    const HoldTick second = StepHold(3, 2, true);
     EXPECT_EQ(second.action, HoldAction::Play);
     EXPECT_EQ(second.step, 1u);
 
     // A loop ends after its ticks.
-    EXPECT_EQ(StepHold(3, true).action, HoldAction::None);
-    EXPECT_EQ(StepHold(3, false).action, HoldAction::None);
-    EXPECT_EQ(StepHold(3, false).action, HoldAction::Release);
+    EXPECT_EQ(StepHold(3, 0, true).action, HoldAction::None);
+    EXPECT_EQ(StepHold(3, 1, false).action, HoldAction::None);
+    EXPECT_EQ(StepHold(3, 2, false).action, HoldAction::Release);
     EXPECT_FALSE(Held(3));
-    EXPECT_EQ(StepHold(3, true).action, HoldAction::None);
+    EXPECT_EQ(StepHold(3, 0, true).action, HoldAction::None);
+}
+
+// A step with an until frame ends there, before its motion does.
+TEST(CombatControl, AStepEndsAtItsFrame) {
+    Hold(4, Reaction{
+                .steps = {{.motion = "damage_2", .until = 4}, {.motion = "damage_2", .until = 20, .carry_on = true}}
+    });
+    EXPECT_EQ(StepHold(4, 0.2f, false).action, HoldAction::None);
+    EXPECT_EQ(StepHold(4, 3.8f, false).action, HoldAction::None);
+    EXPECT_EQ(StepHold(4, 4.0f, false).action, HoldAction::Play);
+    EXPECT_EQ(StepHold(4, 19.0f, false).action, HoldAction::None);
+    EXPECT_EQ(StepHold(4, 20.1f, false).action, HoldAction::Release);
 }
 
 TEST(CombatControl, ReleasingForgetsTheHold) {

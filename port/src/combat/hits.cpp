@@ -99,6 +99,9 @@ const std::vector<MotionKey> &MotionKeys(const std::string &model) {
                 if (const nlohmann::json *end = value(2); end != nullptr && end->is_number()) {
                     key.end = end->get<int>();
                 }
+                if (const nlohmann::json *speed = value(3); speed != nullptr && speed->is_number()) {
+                    key.speed = speed->get<float>();
+                }
                 keys.push_back(std::move(key));
             }
         }

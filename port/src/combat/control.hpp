@@ -27,9 +27,11 @@ inline constexpr int kMonsterSlots = 16;
  * One motion of a reaction.
  */
 struct MotionStep {
-    std::string motion;         /**< The motion's name in the model's key table. */
-    int         loop_ticks = 0; /**< 0 plays the motion once; otherwise it loops for this many ticks. */
-    float       speed = -1.0f;  /**< Frames a tick; below 0, the key table's own. */
+    std::string motion;           /**< The motion's name in the model's key table. */
+    int         loop_ticks = 0;   /**< 0 plays the motion once; otherwise it loops for this many ticks. */
+    float       speed = -1.0f;    /**< Frames a tick; below 0, the key table's own. */
+    int         until = -1;       /**< Played once: ends at this frame from the motion's first; below 0, at its last. */
+    bool        carry_on = false; /**< Goes on with the motion the step before left playing, at this speed. */
 };
 
 /**
@@ -75,10 +77,11 @@ bool Held(int slot);
 const Reaction *HeldReaction(int slot);
 
 /**
- * One tick of slot's hold. motion_ended: the step's motion has reached its last frame. A step played
- * once ends there, but not on the tick it started, whose motion the character has yet to take up.
+ * One tick of slot's hold. frame: how far the motion has played, in frames from its first; motion_ended:
+ * it has reached its last. A step played once ends at its until frame or there, but not on the tick it
+ * started, whose motion the character has yet to take up.
  */
-HoldTick StepHold(int slot, bool motion_ended);
+HoldTick StepHold(int slot, float frame, bool motion_ended);
 
 /**
  * Stops holding slot.
@@ -91,12 +94,16 @@ void Release(int slot);
 void ReleaseAll();
 
 /**
- * A knockdown from a model's key table: its heavy hit (damage_2), then its get-up (get_up). None when
+ * A knockdown from a model's key table: its heavy hit (damage_2), then its get-up (get_up). For a model
+ * whose frames are known, the fall and the get-up play at their own speed and only the time on the
+ * ground gives way, to make the down last two seconds of 60 ticks: the roll on the ground is sped up,
+ * the lying still left out, and the monster goes back to its script once on its feet. Another model
+ * plays both whole. None when
  * it lacks either. Many models keep both keys as placeholders on their idle frames (the Dasher, the
  * Golem, the Lich...), which can't fall, so a key counts only with frames of its own: some, and not its
  * idle's (the table's first) or the other's.
  */
-std::optional<Reaction> DownReaction(std::span<const MotionKey> keys);
+std::optional<Reaction> DownReaction(std::string_view model, std::span<const MotionKey> keys);
 
 /**
  * A stagger for a monster that can't fall: its own hit reaction, then a moment standing without
