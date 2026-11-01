@@ -26,6 +26,7 @@
 #include "dataset.hpp"
 #include "dngstatusdata.hpp"
 #include "dun/gameloop.hpp"
+#include "dungeon/loot.hpp"
 #include "dungeon/rules.hpp"
 #include "ebattle.hpp"
 #include "edit.hpp"
@@ -54,6 +55,7 @@
 #include "platform/input.hpp"
 #include "platform/paths.hpp"
 #include "qol/features.hpp"
+#include "quest/documents.hpp"
 #include "quest/host.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
@@ -860,11 +862,16 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
     InitCDFile();
     // The items read their documents from the data as well as the packs, so they load once it is indexed.
     datapacks::Load(PathsDataRoot());
+    // The packs' strings join the game's own.
+    LocalizeReloadLanguage();
     item::Load();
     journal::RegisterSaveChunk();
     fishing::Load();
     dungeon::LoadRules();
+    dungeon::LoadLoot();
     qol::Load();
+    // After the items and fishing: a quest document names items, and counts catches.
+    quest::LoadDocuments();
     // With one language there is nothing to choose: the game starts in it, past the language
     // select, as retail NTSC does. With several the select offers retail's five.
     std::vector<s32> languages = SupportedLanguages();
