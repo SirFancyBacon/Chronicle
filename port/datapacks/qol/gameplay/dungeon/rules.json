@@ -1,0 +1,6 @@
+{
+  "schema_version": 2,
+  "kind": "dungeon_rules",
+  "key_item_filter": true,
+  "auto_open_locked_doors": true
+}

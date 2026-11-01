@@ -26,6 +26,7 @@
 #include "dataset.hpp"
 #include "dngstatusdata.hpp"
 #include "dun/gameloop.hpp"
+#include "dungeon/rules.hpp"
 #include "ebattle.hpp"
 #include "edit.hpp"
 #include "editground.hpp"
@@ -862,6 +863,7 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
     item::Load();
     journal::RegisterSaveChunk();
     fishing::Load();
+    dungeon::LoadRules();
     qol::Load();
     // With one language there is nothing to choose: the game starts in it, past the language
     // select, as retail NTSC does. With several the select offers retail's five.

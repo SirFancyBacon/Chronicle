@@ -9,6 +9,7 @@
 
 #include "battlemenu.hpp"
 #include "dun/gameloop.hpp"
+#include "dungeon/rules.hpp"
 #include "hitvalue.hpp"
 #include "item/host.hpp"
 #include "itembombeffect.hpp"
@@ -48,6 +49,7 @@ protected:
         datapacks::Clear();
         item::Load();
         qol::Load();
+        dungeon::LoadRules();
         item::Clear();
         fs::remove_all(directory);
     }
@@ -64,6 +66,7 @@ protected:
         datapacks::Load(data, kShipped);
         item::Load();
         qol::Load();
+        dungeon::LoadRules();
     }
 };
 
@@ -72,6 +75,8 @@ TEST_F(QolFeatures, WithoutThePackEveryChangeIsOffAsRetailPlays) {
     EXPECT_FALSE(qol::Get().party_pool_restoration);
     EXPECT_FALSE(qol::Get().inventory_auto_repair);
     EXPECT_EQ(GetItemData(ITEM_REPAIR_POWDER)->stack_kind, ITEM_STACK_NEVER);
+    EXPECT_FALSE(dungeon::GetRules().key_item_filter);
+    EXPECT_FALSE(dungeon::GetRules().auto_open_locked_doors);
 }
 
 TEST_F(QolFeatures, TheShippedPackTurnsEveryChangeOn) {
@@ -79,6 +84,8 @@ TEST_F(QolFeatures, TheShippedPackTurnsEveryChangeOn) {
     EXPECT_TRUE(qol::Get().party_pool_restoration);
     EXPECT_TRUE(qol::Get().inventory_auto_repair);
     EXPECT_EQ(GetItemData(ITEM_REPAIR_POWDER)->stack_kind, ITEM_STACK_MULTI);
+    EXPECT_TRUE(dungeon::GetRules().key_item_filter);
+    EXPECT_TRUE(dungeon::GetRules().auto_open_locked_doors);
 }
 
 TEST_F(QolFeatures, APlayersCopyTurnsOneOff) {

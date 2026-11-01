@@ -30,6 +30,7 @@
 #include "dngstatusdata.hpp"
 #include "dranmapfield.hpp"
 #include "dun/gameloop.hpp"
+#include "dungeon/doors.hpp"
 #include "dungeoneventman.hpp"
 #include "dungeonmap.hpp"
 #include "edit.hpp"
@@ -668,7 +669,8 @@ void DunMoveChara() {
                                                 run_action = false;
                                             } else if (GamePad.Down(PadInput_OK) != 0) {
                                                 gameTask = GAME_TASK_SCRIPT_START;
-                                                BtEventInfo.action_mode = 1;
+                                                // docs/DUNGEON.md: at a locked door with its key, as Square starts it.
+                                                BtEventInfo.action_mode = dungeon::AutoOpenLockedDoor(*state) ? 2 : 1;
                                                 run_action = false;
                                             }
                                         }
