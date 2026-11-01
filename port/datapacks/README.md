@@ -23,3 +23,17 @@ folder beside the executable). Taking `enhanced_fishing` out of `load_order` goe
 game's fishing; a save holding Ruty's rods keeps them as unknown items until it is back.
 
 A folder of the same name in `datapacks/` is used instead of the game's, for trying changes to it.
+
+## Quality of Life
+
+`qol/`: healing water restores the whole party, an Auto Repair Powder in the bag saves a breaking
+weapon, and Repair Powder goes in a quick slot (docs/QOL.md). To turn it on, name it in `load_order`
+as above, beside Enhanced fishing or alone:
+
+```sh
+echo '{ "schema_version": 1, "load_order": ["enhanced_fishing", "qol"] }' > "$packs/datapacks.json"
+```
+
+To turn one change off, copy the pack into `datapacks/qol/` and set its switch to `false` in
+`gameplay/qol/features.json`, or delete `gameplay/items/items.patch.json` to keep Repair Powder out of
+the quick slots.
