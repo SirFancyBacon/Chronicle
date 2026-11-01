@@ -14,6 +14,14 @@ plays as retail. The game ships them as the Quality of Life pack (`port/datapack
 
 Using Repair Powder from a quick slot plays the repair sound; retail has no message for it.
 
+The pack also turns on two of the dungeon's own changes, which the game has off without it
+(docs/DUNGEON.md), in `gameplay/dungeon/rules.json`:
+
+| Change | What it does |
+|---|---|
+| Key item filter | A dungeon event's item window lists only the items it takes: a floor's exit its item, a back floor's entrance its item, a locked door its key. |
+| Auto-open locked doors | Cross at a locked room door opens it when the bag holds its key. |
+
 ## Documents
 
 The first two changes are switches in `gameplay/qol/features.json`, read as the item documents are
