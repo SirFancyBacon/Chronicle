@@ -58,6 +58,7 @@
 #include "platform/settings.hpp"
 #include "platform/touch_overlay.hpp"
 #include "platform/window.hpp"
+#include "qol/features.hpp"
 #include "render/screen.hpp"
 #include "save/save_state.hpp"
 #include "snd.hpp"
@@ -567,7 +568,9 @@ int Run(int argc, const char **argv) {
     if (options.export_gameplay != nullptr) {
         // The tables are compiled in, so this needs no disc data, no window and no game.
         const std::filesystem::path directory = PathsFromUtf8(options.export_gameplay);
-        return item::Export(directory) && fishing::Export(directory) && dungeon::ExportRules(directory) ? kExitOk : kExitFailure;
+        return item::Export(directory) && fishing::Export(directory) && dungeon::ExportRules(directory) && qol::Export(directory)
+                   ? kExitOk
+                   : kExitFailure;
     }
     FirstRunIfNoData(options.headless);
     DC_ANDROID_TRACE("Run: first-run check passed");

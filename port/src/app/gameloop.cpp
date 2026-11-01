@@ -52,6 +52,7 @@
 #include "platform/datapacks.hpp"
 #include "platform/input.hpp"
 #include "platform/paths.hpp"
+#include "qol/features.hpp"
 #include "quest/host.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
@@ -861,6 +862,7 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
     item::Load();
     fishing::Load();
     dungeon::LoadRules();
+    qol::Load();
     // With one language there is nothing to choose: the game starts in it, past the language
     // select, as retail NTSC does. With several the select offers retail's five.
     std::vector<s32> languages = SupportedLanguages();

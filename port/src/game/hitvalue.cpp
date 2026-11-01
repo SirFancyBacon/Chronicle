@@ -12,6 +12,7 @@
 #include "menu_dungeon.hpp"
 #include "menu_inventory.hpp"
 #include "mglib.hpp"
+#include "qol/features.hpp"
 #include "rect.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
@@ -56,10 +57,19 @@ int BattleSubWeaponDmg(float amount, int kind) {
     weapon->durability_f = old_durability - wear;
 
     if (weapon->durability_f <= 0.0f) {
-        int powder_slot = static_cast<CDngStatusData *>(UserStatus)->CheckActItemSlot(ITEM_AUTO_REPAIR_POWDER);
+        auto *status = static_cast<CDngStatusData *>(UserStatus);
+        int   powder_slot = status->CheckActItemSlot(ITEM_AUTO_REPAIR_POWDER);
+        bool  repaired = false;
 
         if (powder_slot != -1) {
             DelActiveItem(powder_slot + 1);
+            repaired = true;
+        } else if (qol::Get().inventory_auto_repair && status->LostItem(ITEM_AUTO_REPAIR_POWDER) != -1) {
+            // QoL (docs/QOL.md): with none in a quick slot, one in the bag is used.
+            repaired = true;
+        }
+
+        if (repaired) {
             weapon->durability_f = weapon->durability;
             DngMessMan.message = 0xBC;
             DngMessMan.timer = 0xF0;
