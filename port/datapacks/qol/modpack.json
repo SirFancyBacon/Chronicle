@@ -2,6 +2,6 @@
   "schema_version": 1,
   "kind": "datapack",
   "name": "Quality of Life",
-  "description": "Healing water restores the whole party, Auto Repair Powder works from the bag, and Repair Powder goes in a quick slot.",
+  "description": "Healing water restores the whole party, Auto Repair Powder works from the bag, Repair Powder goes in a quick slot, item windows list only the items they take, and locked doors open with their key.",
   "version": "0.1.0"
 }
