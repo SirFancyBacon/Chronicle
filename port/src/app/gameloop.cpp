@@ -35,6 +35,7 @@
 #include "editloop3.hpp"
 #include "fishing/host.hpp"
 #include "gamemode.hpp"
+#include "georama/tables.hpp"
 #include "gamepad.hpp"
 #include "item/framework.hpp"
 #include "item/host.hpp"
@@ -886,6 +887,7 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
     fishing::Load();
     dungeon::LoadRules();
     dungeon::LoadLoot();
+    georama::Load();
     qol::Load();
     // After the items and fishing: a quest document names items, and counts catches.
     quest::LoadDocuments();

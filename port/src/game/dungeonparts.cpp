@@ -1660,6 +1660,18 @@ float QuarterTurnAngle(float turn) {
 
 } // namespace
 
+int AtraCenterFloor(int dungeon) {
+    return dungeon >= 0 && dungeon < static_cast<int>(CenterFloorTbl.size()) ? CenterFloorTbl[dungeon] : 0;
+}
+
+int AtraFloorCount(int dungeon) {
+    return dungeon >= 0 && dungeon < static_cast<int>(MaxFloorTbl.size()) ? MaxFloorTbl[dungeon] : 0;
+}
+
+bool AtraFloorOpen(int dungeon, int floor) {
+    return dungeon >= 0 && dungeon < static_cast<int>(MaxFloorTbl.size()) && chkAtraFloor(dungeon, floor) != 0;
+}
+
 void GetPieroItem(int map_no, int ura_dungeon, int *item0, int *item1) {
     const dungeon::ClownLists &clown = dungeon::Loot(map_no).clown[ura_dungeon != 0 ? 1 : 0];
     const auto                &lists = UserStatus->cur_floor < floorNum[map_no] ? clown.lower : clown.upper;
