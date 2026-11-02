@@ -15,6 +15,7 @@
 #include "itembombeffect.hpp"
 #include "itemdata.hpp"
 #include "menu_inventory.hpp"
+#include "menu_misc.hpp"
 #include "menu_save.hpp"
 #include "platform/datapacks.hpp"
 #include "qol/features.hpp"
@@ -74,6 +75,7 @@ TEST_F(QolFeatures, WithoutThePackEveryChangeIsOffAsRetailPlays) {
     Order("");
     EXPECT_FALSE(qol::Get().party_pool_restoration);
     EXPECT_FALSE(qol::Get().inventory_auto_repair);
+    EXPECT_FALSE(qol::Get().steady_favourite_food);
     EXPECT_EQ(GetItemData(ITEM_REPAIR_POWDER)->stack_kind, ITEM_STACK_NEVER);
     EXPECT_FALSE(dungeon::GetRules().key_item_filter);
     EXPECT_FALSE(dungeon::GetRules().auto_open_locked_doors);
@@ -83,6 +85,7 @@ TEST_F(QolFeatures, TheShippedPackTurnsEveryChangeOn) {
     Order(R"("qol")");
     EXPECT_TRUE(qol::Get().party_pool_restoration);
     EXPECT_TRUE(qol::Get().inventory_auto_repair);
+    EXPECT_TRUE(qol::Get().steady_favourite_food);
     EXPECT_EQ(GetItemData(ITEM_REPAIR_POWDER)->stack_kind, ITEM_STACK_MULTI);
     EXPECT_TRUE(dungeon::GetRules().key_item_filter);
     EXPECT_TRUE(dungeon::GetRules().auto_open_locked_doors);
@@ -184,12 +187,38 @@ TEST_F(QolParty, AnAutoRepairPowderInTheBagSavesABreakingWeaponOnlyWithThePack) 
     EXPECT_EQ(Weapon().durability_f, static_cast<float>(Weapon().durability));
 }
 
+TEST_F(QolParty, AFavouriteFoodGivesRangedFightersTheLeastAndMeleeTheMostOnlyWithThePack) {
+    // Each character's own treat, from the Fluffy Doughnut on, adds 5 to 7 defense.
+    auto eat = [](int chara) {
+        UserStatus->defense[chara] = 10;
+        EXPECT_EQ(ItemUseFunc(UserStatus, ITEM_FLUFFY_DOUGHNUT + chara, chara, ITEM_USE_ON_CHARA, nullptr), 1);
+        return UserStatus->defense[chara] - 10;
+    };
+    UserStatus->party_size = 6;
+
+    Order("");
+    for (int chara = 0; chara < 6; chara++) {
+        const int added = eat(chara);
+        EXPECT_GE(added, 5);
+        EXPECT_LE(added, 7);
+    }
+
+    Order(R"("qol")");
+    EXPECT_EQ(eat(CHARA_TOAN), 7);
+    EXPECT_EQ(eat(CHARA_XIAO), 5);
+    EXPECT_EQ(eat(CHARA_GORO), 7);
+    EXPECT_EQ(eat(CHARA_RUBY), 5);
+    EXPECT_EQ(eat(CHARA_UNGAGA), 7);
+    EXPECT_EQ(eat(CHARA_OSMOND), 5);
+}
+
 TEST_F(QolFeatures, TheExportIsEveryChangeOff) {
     ASSERT_TRUE(qol::Export(directory / "exported"));
     const auto document = nlohmann::json::parse(std::ifstream(directory / "exported/gameplay/qol/features.json"));
     EXPECT_EQ(document["kind"], "qol_features");
     EXPECT_EQ(document["party_pool_restoration"], false);
     EXPECT_EQ(document["inventory_auto_repair"], false);
+    EXPECT_EQ(document["steady_favourite_food"], false);
 }
 
 } // namespace
