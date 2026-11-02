@@ -2,5 +2,6 @@
   "schema_version": 2,
   "kind": "qol_features",
   "party_pool_restoration": true,
-  "inventory_auto_repair": true
+  "inventory_auto_repair": true,
+  "steady_favourite_food": true
 }

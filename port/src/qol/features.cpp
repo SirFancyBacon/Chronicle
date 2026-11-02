@@ -31,6 +31,7 @@ Features g_features;
 constexpr std::pair<const char *, bool Features::*> kSwitches[] = {
     {"party_pool_restoration", &Features::party_pool_restoration},
     {"inventory_auto_repair",  &Features::inventory_auto_repair },
+    {"steady_favourite_food",  &Features::steady_favourite_food },
 };
 
 Features Parse(const Json &document, std::set<std::string> &unknown) {

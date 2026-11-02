@@ -38,6 +38,7 @@
 #include "menu_manual.hpp"
 #include "menuitemstep.hpp"
 #include "mglib.hpp"
+#include "qol/features.hpp"
 #include "rect.hpp"
 #include "savedata.hpp"
 #include "shot_effect.hpp"
@@ -229,6 +230,13 @@ int ItemUseFunc(CUserStatus *status, int item_no, int chara, int target, WEAPON_
             }
 
             int add = data->vol + rand() % range;
+
+            // The QoL pack (docs/QOL.md): the least for those who fight from afar, the most for the rest. The
+            // roll is still drawn, so the game's random numbers run as retail's.
+            if (qol::Get().steady_favourite_food) {
+                const bool ranged = chara == CHARA_XIAO || chara == CHARA_RUBY || chara == CHARA_OSMOND;
+                add = ranged ? data->vol : data->vol + range - 1;
+            }
             MenuItemUseVolume = add;
             old += add;
 

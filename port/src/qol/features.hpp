@@ -14,6 +14,7 @@ namespace dc::qol {
 struct Features {
     bool party_pool_restoration = false; /**< Healing water refills the whole party's HP and water. */
     bool inventory_auto_repair = false;  /**< An Auto Repair Powder in the bag saves a breaking weapon too. */
+    bool steady_favourite_food = false;  /**< A favourite food's defense is its least for a ranged fighter, its most for melee. */
 };
 
 /**
