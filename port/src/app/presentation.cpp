@@ -589,6 +589,10 @@ bool GameScreenshot(std::vector<std::uint8_t> &rgba, std::uint32_t &width, std::
     return gfx::ReadbackTexture(gfx::kPreviousFrame, rgba, width, height);
 }
 
+bool GameScreenshotBetween(float moment, std::vector<std::uint8_t> &rgba, std::uint32_t &width, std::uint32_t &height) {
+    return g_list && gfx::RenderList(*g_list, moment, {.previous = g_previous_list.get(), .present = true}) && gfx::ReadbackFrame(rgba, width, height);
+}
+
 bool GameScreenshotWithFps(std::vector<std::uint8_t> &rgba, std::uint32_t &width, std::uint32_t &height) {
     const gfx::DisplayList *overlay = FpsOverlayList();
     return overlay != nullptr && gfx::RenderList(*overlay, 1.0f, {.present = false, .host = true}) &&

@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -34,6 +36,10 @@ struct Mirror {
     std::uint64_t                                            drawn = 0;
     std::uint64_t                                            skipped = 0;
     std::uint64_t                                            elsewhere = 0;
+    noktus::ObjectKey                                        key = noktus::ObjectKey::None;
+    bool                                                     still = false;
+    float                                                    jump_distance = std::numeric_limits<float>::infinity();
+    bool                                                     vertices_move = false;
 };
 
 // A mirror is a test tool: whatever goes wrong in it, the game plays on.
@@ -68,6 +74,13 @@ void WriteLastPicture() {
             const std::vector<std::uint8_t> pixels = noktus::ReadScreen(*mirror.renderer, &width, &height);
             if (!pixels.empty()) {
                 gfx::WritePng(mirror.path, pixels.data(), width, height);
+            }
+            if (const std::optional<float> moment = MirrorMoment()) {
+                mirror.renderer->DrawBetweenTicks(*moment);
+                const std::vector<std::uint8_t> between = noktus::ReadScreen(*mirror.renderer, &width, &height);
+                if (!between.empty()) {
+                    gfx::WritePng(std::filesystem::path(mirror.path).replace_extension(".between.png"), between.data(), width, height);
+                }
             }
         });
         std::fprintf(stderr, "noktus mirror: %llu drawn, %llu skipped for a texture it lacks, %llu to other targets, %llu dropped\n",
@@ -153,6 +166,10 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
     }
     mirror.renderer->SetCamera(scene.camera);
     draw = std::move(scene.draw);
+    draw.key = mirror.key;
+    draw.still = mirror.still;
+    draw.jump_distance = mirror.jump_distance;
+    draw.vertices_move = mirror.vertices_move;
     return true;
 }
 
@@ -193,6 +210,14 @@ bool MirrorOn() {
     return RequestedPath() != nullptr && !g_failed;
 }
 
+std::optional<float> MirrorMoment() {
+    static const char *moment = std::getenv("DC_NOKTUS_MOMENT");
+    if (moment == nullptr || *moment == '\0') {
+        return std::nullopt;
+    }
+    return std::strtof(moment, nullptr);
+}
+
 void MirrorBeginTick() {
     if (!MirrorOn()) {
         return;
@@ -219,6 +244,34 @@ void MirrorEndTick() {
     if (mirror.open) {
         Guarded([&] { mirror.renderer->EndTick(); });
         mirror.open = false;
+    }
+}
+
+void MirrorMotion(gfx::InterpKey key, bool no_interpolation, float teleport_distance, bool blend_vertices) {
+    if (!MirrorOn()) {
+        return;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    mirror.key = static_cast<noktus::ObjectKey>(key);
+    mirror.still = no_interpolation;
+    mirror.jump_distance = teleport_distance;
+    mirror.vertices_move = blend_vertices;
+}
+
+void MirrorCutMotion() {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.renderer) {
+        Guarded([&] { mirror.renderer->CutMotion(); });
+    }
+}
+
+void MirrorCutCameraMotion() {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.renderer) {
+        Guarded([&] { mirror.renderer->CutCameraMotion(); });
     }
 }
 

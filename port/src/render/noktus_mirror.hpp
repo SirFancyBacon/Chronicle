@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <span>
 
 #include "gfx/gfx.hpp"
@@ -9,12 +10,21 @@ namespace dc::render {
 
 // DC_NOKTUS_MIRROR=<path>: alongside today's renderer, draws the same 2D through Noktus Nimbus, offscreen, and writes its last picture
 // to path at exit. Noktus is built up against today's picture this way while the game keeps running on today's renderer.
+// DC_NOKTUS_MOMENT=<0 to 1>: also writes the last tick as drawn that far from the tick before, beside it as <name>.between.png.
 
 /** Whether a mirror was asked for. */
 bool MirrorOn();
 
+/** The moment asked for by DC_NOKTUS_MOMENT, if any. */
+std::optional<float> MirrorMoment();
+
 void MirrorBeginTick();
 void MirrorEndTick();
+
+/** Who the mesh draws from now on belong to, and how they move between ticks. */
+void MirrorMotion(gfx::InterpKey key, bool no_interpolation, float teleport_distance, bool blend_vertices);
+void MirrorCutMotion();
+void MirrorCutCameraMotion();
 
 /** Notes a texture's contents, for the textures Chronicle makes itself. */
 void MirrorTexture(gfx::TextureHandle texture, const gfx::TextureDesc &desc);

@@ -10,6 +10,7 @@
 #include "platform/load_work_profile.hpp"
 #include "render/draw3d.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "renderinfo.hpp"
 #include "texture.hpp"
 
@@ -179,7 +180,7 @@ void Draw3DDrawVisual(const Draw3DVisual &visual, const float model[4][4], const
     // A visual drawn outside a CFrame is known by its record, unless the record lasts one tick.
     bool unkeyed = gfx::CurrentInterpKey() == 0 && !visual.immediate;
     if (unkeyed) {
-        gfx::SetInterpKey(reinterpret_cast<uintptr_t>(&visual));
+        render::SetInterpKey(reinterpret_cast<uintptr_t>(&visual));
     }
     if (projected) {
         constants.flags = gfx::kMeshShadow;
@@ -288,7 +289,7 @@ void Draw3DDrawVisual(const Draw3DVisual &visual, const float model[4][4], const
         }
     }
     if (unkeyed) {
-        gfx::SetInterpKey(0);
+        render::SetInterpKey(0);
     }
 
     if (projected) {
@@ -303,11 +304,11 @@ void Draw3DDrawVisual(const Draw3DVisual &visual, const float model[4][4], const
 
 Draw3DIdentityScope::Draw3DIdentityScope(const void *object, float teleport_distance, bool blend_vertices)
     : key(gfx::CurrentInterpKey()), no_interpolation(gfx::CurrentNoInterpolation()) {
-    gfx::SetInterpKey(reinterpret_cast<uintptr_t>(object), false, teleport_distance, blend_vertices);
+    render::SetInterpKey(reinterpret_cast<uintptr_t>(object), false, teleport_distance, blend_vertices);
 }
 
 Draw3DIdentityScope::~Draw3DIdentityScope() {
-    gfx::SetInterpKey(key, no_interpolation);
+    render::SetInterpKey(key, no_interpolation);
 }
 
 } // namespace dc::render

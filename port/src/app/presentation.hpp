@@ -99,6 +99,9 @@ std::string GameFpsText();
  */
 bool GameScreenshotWithFps(std::vector<std::uint8_t> &rgba, std::uint32_t &width, std::uint32_t &height);
 
+/** The last tick as a display frame shows it that far from the tick before, for comparing renderers. */
+bool GameScreenshotBetween(float moment, std::vector<std::uint8_t> &rgba, std::uint32_t &width, std::uint32_t &height);
+
 /**
  * The newest canonical image (or the loading screen's frame, if it presented since), RGBA8 rows top
  * to bottom: what --screenshot writes. A display frame, and so the FPS counter, never is. Outside a

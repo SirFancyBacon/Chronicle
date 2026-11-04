@@ -61,6 +61,7 @@
 #include "platform/touch_overlay.hpp"
 #include "platform/window.hpp"
 #include "qol/features.hpp"
+#include "render/noktus_mirror.hpp"
 #include "render/passes.hpp"
 #include "render/screen.hpp"
 #include "save/save_state.hpp"
@@ -539,6 +540,13 @@ int Screenshot(const char *path) {
     if (!grabbed || !gfx::WritePng(PathsFromUtf8(path), pixels.data(), width, height)) {
         std::fprintf(stderr, "cannot write the screenshot to %s\n", path);
         return kExitFailure;
+    }
+    if (const std::optional<float> moment = render::MirrorMoment()) {
+        // Noktus's picture of the same moment is written beside its own at exit.
+        std::vector<uint8_t> between;
+        if (GameScreenshotBetween(*moment, between, width, height)) {
+            gfx::WritePng(PathsFromUtf8(path).replace_extension(".between.png"), between.data(), width, height);
+        }
     }
     const char *rgba = std::getenv("DC_SCREENSHOT_RGBA");
     if (rgba != nullptr && std::string_view(rgba) == "1") {

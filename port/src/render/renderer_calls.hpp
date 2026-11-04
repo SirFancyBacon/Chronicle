@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include <string_view>
 #include <utility>
 
@@ -23,8 +24,6 @@ DC_RENDERER_CALL(CanCopyMainDepth)
 DC_RENDERER_CALL(CreateTexture)
 DC_RENDERER_CALL(CurrentFrameLayout)
 DC_RENDERER_CALL(CurrentRenderTarget)
-DC_RENDERER_CALL(CutCameraInterpolation)
-DC_RENDERER_CALL(CutInterpolation)
 DC_RENDERER_CALL(DepthPlanesAvailable)
 DC_RENDERER_CALL(DepthResult)
 DC_RENDERER_CALL(EndFrame)
@@ -45,6 +44,25 @@ DC_RENDERER_CALL(UpdateTextureNow)
 DC_RENDERER_CALL(VisibleLogicalRect)
 
 #undef DC_RENDERER_CALL
+
+inline void CutInterpolation() {
+    if (MirrorOn()) {
+        MirrorCutMotion();
+    }
+    gfx::CutInterpolation();
+}
+
+inline void CutCameraInterpolation() {
+    if (MirrorOn()) {
+        MirrorCutCameraMotion();
+    }
+    gfx::CutCameraInterpolation();
+}
+
+inline void SetInterpKey(gfx::InterpKey key, bool no_interpolation = false, float teleport_distance = std::numeric_limits<float>::infinity(), bool blend_vertices = false) {
+    MirrorMotion(key, no_interpolation, teleport_distance, blend_vertices);
+    gfx::SetInterpKey(key, no_interpolation, teleport_distance, blend_vertices);
+}
 
 inline void UpdateMeshVertices(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices) {
     if (MirrorOn()) {
