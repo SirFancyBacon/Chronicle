@@ -1,5 +1,6 @@
 #include "render/noktus_mirror.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -133,9 +134,6 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
         return false;
     }
     MeshScene scene = ToMeshScene(constants, *transform, texture, state);
-    if (scene.draw.material.shadow_volume != noktus::ShadowVolume::None) {
-        return false;
-    }
     if (texture.texture != gfx::kNullTexture) {
         const auto found = mirror.textures.find(texture.texture);
         if (found == mirror.textures.end()) {
@@ -294,6 +292,14 @@ void MirrorClear(bool color, const std::uint8_t *rgba, bool depth, float depth_v
     Guarded([&] { mirror.renderer->Clear(clear, color, depth_value, depth); });
 }
 
+void MirrorClearStencil() {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.open && gfx::CurrentRenderTarget() == gfx::kMainTarget) {
+        Guarded([&] { mirror.renderer->ClearShadowVolumes(); });
+    }
+}
+
 void MirrorCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
@@ -365,9 +371,6 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     const bool textured = texture.texture != gfx::kNullTexture;
     noktus::Draw2D draw;
     draw.material = ToMaterial(state, texture);
-    if (draw.material.shadow_volume != noktus::ShadowVolume::None) {
-        return;
-    }
     if (textured) {
         const auto found = mirror.textures.find(texture.texture);
         if (found == mirror.textures.end()) {
@@ -389,6 +392,21 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     draw.vertices = converted;
     draw.primitive = ToPrimitive(primitive);
     draw.layer = ToLayer(CurrentLayer2D());
+    // Whole draws anchor by the centre of their bounds, as today's renderer decides it.
+    const gfx::UiAnchor anchor = gfx::CurrentUiAnchor();
+    float               low_x = vertices[0].x, high_x = vertices[0].x, low_y = vertices[0].y, high_y = vertices[0].y;
+    for (const gfx::Vertex2D &vertex : vertices) {
+        low_x = std::min(low_x, vertex.x);
+        high_x = std::max(high_x, vertex.x);
+        low_y = std::min(low_y, vertex.y);
+        high_y = std::max(high_y, vertex.y);
+    }
+    const float centre_x = (low_x + high_x) * 0.5f;
+    const float centre_y = (low_y + high_y) * 0.5f;
+    if (state.depth_test == gfx::DepthTest::Always && !state.depth_write) {
+        draw.anchor.x = centre_x < anchor.left_until ? -1 : centre_x >= anchor.right_from ? 1 : 0;
+        draw.anchor.y = centre_y < anchor.top_until ? -1 : centre_y >= anchor.bottom_from ? 1 : 0;
+    }
     Guarded([&] { mirror.renderer->Draw(draw); });
     mirror.drawn++;
 }

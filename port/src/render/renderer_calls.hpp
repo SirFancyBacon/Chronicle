@@ -19,7 +19,6 @@ namespace dc::render {
 DC_RENDERER_CALL(BeginFrame)
 DC_RENDERER_CALL(BeginRecording)
 DC_RENDERER_CALL(CanCopyMainDepth)
-DC_RENDERER_CALL(ClearStencil)
 DC_RENDERER_CALL(CopyMainDepthToTarget)
 DC_RENDERER_CALL(CreateRenderTarget)
 DC_RENDERER_CALL(CreateTexture)
@@ -65,6 +64,13 @@ inline void Clear(bool color, const std::uint8_t *rgba, bool depth, float depth_
         MirrorClear(color, rgba, depth, depth_value);
     }
     gfx::Clear(color, rgba, depth, depth_value, rect, presentation_rect);
+}
+
+inline void ClearStencil(std::uint8_t value, const gfx::LogicalRect *rect = nullptr) {
+    if (MirrorOn()) {
+        MirrorClearStencil();
+    }
+    gfx::ClearStencil(value, rect);
 }
 
 inline void SetUiAnchor(const gfx::UiAnchor &anchor) {

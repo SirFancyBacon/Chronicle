@@ -24,6 +24,7 @@ void MirrorDestroyTexture(gfx::TextureHandle texture);
 
 void MirrorCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHandle to, std::int32_t x, std::int32_t y);
 void MirrorClear(bool color, const std::uint8_t *rgba, bool depth, float depth_value);
+void MirrorClearStencil();
 
 void MirrorCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices);
 void MirrorUpdateMesh(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices);
