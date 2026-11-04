@@ -23,7 +23,7 @@ void MirrorTexturePixels(gfx::TextureHandle texture, std::uint32_t level, std::u
 void MirrorDestroyTexture(gfx::TextureHandle texture);
 
 void MirrorCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHandle to, std::int32_t x, std::int32_t y);
-void MirrorClear(bool color, const std::uint8_t *rgba, bool depth, float depth_value);
+void MirrorClear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect);
 void MirrorClearStencil();
 
 void MirrorSurface(gfx::TextureHandle target, std::uint32_t width, std::uint32_t height, bool has_alpha, bool shares_depth, bool frame_target);

@@ -2260,7 +2260,6 @@ void DunMainDraw() {
     if (BtEventMode != 0) {
         sceVu0FVECTOR focus = {200.0f, 500.0f, 0.0f, 0.0f};
 
-        render::PassScope depth_of_field(render::Pass::DepthOfField);
         DepthOfField(focus, 3, 0x40, 0);
     }
 

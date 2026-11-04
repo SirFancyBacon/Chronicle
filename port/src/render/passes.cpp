@@ -73,6 +73,7 @@ std::uint64_t                g_route_checked = 0;
 std::uint64_t                g_mesh_checked = 0;
 std::uint64_t                g_mesh_lost = 0;
 std::uint64_t                g_route_lost = 0;
+std::uint64_t                g_copy_unsaid = 0;
 std::uint64_t                g_layer_wrong = 0;
 bool                         g_tracing = false;
 std::string                  g_path;
@@ -111,7 +112,7 @@ void WriteTrace() {
         }
         out << "]}";
     }
-    out << "\n ],\n \"kinds\": {";
+    out << "\n ],\n \"copy_unsaid\": " << g_copy_unsaid << ",\n \"kinds\": {";
     first = true;
     for (const auto &[key, count] : g_kinds) {
         out << (first ? "" : ", ") << "\"" << key << "\": " << count;
@@ -154,6 +155,13 @@ void CountDraw() {
     }
 }
 
+void NoteCopy(gfx::Rect src_rect, gfx::Rect dst_rect) {
+    if (!g_tracing) {
+        return;
+    }
+    g_copy_unsaid += src_rect.w < 0 || src_rect.h < 0 || dst_rect.w < 0 || dst_rect.h < 0 || src_rect.x < 0 || src_rect.y < 0 || dst_rect.x < 0 || dst_rect.y < 0;
+}
+
 void CountCopy() {
     if (g_tracing) {
         Current().copies++;
@@ -173,7 +181,10 @@ void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
     const bool ui = state.depth_test == gfx::DepthTest::Always && !state.depth_write && !samples_frame;
     const bool untextured = texture.texture == gfx::kNullTexture;
     const bool quads = primitive == gfx::Primitive::Quads || (primitive == gfx::Primitive::TriangleStrip && vertices.size() == 4);
-    const gfx::LogicalRect frame = gfx::LogicalFrame();
+    const auto             drawn_on = gfx::GetTextureInfo(target);
+    const bool             on_main = target == gfx::kMainTarget;
+    const gfx::LogicalRect frame = on_main || !drawn_on ? gfx::LogicalFrame()
+                                                        : gfx::LogicalRect{0.0f, 0.0f, static_cast<float>(drawn_on->width), static_cast<float>(drawn_on->height)};
     bool covers = false;
     bool reaches = false;
     if (quads) {
@@ -190,7 +201,8 @@ void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
                        (low_y <= frame.y && high_y > frame.y) || (high_y >= frame.y + frame.h && low_y < frame.y + frame.h);
         }
     }
-    if (target != gfx::kMainTarget) {
+    // A surface with nothing past its frame has no edges to carry a draw out to, so every layer means the same there.
+    if (!on_main && !(drawn_on && (drawn_on->shares_main_depth || drawn_on->frame_target))) {
         return;
     }
     const Layer2D declared = CurrentLayer2D();
@@ -201,7 +213,9 @@ void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
         rule = Layer2D::Window;
     }
     // A window-wide draw tiled like a fade has tiles that reach no edge: only the rule's layers that can't be a tile of it disagree.
-    const bool agrees = declared == rule || (declared == Layer2D::Window && !covers);
+    // Off the screen nothing follows the interface size, so Ui and World are one.
+    const auto stays = [](Layer2D layer) { return layer == Layer2D::Ui || layer == Layer2D::World; };
+    const bool agrees = declared == rule || (declared == Layer2D::Window && !covers) || (!on_main && stays(declared) && stays(rule));
     g_layer_checked++;
     if (!agrees && g_layer_differs) {
         g_layer_differing++;

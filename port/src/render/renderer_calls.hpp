@@ -56,7 +56,7 @@ inline void UpdateMeshVertices(gfx::MeshHandle mesh, std::uint32_t first, std::s
 inline void Clear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect = nullptr,
                   const gfx::LogicalRect *presentation_rect = nullptr) {
     if (MirrorOn()) {
-        MirrorClear(color, rgba, depth, depth_value);
+        MirrorClear(color, rgba, depth, depth_value, rect);
     }
     gfx::Clear(color, rgba, depth, depth_value, rect, presentation_rect);
 }
@@ -85,8 +85,13 @@ inline gfx::TextureHandle CreateRenderTarget(std::uint32_t width, std::uint32_t 
 
 inline gfx::TextureHandle NamedRenderTarget(std::string_view name, std::uint32_t width, std::uint32_t height, bool has_alpha, bool share_main_depth = false,
                                             bool frame_target = false) {
+    const gfx::TextureHandle before = MirrorOn() ? gfx::FindNamedRenderTarget(name) : gfx::kNullTexture;
     const gfx::TextureHandle target = gfx::NamedRenderTarget(name, width, height, has_alpha, share_main_depth, frame_target);
     if (MirrorOn()) {
+        // A name asked for in a new shape is a new target, and the old one is gone.
+        if (before != gfx::kNullTexture && before != target) {
+            MirrorDestroyTexture(before);
+        }
         MirrorSurface(target, width, height, has_alpha, share_main_depth, frame_target);
     }
     return target;

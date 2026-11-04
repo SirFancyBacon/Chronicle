@@ -1010,7 +1010,8 @@ void StretchColour24(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHan
         std::memset(corners[i].color, 0x80, sizeof(corners[i].color));
     }
 
-    gfx::TextureHandle previous = render::CurrentRenderTarget();
+    render::Layer2DScope layer(render::Layer2D::Window);
+    gfx::TextureHandle   previous = render::CurrentRenderTarget();
     render::SetRenderTarget(dst);
     render::Draw2D(gfx::Primitive::Quads, corners, binding, state);
     render::SetRenderTarget(previous);

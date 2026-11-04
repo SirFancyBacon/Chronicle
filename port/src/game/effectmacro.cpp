@@ -446,6 +446,7 @@ LowHaze PrepareLowHaze(gfx::TextureHandle snapshot, const gfx::LogicalRect &visi
 // planes spaced in 1/z, so foreground objects stay stable while the distant scenery gains haze
 // gradually. The two outermost columns do not wander past the edges of the image.
 void DepthOfField(float *focus, int level, int alpha, int blur) {
+    render::PassScope pass(render::Pass::DepthOfField);
     gfx::TextureHandle target = render::CurrentRenderTarget();
     bool               haze = blur > 0;
     const HazeRange    range = HazeRangeOf(focus);

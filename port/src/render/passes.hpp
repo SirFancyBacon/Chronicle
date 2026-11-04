@@ -1,12 +1,13 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
 
 #include "gfx/gfx.hpp"
 #include "render/noktus_mirror.hpp"
-#include "render/passes.hpp"
 
 namespace dc::render {
 
@@ -92,6 +93,8 @@ private:
 /** Counts a draw or copy against the current pass while a trace runs. */
 void CountDraw();
 void CountCopy();
+/** For a trace: counts copies with a flipped rectangle or one starting outside its image, which nothing makes today and Noktus can't say. */
+void NoteCopy(gfx::Rect src_rect, gfx::Rect dst_rect);
 
 /** A draw's state and texture, as they stand after the trip through Noktus's material. */
 struct Routed {
@@ -138,6 +141,17 @@ inline void DrawDepthPlanes2D(const gfx::DepthPlanes2D &planes, std::span<const 
                               const gfx::TextureBinding &texture, const gfx::DrawState &state) {
     CountDraw();
     const Routed routed = Route(texture, state);
+    if (MirrorOn()) {
+        std::array<gfx::Vertex2D, 4> plane;
+        std::ranges::copy(quad, plane.begin());
+        for (std::uint32_t i = 0; i < planes.count; i++) {
+            for (gfx::Vertex2D &vertex : plane) {
+                vertex.z = planes.depth[i];
+                vertex.color[3] = planes.alpha[i];
+            }
+            MirrorDraw2D(gfx::Primitive::Quads, plane, routed.texture, routed.state);
+        }
+    }
     gfx::DrawDepthPlanes2D(planes, quad, routed.texture, routed.state);
 }
 
@@ -168,6 +182,7 @@ inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span
 inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, std::int32_t dst_x,
                         std::int32_t dst_y) {
     CountCopy();
+    NoteCopy(src_rect, gfx::Rect{dst_x, dst_y, src_rect.w, src_rect.h});
     if (MirrorOn()) {
         MirrorCopyTexture(src, src_rect, dst, dst_x, dst_y);
     }
@@ -177,6 +192,7 @@ inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::Texture
 inline bool BlitTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, gfx::Rect dst_rect,
                         gfx::Filter filter) {
     CountCopy();
+    NoteCopy(src_rect, dst_rect);
     if (MirrorOn()) {
         MirrorBlit(src, src_rect, dst, dst_rect, filter);
     }
