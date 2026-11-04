@@ -113,7 +113,8 @@ a language the data lacks, and its English button reads as the disc's art does.
 
 Environment: `DC_DATA` and `DC_SAVE` (above), `DC_INPUT` (above), `DC_AUDIO=off` (no audio
 device), `DC_AUDIO_WAV` and `DC_AUDIO_TRACE` (see "Audio"), `DC_VULKAN_VALIDATION` (enable the Khronos validation layer in a
-release build; a debug build always asks for it), `DC_PRESENT_STATS=1` (print
+release build; a debug build always asks for it), `DC_PASS_TRACE=<path>` (write each shape of frame seen, its render passes in order with their draws and copies, as JSON at exit;
+`port/src/render/passes.hpp`), `DC_PRESENT_STATS=1` (print
 draws per tick and render times at exit, and what the FPS counter said last
 when it is on), `DC_FISHING_TRACE=1` (print a fishing session's steps and each fish's actions about the
 bait, docs/FISHING_FRAMEWORK.md), and SDL's own variables.

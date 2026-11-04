@@ -61,6 +61,7 @@
 #include "platform/touch_overlay.hpp"
 #include "platform/window.hpp"
 #include "qol/features.hpp"
+#include "render/passes.hpp"
 #include "render/screen.hpp"
 #include "save/save_state.hpp"
 #include "snd.hpp"
@@ -624,6 +625,7 @@ int Run(int argc, const char **argv) {
         std::fprintf(stderr, "bad --town-dungeon: %s\n", options.town_dungeon);
         std::exit(kExitUsage);
     }
+    render::PassTraceStart();
     if (options.town_clock == nullptr) {
         options.town_clock = std::getenv("DC_TOWN_CLOCK");
     }

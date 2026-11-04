@@ -76,6 +76,7 @@
 #include "platform/input.hpp"
 #include "randomitem.hpp"
 #include "rect.hpp"
+#include "render/passes.hpp"
 #include "runeffect.hpp"
 #include "runscript_opcodes.hpp"
 #include "savedata.hpp"
@@ -2176,6 +2177,7 @@ CTexture *NamedTexture(const char *name) {
 } // namespace
 
 void DunMainDraw() {
+    render::PassScope frame(render::Pass::TextureAnimation);
     sceVu0FMATRIX camera;
     sceVu0FVECTOR eye;
     sceVu0FMATRIX view;
@@ -2224,8 +2226,10 @@ void DunMainDraw() {
 
     TexManager.ReloadTexture(Vif1Packet, 3);
     BtTexAnime.TexAnime(3);
+    render::SetPass(render::Pass::Sky);
     NowDngMap->DrawBGModel(NowCamera__3);
     NowDngMap->DrawDummyModel(NowCamera__3);
+    render::SetPass(render::Pass::Ground);
 
     if (NowDngMap->map_type == 1) {
         NowDngMap->DrawMap(NowCamera__3, CharaFrame);
@@ -2254,6 +2258,7 @@ void DunMainDraw() {
     if (BtEventMode != 0) {
         sceVu0FVECTOR focus = {200.0f, 500.0f, 0.0f, 0.0f};
 
+        render::PassScope depth_of_field(render::Pass::DepthOfField);
         DepthOfField(focus, 3, 0x40, 0);
     }
 
@@ -2265,7 +2270,9 @@ void DunMainDraw() {
         NowDngMap->DrawAtraBoll(atra_pos);
     }
 
+    render::SetPass(render::Pass::Shadows);
     Draw_MainUnitShadow();
+    render::SetPass(render::Pass::Characters);
 
     if (BtActStatus.player_visible != 0 && EdEventInfo.player_draw != 0) {
         Draw_MainUnit();
@@ -2304,6 +2311,7 @@ void DunMainDraw() {
 
     NowDngMap->DrawNPCDraw();
     mainItemModel.Draw();
+    render::SetPass(render::Pass::Water);
     TexManager.ReloadTexture(Vif1Packet, 6);
     DrawWaterLing();
 
@@ -2327,6 +2335,7 @@ void DunMainDraw() {
         NowDngMap->DrawWater(water_pos, driveStepHold);
     }
 
+    render::SetPass(render::Pass::Effects);
     if (CEffectHyde == 0 && BtEventMode == 0) {
         TexManager.ReloadTexture(Vif1Packet, 0x13);
         NowShockWave->Draw(NowCamera__3);
@@ -2553,6 +2562,7 @@ void DunMainDraw() {
             MGSetGsZBUF(nullptr);
         }
 
+        render::SetPass(render::Pass::Overlay);
         if (rogoSwitch2 == 1 && BtEventInfo.floor_title_off == 0) {
             TEX_Floor1 = TexManager.GetTexture(floor_name, -1);
             TexManager.ReloadTexture(Vif1Packet, 8);
@@ -2703,6 +2713,7 @@ void DunMainDraw() {
         DebugInfomationDraw();
     }
 
+    render::SetPass(render::Pass::Fade);
     DispFade__3.FadeIn(Vif1Packet);
     DispFade__3.FadeOut(Vif1Packet);
     EdFadeInOut();

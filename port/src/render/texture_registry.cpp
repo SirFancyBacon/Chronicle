@@ -30,6 +30,7 @@
 #include "platform/load_work_profile.hpp"
 #include "platform/png_image.hpp"
 #include "render/gs_state.hpp"
+#include "render/passes.hpp"
 #include "render/screen.hpp"
 #include "texture.hpp"
 
@@ -828,7 +829,7 @@ bool PortMoveImage(unsigned src_tbp, unsigned src_psm, int x, int y, int width, 
                    dst_tbp);
         return false;
     }
-    return gfx::CopyTexture(src.texture, gfx::Rect{.x = x, .y = y, .w = width, .h = height}, dst.texture, dst_x, dst_y);
+    return render::CopyTexture(src.texture, gfx::Rect{.x = x, .y = y, .w = width, .h = height}, dst.texture, dst_x, dst_y);
 }
 
 bool PortMoveImage(const sceGsTex0 &src, int x, int y, int width, int height, const sceGsTex0 &dst, int dst_x,

@@ -60,6 +60,7 @@
 #include "quest/host.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
+#include "render/passes.hpp"
 #include "save/extension.hpp"
 #include "save/save_slots.hpp"
 #include "savedata.hpp"
@@ -313,7 +314,30 @@ void StartNewGame() {
 }
 
 // One frame of the current mode; a non-zero result ends it.
+// Modes with one kind of picture are one pass. A town's and a dungeon's world frame names its own passes, and what they draw
+// outside it is their menus.
+render::Pass ModePass() {
+    switch (mode) {
+        case GAME_MODE_TITLE:
+            return render::Pass::Title;
+        case GAME_MODE_RUSH_MOVIE:
+            return render::Pass::Attract;
+        case GAME_MODE_OPENING:
+            return render::Pass::Opening;
+        case GAME_MODE_LANGUAGE:
+        case GAME_MODE_MENU:
+        case GAME_MODE_SAVE:
+        case GAME_MODE_MEMORY_CHECK:
+        case GAME_MODE_TRIAL_END:
+        case GAME_MODE_LOADER:
+            return render::Pass::Screen;
+        default:
+            return render::Pass::Menu;
+    }
+}
+
 int ModeLoop(bool &skip_title) {
+    render::PassScope pass(ModePass());
     switch (mode) {
         case GAME_MODE_LANGUAGE:
             return LangsetLoop();

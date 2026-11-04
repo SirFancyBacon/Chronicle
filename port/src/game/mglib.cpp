@@ -27,6 +27,7 @@
 #include "rect.hpp"
 #include "render/draw3d.hpp"
 #include "render/gs_state.hpp"
+#include "render/passes.hpp"
 #include "render/screen.hpp"
 #include "renderinfo.hpp"
 #include "text/textwipe.hpp"
@@ -192,8 +193,8 @@ void BlitWithin(gfx::TextureHandle texture, gfx::Rect src, gfx::Rect dst, gfx::F
         scratch = gfx::CreateRenderTarget(scratch_width, scratch_height, true, false, frame);
     }
     gfx::Rect middle = {0, 0, static_cast<int32_t>(width), static_cast<int32_t>(height)};
-    gfx::BlitTexture(texture, src, scratch, middle, gfx::Filter::Nearest);
-    gfx::BlitTexture(scratch, middle, texture, dst, filter);
+    render::BlitTexture(texture, src, scratch, middle, gfx::Filter::Nearest);
+    render::BlitTexture(scratch, middle, texture, dst, filter);
 }
 
 bool IsFrame(const sceGsTex0 &tex0) {
@@ -208,9 +209,9 @@ void Blit(const ResolvedRect &src, const ResolvedRect &dst, gfx::Filter filter) 
         BlitWithin(src.texture, src.rect, dst.rect, filter);
     } else if (src.rect.w == dst.rect.w && src.rect.h == dst.rect.h && src.texture != gfx::kMainTarget &&
                src.texture != gfx::kPreviousFrame && dst.texture != gfx::kMainTarget) {
-        gfx::CopyTexture(src.texture, src.rect, dst.texture, dst.rect.x, dst.rect.y);
+        render::CopyTexture(src.texture, src.rect, dst.texture, dst.rect.x, dst.rect.y);
     } else {
-        gfx::BlitTexture(src.texture, src.rect, dst.texture, dst.rect, filter);
+        render::BlitTexture(src.texture, src.rect, dst.texture, dst.rect, filter);
     }
 }
 
@@ -392,6 +393,7 @@ void MGInitVif1Packet(u_long128 * /*buffer0*/, u_long128 * /*buffer1*/) {}
 // A tick records its drawing as a display list; MGEndFrame renders it. A frame someone opened
 // with gfx::BeginFrame is drawn into as it is.
 void MGBeginFrame() {
+    render::PassTraceBeginTick();
     if (!gfx::InFrame()) {
         gfx::BeginRecording();
         if (MGPortTakeInterpolationCut()) {
@@ -973,7 +975,7 @@ void StretchColour24(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHan
     }
     gfx::Rect whole = {0, 0, static_cast<int32_t>(width), static_cast<int32_t>(height)};
     if (src == gfx::kMainTarget ? !gfx::SnapshotFrame(colour)
-                                : !gfx::BlitTexture(src, whole, colour, whole, gfx::Filter::Nearest)) {
+                                : !render::BlitTexture(src, whole, colour, whole, gfx::Filter::Nearest)) {
         return;
     }
 
@@ -1007,7 +1009,7 @@ void StretchColour24(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHan
 
     gfx::TextureHandle previous = gfx::CurrentRenderTarget();
     gfx::SetRenderTarget(dst);
-    gfx::Draw2D(gfx::Primitive::Quads, corners, binding, state);
+    render::Draw2D(gfx::Primitive::Quads, corners, binding, state);
     gfx::SetRenderTarget(previous);
 }
 
@@ -1078,7 +1080,7 @@ void MGFillBox(const CRect_i_ &rect, unsigned char r, unsigned char g, unsigned 
         corners[i].color[3] = a;
         corners[i].fog = 0xFF;
     }
-    gfx::Draw2D(gfx::Primitive::Quads, corners, {}, state);
+    render::Draw2D(gfx::Primitive::Quads, corners, {}, state);
 
     current.test = mgPixelTest;
     current.zbuf = mgZBuffer;
@@ -1192,7 +1194,7 @@ void MGEndDrawShadow(u_char alpha) {
             quad[i].color[3] = alpha;
             quad[i].fog = 0xFF;
         }
-        gfx::Draw2D(gfx::Primitive::Quads, quad, {}, state);
+        render::Draw2D(gfx::Primitive::Quads, quad, {}, state);
     }
 
     MGPortRestoreRegisters();

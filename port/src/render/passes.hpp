@@ -1,0 +1,111 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <span>
+
+#include "gfx/gfx.hpp"
+
+namespace dc::render {
+
+/**
+ * The named stretches of a tick's drawing, so the frame's shape is written down in the code rather than implied by the order
+ * of its calls. Naming a pass draws nothing and changes nothing.
+ */
+enum class Pass : std::uint8_t {
+    Unnamed,          /**< Drawing nothing has named yet: a trace reports it, and there should be none. */
+    TextureAnimation, /**< Copies that animate textures, before a world frame draws. */
+    Sky,              /**< Sky, sun and moon. */
+    Ground,           /**< The town's ground, parts and the dungeon's map. */
+    Fishing,          /**< The fish and the fishing line. */
+    Water,            /**< The frame grab for water, and the water and ripples drawn from it. */
+    DepthOfField,     /**< The blur laid over what has been drawn so far. */
+    Characters,       /**< The player, villagers, monsters and what they hold. */
+    Shadows,          /**< The shadow volumes and the darkening they mark. */
+    MovingParts,      /**< Parts that move, drawn over the shadows. */
+    Effects,          /**< World effects: fire, spray, shots, shimmer and heat haze. */
+    LensFlare,        /**< The town's lens flare. */
+    Overlay,          /**< 2D over the world: the HUD, messages and event sprites. */
+    Menu,             /**< 2D drawn outside the world's frame: menus and the floor select. */
+    Fade,             /**< Full-screen fades. */
+    Title,            /**< The title screen. */
+    Opening,          /**< The opening. */
+    Attract,          /**< The attract movie. */
+    Screen,           /**< Screens outside the game's world: language, saving, memory check. */
+    Count,
+};
+
+/** The pass's name, for a trace. */
+const char *PassName(Pass pass);
+
+/** The pass drawing belongs to from now on. */
+void SetPass(Pass pass);
+
+/** The pass drawing belongs to now. */
+Pass CurrentPass();
+
+/** Names a stretch inside another pass, and returns to that pass when it ends. */
+class PassScope {
+public:
+    explicit PassScope(Pass pass) : previous_(CurrentPass()) { SetPass(pass); }
+    ~PassScope() { SetPass(previous_); }
+    PassScope(const PassScope &) = delete;
+    PassScope &operator=(const PassScope &) = delete;
+
+private:
+    Pass previous_;
+};
+
+/** Counts a draw or copy against the current pass while a trace runs. */
+void CountDraw();
+void CountCopy();
+
+/**
+ * DC_PASS_TRACE=<path>: at exit writes each shape of frame seen, with its passes in order, as JSON. `drawn` is what the tick's
+ * display list says it holds, the truth the counted draws are checked against: every draw has to come through the calls below.
+ */
+void PassTraceStart();
+void PassTraceBeginTick();
+void PassTraceTick(std::uint32_t drawn);
+
+// Drawing goes through these rather than gfx, so that each draw is counted against a pass.
+
+inline void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
+                   const gfx::DrawState &state, const gfx::Presentation2D *presentation = nullptr) {
+    CountDraw();
+    gfx::Draw2D(primitive, vertices, texture, state, presentation);
+}
+
+inline void DrawDepthPlanes2D(const gfx::DepthPlanes2D &planes, std::span<const gfx::Vertex2D, 4> quad,
+                              const gfx::TextureBinding &texture, const gfx::DrawState &state) {
+    CountDraw();
+    gfx::DrawDepthPlanes2D(planes, quad, texture, state);
+}
+
+inline void DrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint32_t index_count,
+                     const gfx::MeshConstants &constants, const gfx::TextureBinding &texture, const gfx::DrawState &state,
+                     const gfx::MeshTransform *transform = nullptr) {
+    CountDraw();
+    gfx::DrawMesh(mesh, first_index, index_count, constants, texture, state, transform);
+}
+
+inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices,
+                              const gfx::MeshConstants &constants, const gfx::TextureBinding &texture,
+                              const gfx::DrawState &state, const gfx::MeshTransform *transform = nullptr) {
+    CountDraw();
+    gfx::DrawMeshImmediate(vertices, indices, constants, texture, state, transform);
+}
+
+inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, std::int32_t dst_x,
+                        std::int32_t dst_y) {
+    CountCopy();
+    return gfx::CopyTexture(src, src_rect, dst, dst_x, dst_y);
+}
+
+inline bool BlitTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, gfx::Rect dst_rect,
+                        gfx::Filter filter) {
+    CountCopy();
+    return gfx::BlitTexture(src, src_rect, dst, dst_rect, filter);
+}
+
+} // namespace dc::render

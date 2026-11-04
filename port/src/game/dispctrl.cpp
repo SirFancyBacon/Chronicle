@@ -9,6 +9,7 @@
 #include "mglib.hpp"
 #include "rect.hpp"
 #include "render/draw2d.hpp"
+#include "render/passes.hpp"
 #include "texture.hpp"
 
 namespace dc::game {
@@ -232,13 +233,13 @@ void CDebugFont::Draw() {
     }
 
     if (!skin.empty()) {
-        gfx::Draw2D(gfx::Primitive::Quads, skin, {}, state);
+        render::Draw2D(gfx::Primitive::Quads, skin, {}, state);
     }
     if (!backdrop.empty()) {
-        gfx::Draw2D(gfx::Primitive::Quads, backdrop, {}, state);
+        render::Draw2D(gfx::Primitive::Quads, backdrop, {}, state);
     }
     if (!glyph_quads.empty()) {
-        gfx::Draw2D(gfx::Primitive::Quads, glyph_quads, glyphs.binding, state);
+        render::Draw2D(gfx::Primitive::Quads, glyph_quads, glyphs.binding, state);
     }
     draw2d::RestoreTestZbuf();
 }

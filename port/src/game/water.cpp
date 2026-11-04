@@ -12,6 +12,7 @@
 #include "dataalloc.hpp"
 #include "mglib.hpp"
 #include "render/draw3d.hpp"
+#include "render/passes.hpp"
 #include "render/screen.hpp"
 #include "renderinfo.hpp"
 #include "texture.hpp"
@@ -188,21 +189,21 @@ void DrawRefracted(const CWater &water, const Refraction &refraction, const Draw
 
     binding.texture = refraction.frame;
     gfx::SetRenderTarget(refraction.visible);
-    gfx::DrawMeshImmediate(flat, visual.indices, plain, binding, copy, &transform);
+    render::DrawMeshImmediate(flat, visual.indices, plain, binding, copy, &transform);
     gfx::SetRenderTarget(refraction.refracted);
-    gfx::DrawMeshImmediate(flat, visual.indices, plain, binding, copy, &transform);
+    render::DrawMeshImmediate(flat, visual.indices, plain, binding, copy, &transform);
     binding.texture = refraction.visible;
     over.alpha = {.a = 2, .b = 1, .c = 0, .d = 1, .fix = 0x80};
-    gfx::DrawMeshImmediate(rippled, visual.indices, plain, binding, over, &transform);
+    render::DrawMeshImmediate(rippled, visual.indices, plain, binding, over, &transform);
     over.alpha = {.a = 0, .b = 2, .c = 2, .d = 1, .fix = 0x80};
-    gfx::DrawMeshImmediate(rippled, visual.indices, plain, binding, over, &transform);
+    render::DrawMeshImmediate(rippled, visual.indices, plain, binding, over, &transform);
 
     gfx::SetRenderTarget(gfx::kMainTarget);
     gfx::DrawState surface = state;
     surface.texa_aem = false;
     surface.texa_ta0 = 0x80;
     binding.texture = refraction.refracted;
-    gfx::DrawMeshImmediate(flat, visual.indices, constants, binding, surface, &transform);
+    render::DrawMeshImmediate(flat, visual.indices, constants, binding, surface, &transform);
 }
 
 } // namespace
@@ -329,7 +330,7 @@ extern "C" int DrawVu1__6CWaterFP10RenderInfoP13sceVif1PacketP1(CWater *water, R
                 binding.wrap_u = gfx::Wrap::Clamp;
                 binding.wrap_v = gfx::Wrap::Clamp;
             }
-            gfx::DrawMeshImmediate(visual->vertices, visual->indices, constants, binding, state, &transform);
+            render::DrawMeshImmediate(visual->vertices, visual->indices, constants, binding, state, &transform);
         }
     }
 

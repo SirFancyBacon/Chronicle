@@ -23,6 +23,7 @@
 #include "platform/input.hpp"
 #include "platform/overlay.hpp"
 #include "platform/paths.hpp"
+#include "render/passes.hpp"
 
 namespace dc::text::textwipe {
 
@@ -433,7 +434,7 @@ void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
                     static_cast<uint8_t>(std::clamp(vertex.color[channel] * (*g_tint)[channel] + 0.5f, 0.0f, 255.0f));
             }
         }
-        gfx::Draw2D(primitive, tinted, binding, state);
+        render::Draw2D(primitive, tinted, binding, state);
         return;
     }
     if (g_clip) {
@@ -448,10 +449,10 @@ void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
         }
         clipped.scissor = true;
         clipped.scissor_rect = {.x = left, .y = top, .w = right - left, .h = bottom - top};
-        gfx::Draw2D(primitive, vertices, binding, clipped);
+        render::Draw2D(primitive, vertices, binding, clipped);
         return;
     }
-    gfx::Draw2D(primitive, vertices, binding, state);
+    render::Draw2D(primitive, vertices, binding, state);
 }
 
 void DrawDivider() {
@@ -481,7 +482,7 @@ void DrawDivider() {
         line.push_back(vertex(x - half_width, gfx::LogicalHeight(), grey));
     }
     if (g_mode != Mode::Overlay) {
-        gfx::Draw2D(gfx::Primitive::Quads, line, {}, state);
+        render::Draw2D(gfx::Primitive::Quads, line, {}, state);
     }
 
     const bool        overlay = g_mode == Mode::Overlay;

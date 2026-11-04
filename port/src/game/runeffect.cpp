@@ -1,4 +1,5 @@
 #include "mathconst.h"
+#include "render/passes.hpp"
 #include "runeffect.hpp"
 
 #include <libgraph.h>
@@ -112,7 +113,7 @@ void TexturedSprite(u_long tex0, const CRect_i_ &destination, const CRect_i_ &so
                  ((destination.x + destination.width) << 4) + 0x6C00,
                  ((destination.y + destination.height) << 4) + GS_Y_OFFSET, source.x << 4, source.y << 4,
                  (source.x + source.width) << 4, (source.y + source.height) << 4, texture.v_scale);
-    gfx::Draw2D(gfx::Primitive::Quads, quad, texture.binding, state);
+    render::Draw2D(gfx::Primitive::Quads, quad, texture.binding, state);
 }
 
 void RestoreRegisters() {
@@ -149,7 +150,7 @@ void blendTextuer(sceVif1Packet * /*packet*/, int destination, int width, int fo
                 GsSprite((first_destination.x << 4) + 0x6C00, (first_destination.y << 4) + GS_Y_OFFSET,
                          ((first_destination.x + first_destination.width) << 4) + 0x6C00,
                          ((first_destination.y + first_destination.height) << 4) + GS_Y_OFFSET, 0, 0, 0, 0, 1.0f);
-            gfx::Draw2D(gfx::Primitive::Quads, flat, {}, TargetState(false));
+            render::Draw2D(gfx::Primitive::Quads, flat, {}, TargetState(false));
             TexturedSprite(first_texture->tex0, first_destination, first_source, true);
         }
 
@@ -243,7 +244,7 @@ void blendTextuerTest(sceVif1Packet * /*packet*/, int destination, int width, in
         }
 
         if (target.Bound() && have_frame && !strips.empty()) {
-            gfx::Draw2D(gfx::Primitive::Quads, strips, frame_texture.binding, strip_state);
+            render::Draw2D(gfx::Primitive::Quads, strips, frame_texture.binding, strip_state);
         }
 
         sceGsAlpha alpha = mgAlpha;

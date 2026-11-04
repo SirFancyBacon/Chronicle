@@ -16,6 +16,7 @@
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/draw3d.hpp"
+#include "render/passes.hpp"
 #include "render/screen.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
@@ -153,7 +154,7 @@ void TitlePortFog(std::span<const TitleFogBand> bands) {
     }
     auto draw = [&](std::span<gfx::Vertex2D> vertices) {
         if (full_height) {
-            gfx::Draw2D(gfx::Primitive::Quads, vertices, binding, draw2d::SpriteState());
+            render::Draw2D(gfx::Primitive::Quads, vertices, binding, draw2d::SpriteState());
         } else {
             draw2d::DrawTextured(gfx::Primitive::Quads, vertices, texture->tex0, kFogTex1, draw2d::SpriteState());
         }

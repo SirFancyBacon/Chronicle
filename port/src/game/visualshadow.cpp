@@ -21,6 +21,7 @@
 #include "mdt.hpp"
 #include "mglib.hpp"
 #include "render/draw3d.hpp"
+#include "render/passes.hpp"
 #include "render/shadowclip.hpp"
 #include "renderinfo.hpp"
 
@@ -602,7 +603,7 @@ void DrawCount(const Volume &volume, const Projection &projection, const RenderI
     gfx::DrawState state = Draw3DState(info, false);
     state.cull = add ? gfx::CullMode::Back : gfx::CullMode::Front;
     Draw3DShadowCount(state, !add);
-    gfx::DrawMeshImmediate(volume.vertices, indices, constants, {}, state,
+    render::DrawMeshImmediate(volume.vertices, indices, constants, {}, state,
                            projection.has_transform ? &projection.transform : nullptr);
 }
 

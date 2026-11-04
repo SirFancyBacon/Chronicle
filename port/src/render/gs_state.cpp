@@ -6,6 +6,7 @@
 
 #include "mglib.hpp"
 #include "render/draw3d.hpp"
+#include "render/passes.hpp"
 #include "render/screen.hpp"
 
 namespace dc::render {
@@ -134,7 +135,7 @@ void MoveFrameImage(gfx::TextureHandle frame, sceGsTex0 *dst) {
         ref.binding.texture == gfx::kPreviousFrame) {
         return;
     }
-    gfx::BlitTexture(frame, {0, 0, 640, SCREEN_HEIGHT}, ref.binding.texture, {0, 0, 640, SCREEN_HEIGHT},
+    render::BlitTexture(frame, {0, 0, 640, SCREEN_HEIGHT}, ref.binding.texture, {0, 0, 640, SCREEN_HEIGHT},
                      gfx::Filter::Nearest);
 }
 

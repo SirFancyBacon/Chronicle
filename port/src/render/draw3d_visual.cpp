@@ -9,6 +9,7 @@
 #include "mglib.hpp"
 #include "platform/load_work_profile.hpp"
 #include "render/draw3d.hpp"
+#include "render/passes.hpp"
 #include "renderinfo.hpp"
 #include "texture.hpp"
 
@@ -272,11 +273,11 @@ void Draw3DDrawVisual(const Draw3DVisual &visual, const float model[4][4], const
         }
 
         if (visual.immediate) {
-            gfx::DrawMeshImmediate(visual.vertices,
+            render::DrawMeshImmediate(visual.vertices,
                                    std::span<const uint32_t>(visual.indices).subspan(strip.first_index, index_count),
                                    constants, binding, strip_state, &transform);
         } else {
-            gfx::DrawMesh(visual.mesh, strip.first_index, index_count, constants, binding, strip_state,
+            render::DrawMesh(visual.mesh, strip.first_index, index_count, constants, binding, strip_state,
                           &transform);
         }
     }

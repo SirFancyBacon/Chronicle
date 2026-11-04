@@ -82,6 +82,7 @@
 #include "platform/input.hpp"
 #include "rect.hpp"
 #include "render/draw2d.hpp"
+#include "render/passes.hpp"
 #include "runeffect.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
@@ -2313,7 +2314,7 @@ bool EdDrawBeyondRetailReach(int *far_marks, const GameDrawTrace &draw_trace) {
 
             draw_trace.Finish(GameDrawPhase::FarPrepare, prepare_start);
             if (drawn) {
-                const auto character_start = draw_trace.Start();
+        const auto character_start = draw_trace.Start();
                 int        shadow_on = GameMode != ED_MODE_TALK && EdSystemMesCheck() == 0;
                 EdDrawCharacter(Chara, 0, 10, EdVillager, far_marks, shadow_on, nullptr);
                 draw_trace.Finish(GameDrawPhase::FarCharacter, character_start);
@@ -2356,6 +2357,7 @@ bool EdDrawBeyondRetailReach(int *far_marks, const GameDrawTrace &draw_trace) {
  * Draws the editor's world for one frame (retail's MainDraw).
  */
 void EditMainDraw() {
+    render::PassScope frame(render::Pass::TextureAnimation);
     const GameDrawTrace draw_trace;
     auto                far_marks = std::make_unique<int[]>(10);
     bool                far_drawn = false;
@@ -2375,11 +2377,13 @@ void EditMainDraw() {
         EdDrawOffMapShadow = EdEventInfo.suppress_shadows;
 
         if (EdDrawOffMap == 0) {
+            render::SetPass(render::Pass::Sky);
             const auto sky_base_start = draw_trace.Start();
             if (draw_sky != 0) {
                 EdDrawSky(NowTime, SkyFrame, SunFrame, SkyBackFrame, NowCamera, EditMapInfo->sky_follow);
             }
 
+            render::SetPass(render::Pass::Ground);
             TexManager.ReloadTexture(Vif1Packet, 1);
             TexAnime.TexAnime(1);
             pEditGround->DrawBaseGround();
@@ -2421,11 +2425,13 @@ void EditMainDraw() {
                 pEditGround->DrawPartsCursor(NowSelectParts, at2, NowPartsCursorPos, NowSelectAngle, colour2, 2);
             }
 
+            render::SetPass(render::Pass::Fishing);
             if (FishingDrawCheck() != 0) {
                 FishingDrawFish();
                 FishLineDraw(0);
             }
 
+            render::SetPass(render::Pass::Water);
             const auto water_start = draw_trace.Start();
             TexManager.ReloadTexture(Vif1Packet, 0x15);
             TexAnime.TexAnime(0x15);
@@ -2472,6 +2478,7 @@ void EditMainDraw() {
             draw_trace.Finish(GameDrawPhase::Water, water_start);
 
             if (depth_of_field != 0) {
+                render::SetPass(render::Pass::DepthOfField);
                 const auto far_dof_start = draw_trace.Start();
                 int        dof_level = 2;
 
@@ -2488,14 +2495,17 @@ void EditMainDraw() {
             }
         }
 
+        render::SetPass(render::Pass::Fishing);
         if (FishingDrawCheck() != 0) {
             FishLineDraw(1);
         }
 
+        render::SetPass(render::Pass::Overlay);
         if (GameMode == ED_MODE_EVENT) {
             EdEventBackSpriteDraw();
         }
 
+        render::SetPass(render::Pass::Characters);
         const auto character_start = draw_trace.Start();
         PolyCount = 0;
 
@@ -2629,6 +2639,7 @@ void EditMainDraw() {
         draw_trace.Finish(GameDrawPhase::Character, character_start);
 
         if (EdDrawOffMapShadow == 0 && EdDrawOffMap == 0) {
+            render::SetPass(render::Pass::Shadows);
             const auto shadows_start = draw_trace.Start();
             float      saved_light[4][4];
             float      shadow_light[4][4];
@@ -2670,6 +2681,7 @@ void EditMainDraw() {
             draw_trace.Finish(GameDrawPhase::Shadows, shadows_start);
         }
 
+        render::SetPass(render::Pass::MovingParts);
         const auto motion_parts_start = draw_trace.Start();
         for (int i = 0; i < 4; i++) {
             TexManager.ReloadTexture(Vif1Packet, i + 0x1B);
@@ -2679,6 +2691,7 @@ void EditMainDraw() {
         draw_trace.Finish(GameDrawPhase::MotionParts, motion_parts_start);
 
         if (EdDrawOffMap == 0) {
+            render::SetPass(render::Pass::Effects);
             const auto effects_start = draw_trace.Start();
             TexManager.ReloadTexture(Vif1Packet, 0x18);
             RunEffect.Lighting(1);
@@ -2726,11 +2739,13 @@ void EditMainDraw() {
             }
 
             if (edit_mode_draw == 0) {
+                render::PassScope lens_flare(render::Pass::LensFlare);
                 EdDrawLensFlare(NowTime, SunFrame);
             }
             draw_trace.Finish(GameDrawPhase::Effects, effects_start);
         }
 
+        render::SetPass(render::Pass::Overlay);
         const auto final_2d_start = draw_trace.Start();
         if (GameMode == ED_MODE_EVENT) {
             EdEventSpriteDraw();
@@ -2814,6 +2829,7 @@ void EditMainDraw() {
             }
         }
 
+        render::SetPass(render::Pass::Fade);
         EdFadeInOut();
 
         if (clear_screen != 0) {

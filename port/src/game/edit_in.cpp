@@ -51,6 +51,7 @@
 #include "objanime.hpp"
 #include "platform/input.hpp"
 #include "rect.hpp"
+#include "render/passes.hpp"
 #include "savedata.hpp"
 #include "scriptinterpreter.hpp"
 #include "snd.hpp"
@@ -917,6 +918,7 @@ int EditInLoop() {
  */
 namespace {
 void MainDraw() {
+    render::PassScope frame(render::Pass::TextureAnimation);
     sceVu0FVECTOR position;
 
     if (EdDrawOffFlag != 0) {
@@ -933,6 +935,7 @@ void MainDraw() {
     EdDrawOffMapShadow = EdEventInfo.suppress_shadows;
     EdIn_Chara->GetPosition(position);
 
+    render::SetPass(render::Pass::Ground);
     if (EdDrawOffMap == 0) {
         TexManager.ReloadTexture(GetVif1Packet(), 15);
         TexAnime.TexAnime(15);
@@ -947,6 +950,7 @@ void MainDraw() {
     sceGsTex0 frame_tex;
     CRect_i_  screen;
     sceGsTex0 water_tex;
+    render::SetPass(render::Pass::Water);
     MGGetFBuffTex(&frame_tex);
     screen.x = 0;
     screen.y = 0;
@@ -962,10 +966,12 @@ void MainDraw() {
     DrawWaterSurface(EdIn_NowCamera);
     MGSetGsZBUF(&mgZBuffer);
 
+    render::SetPass(render::Pass::Overlay);
     if (GameMode == EdInMode::EVENT) {
         EdEventBackSpriteDraw();
     }
 
+    render::SetPass(render::Pass::Characters);
     if (GameMode == EdInMode::EVENT) {
         EdDrawItem();
     }
@@ -1008,6 +1014,7 @@ void MainDraw() {
 
     EditEffectStep2();
 
+    render::SetPass(render::Pass::Effects);
     if (EdDrawOffMap == 0) {
         for (int i = 0; i < effect_num; i++) {
             EDIT_EFFECT_INFO *effect = &EdInInfo->effects[i];
@@ -1020,11 +1027,13 @@ void MainDraw() {
 
     EdEffectGroup.Draw();
 
+    render::SetPass(render::Pass::MovingParts);
     for (int i = 0; i < 4; i++) {
         TexManager.ReloadTexture(GetVif1Packet(), i + 0x32);
         MotionParts__2[i].Draw();
     }
 
+    render::SetPass(render::Pass::Overlay);
     TexManager.ReloadTexture(Vif1Packet, 0x14);
     EdDrawSysCursor(EdInInfo->event_points, 32);
 
@@ -1113,6 +1122,7 @@ void MainDraw() {
         }
     }
 
+    render::SetPass(render::Pass::Fade);
     EdFadeInOut();
 }
 

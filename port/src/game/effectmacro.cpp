@@ -19,6 +19,7 @@
 #include "render/draw2d.hpp"
 #include "render/draw3d.hpp"
 #include "render/gs_state.hpp"
+#include "render/passes.hpp"
 #include "render/screen.hpp"
 #include "texture.hpp"
 
@@ -260,7 +261,7 @@ bool DrawBeyond(gfx::TextureHandle beyond, gfx::TextureHandle snapshot, float fr
         for (gfx::Vertex2D &vertex : quad) {
             vertex.color[0] = vertex.color[1] = vertex.color[2] = 0x10;
         }
-        gfx::DrawDepthPlanes2D(planes, quad, binding, state);
+        render::DrawDepthPlanes2D(planes, quad, binding, state);
         return true;
     }
     for (int i = 0; i < samples; i++) {
@@ -274,7 +275,7 @@ bool DrawBeyond(gfx::TextureHandle beyond, gfx::TextureHandle snapshot, float fr
                 vertex.color[3] = static_cast<u_char>((i + 1) * 0x10);
             }
         }
-        gfx::Draw2D(gfx::Primitive::Quads, quad, binding, state);
+        render::Draw2D(gfx::Primitive::Quads, quad, binding, state);
     }
     return true;
 }
@@ -288,7 +289,7 @@ void Resize(gfx::TextureHandle src, float u0, float v0, float u1, float v1, gfx:
     binding.filter = gfx::Filter::Linear;
     std::array<gfx::Vertex2D, 4> quad =
         Quad(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, u0, v0, u1, v1);
-    gfx::Draw2D(gfx::Primitive::Quads, quad, binding, gfx::DrawState{});
+    render::Draw2D(gfx::Primitive::Quads, quad, binding, gfx::DrawState{});
 }
 
 // The bands over the frame from a premultiplied image at the vertices' alpha: the frame is first
@@ -305,13 +306,13 @@ void DrawBands(std::vector<gfx::Vertex2D> &triangles, gfx::TextureHandle image, 
     state.fog = false;
     state.cull = gfx::CullMode::None;
     state.alpha = {.a = 2, .b = 1, .c = 0, .d = 1, .fix = 0x80};
-    gfx::Draw2D(gfx::Primitive::Triangles, triangles, binding, state);
+    render::Draw2D(gfx::Primitive::Triangles, triangles, binding, state);
     for (gfx::Vertex2D &vertex : triangles) {
         vertex.color[0] = vertex.color[1] = vertex.color[2] = vertex.color[3];
         vertex.color[3] = 0x80;
     }
     state.alpha = {.a = 0, .b = 2, .c = 2, .d = 1, .fix = 0x80};
-    gfx::Draw2D(gfx::Primitive::Triangles, triangles, binding, state);
+    render::Draw2D(gfx::Primitive::Triangles, triangles, binding, state);
 }
 
 // One GS triangle strip as a triangle list, so that every band of the effect goes in one draw.

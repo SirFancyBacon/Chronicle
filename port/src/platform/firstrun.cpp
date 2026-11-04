@@ -34,6 +34,7 @@
 #include "platform/paths.hpp"
 #include "platform/settings.hpp"
 #include "platform/window.hpp"
+#include "render/passes.hpp"
 #include "render/screen.hpp"
 
 namespace dc::platform {
@@ -257,7 +258,7 @@ struct Canvas {
         }
         gfx::Clear(true, kBackground.data(), true, 0.0f);
         if (!quads.empty()) {
-            gfx::Draw2D(gfx::Primitive::Quads, quads, {}, gfx::DrawState{});
+            render::Draw2D(gfx::Primitive::Quads, quads, {}, gfx::DrawState{});
         }
         gfx::EndFrame();
     }

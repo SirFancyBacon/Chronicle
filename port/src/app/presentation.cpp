@@ -14,6 +14,7 @@
 #include "platform/clock.hpp"
 #include "platform/input.hpp"
 #include "platform/overlay.hpp"
+#include "render/passes.hpp"
 #include "text/caption_text.hpp"
 #include "text/textwipe.hpp"
 
@@ -431,6 +432,7 @@ void GameRenderTick(gfx::DisplayListRef list) {
     };
     g_stats.ticks++;
     gfx::DisplayListStats counts = gfx::ListStats(*list);
+    render::PassTraceTick(counts.mesh_draws + counts.draws_2d);
     g_stats.mesh_draws += counts.mesh_draws;
     g_stats.keyed_mesh_draws += counts.keyed_mesh_draws;
     g_stats.draws_2d += counts.draws_2d;
