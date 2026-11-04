@@ -9,6 +9,7 @@
 #include "mglib.hpp"
 #include "rect.hpp"
 #include "render/draw2d.hpp"
+#include "render/passes.hpp"
 #include "runeffect.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
@@ -179,6 +180,7 @@ void CFireOmni::RasterStep() {
 }
 
 void CFireOmni::DrawRaster() {
+    render::Layer2DScope layer(render::Layer2D::Ui);
     sceVu0FVECTOR world;
     int           top_left[4];
     int           bottom_right[4];

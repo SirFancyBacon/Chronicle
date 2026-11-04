@@ -2201,6 +2201,7 @@ void DunMainDraw() {
             BtItemListCashFlag = 0;
         }
 
+        render::SetPass(render::Pass::Fade);
         EdFadeInOut();
         return;
     }

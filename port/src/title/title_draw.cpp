@@ -47,6 +47,7 @@ gfx::TextureHandle FogFrameForLayout(const gfx::LogicalRect &visible) {
 
 // The previous frame is 640x480 logical; its TEX0 counts field rows, as the frame buffer's did.
 void TitlePortFeedback(u_char alpha) {
+    render::Layer2DScope layer(render::Layer2D::Window);
     sceGsTex0 back;
     MGGetFBuffBackTex(&back);
     CTexture texture;
@@ -91,6 +92,7 @@ void TitlePortCaptureFog() {
 // row of the copy: frame_image is taller than the field and black below it. The taps are blended
 // in turn over every band, with alphas that give each an eighth of the band's alpha in the result.
 void TitlePortFog(std::span<const TitleFogBand> bands) {
+    render::Layer2DScope layer(render::Layer2D::Window);
     CTexture *texture = TexManager.GetTexture(const_cast<char *>("frame_image"), -1);
     if (texture == nullptr) {
         return;

@@ -30,6 +30,7 @@
 #include "nowload.hpp"
 #include "objanime.hpp"
 #include "object.hpp"
+#include "render/passes.hpp"
 #include "runeffect.hpp"
 #include "snd.hpp"
 #include "sound.hpp"
@@ -643,6 +644,7 @@ void DrawProcess() {
         static int fade = 0;
 
         if (StartDisp) {
+            render::Layer2DScope layer(render::Layer2D::Ui);
             TexManager.ReloadTexture(Vif1Packet, 20);
             set2DSprite(GetVif1Packet(), TexManager.GetTexture("start2", -1), CRect<int>(192, 392, 256, 32), CRect<int>(0, 0, 256, 32), fade);
             fade = (fade + 2) & 127;
@@ -664,6 +666,7 @@ void DrawProcess() {
     CTexture texture;
 
     texture.tex0 = std::bit_cast<u_long>(back_tex);
+    render::Layer2DScope layer(render::Layer2D::Window);
     set2DSprite(Vif1Packet, &texture, CRect<int>(0, 0, 640, SCREEN_HEIGHT), CRect<int>(0, 0, 640, SCREEN_HALF_HEIGHT), 128, 128, 128, 35);
 }
 } // namespace

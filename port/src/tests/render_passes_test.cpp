@@ -35,4 +35,19 @@ TEST(RenderPasses, AScopeReturnsToThePassItInterrupted) {
     SetPass(Pass::Unnamed);
 }
 
+TEST(RenderPasses, APassGivesItsUsualLayerAndAScopeOverridesIt) {
+    SetPass(Pass::Menu);
+    EXPECT_EQ(render::CurrentLayer2D(), render::Layer2D::Ui);
+    {
+        render::Layer2DScope cover(render::Layer2D::Cover);
+        EXPECT_EQ(render::CurrentLayer2D(), render::Layer2D::Cover);
+        render::PassScope effects(Pass::Effects);
+        EXPECT_EQ(render::CurrentLayer2D(), render::Layer2D::Cover);
+    }
+    EXPECT_EQ(render::CurrentLayer2D(), render::Layer2D::Ui);
+    SetPass(Pass::Fade);
+    EXPECT_EQ(render::CurrentLayer2D(), render::Layer2D::Window);
+    SetPass(Pass::Unnamed);
+}
+
 } // namespace dc::test

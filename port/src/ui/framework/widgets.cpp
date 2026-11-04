@@ -3,6 +3,7 @@
 
 #include "itemdata.hpp"
 #include "menu_inventory.hpp"
+#include "render/passes.hpp"
 #include "ui/framework/internal.hpp"
 #include "ui/menu_pointer.hpp"
 
@@ -119,10 +120,12 @@ void Picture::DrawClipped(CTexture *texture, const Rect &destination, const Rect
 }
 
 void Picture::DrawScreen(CTexture *texture, int alpha) {
+    render::Layer2DScope layer(render::Layer2D::Cover);
     DrawFullSizePicture(texture, 0, 0, alpha);
 }
 
 void ScreenFill::Draw(int r, int g, int b, int alpha) {
+    render::Layer2DScope layer(render::Layer2D::Window);
     MGFillBox(CRect_i_(0, 0, metrics::kScreenWidth << 4, metrics::kScreenHeight << 4), static_cast<u8>(r), static_cast<u8>(g), static_cast<u8>(b),
               static_cast<u8>(alpha));
 }

@@ -5,6 +5,7 @@
 #include <span>
 
 #include "gfx/gfx.hpp"
+#include "render/passes.hpp"
 
 namespace dc::render {
 
@@ -35,6 +36,18 @@ enum class Pass : std::uint8_t {
     Count,
 };
 
+/**
+ * Where a 2D draw belongs on screen, said outright so that nothing has to work it out from the draw's shape. Each pass has a
+ * usual layer; a draw that differs says so with a Layer2DScope.
+ */
+enum class Layer2D : std::uint8_t {
+    World,  /**< Among the 3D scene, and placed by it. */
+    Ui,     /**< Interface: follows the interface size, and stays where it's put. */
+    Window, /**< Reaches the window's edges, past the 4:3 frame: fades, fills and images of the frame. */
+    Cover,  /**< A full-frame picture, stretched to fill the window. */
+    Count,
+};
+
 /** The pass's name, for a trace. */
 const char *PassName(Pass pass);
 
@@ -56,9 +69,32 @@ private:
     Pass previous_;
 };
 
+/** The layer a 2D draw is in now: the one a scope gives, or else the pass's usual one. */
+Layer2D CurrentLayer2D();
+
+/** Puts the 2D drawn inside it in a layer other than its pass's usual one. */
+class Layer2DScope {
+public:
+    /** For a draw whose shape misleads the renderer's rule, so the trace counts it apart and doesn't fail it. */
+    static constexpr bool kDiffersFromRule = true;
+
+    explicit Layer2DScope(Layer2D layer, bool differs_from_rule = false);
+    ~Layer2DScope();
+    Layer2DScope(const Layer2DScope &) = delete;
+    Layer2DScope &operator=(const Layer2DScope &) = delete;
+
+private:
+    int  previous_;
+    bool previous_differs_;
+};
+
 /** Counts a draw or copy against the current pass while a trace runs. */
 void CountDraw();
 void CountCopy();
+
+/** While a trace runs, notes what the renderer's rules will decide about a 2D draw, from its shape and state. */
+void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
+            const gfx::DrawState &state);
 
 /**
  * DC_PASS_TRACE=<path>: at exit writes each shape of frame seen, with its passes in order, as JSON. `drawn` is what the tick's
@@ -73,6 +109,7 @@ void PassTraceTick(std::uint32_t drawn);
 inline void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
                    const gfx::DrawState &state, const gfx::Presentation2D *presentation = nullptr) {
     CountDraw();
+    Note2D(primitive, vertices, texture, state);
     gfx::Draw2D(primitive, vertices, texture, state, presentation);
 }
 

@@ -4,6 +4,7 @@
 
 #include "mglib.hpp"
 #include "rect.hpp"
+#include "render/passes.hpp"
 
 namespace dc::game {
 
@@ -45,6 +46,7 @@ float CDispFade::GetRate() {
 }
 
 float CDispFade::FadeOut(sceVif1Packet * /*packet*/) {
+    render::PassScope pass(render::Pass::Fade);
     if (mode != TitleFadeMode::Out) {
         return fade_rate;
     }
@@ -66,6 +68,7 @@ float CDispFade::FadeOut(sceVif1Packet * /*packet*/) {
 }
 
 float CDispFade::FadeIn(sceVif1Packet * /*packet*/) {
+    render::PassScope pass(render::Pass::Fade);
     if (mode != TitleFadeMode::In) {
         return fade_rate;
     }

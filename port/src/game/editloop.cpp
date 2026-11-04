@@ -1665,7 +1665,10 @@ int EditLoop() {
 
                 SndStep();
 
-                MGFillBox(CRect_i_(0, 0, 0x2800, SCREEN_HALF_HEIGHT * 16), 0, 0, 0, 0x80);
+                {
+                    render::Layer2DScope layer(render::Layer2D::Window);
+                    MGFillBox(CRect_i_(0, 0, 0x2800, SCREEN_HALF_HEIGHT * 16), 0, 0, 0, 0x80);
+                }
                 MGEndFrame();
 
                 for (int i = 0; i < 10; i++) {
@@ -1682,7 +1685,10 @@ int EditLoop() {
                 EditInInit(NowTime, interior_map_name);
                 MGBeginFrame();
 
-                MGFillBox(CRect_i_(0, 0, 0x2800, SCREEN_HALF_HEIGHT * 16), 0, 0, 0, 0x80);
+                {
+                    render::Layer2DScope layer(render::Layer2D::Window);
+                    MGFillBox(CRect_i_(0, 0, 0x2800, SCREEN_HALF_HEIGHT * 16), 0, 0, 0, 0x80);
+                }
                 ItemVolumeStep.CheckItemVolume();
                 return 0;
             }
@@ -3340,6 +3346,7 @@ void DrawSysGra() {
             fade.y = 0;
             fade.width = 0x2800;
             fade.height = (SCREEN_HALF_HEIGHT << 4);
+            render::Layer2DScope layer(render::Layer2D::Window);
             MGFillBox(fade, 0, 0, 0, 0x40);
             setbilinear(0);
 

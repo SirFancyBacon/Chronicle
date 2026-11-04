@@ -39,6 +39,7 @@
 #include "nowload.hpp"
 #include "objanime.hpp"
 #include "platform/arena.hpp"
+#include "render/passes.hpp"
 #include "snd.hpp"
 #include "sound.hpp"
 #include "texture.hpp"
@@ -887,6 +888,7 @@ void DrawProcess() {
     CTexture texture;
 
     texture.tex0 = std::bit_cast<u_long>(tex0);
+    render::Layer2DScope layer(render::Layer2D::Window);
     set2DSprite(Vif1Packet, &texture, CRect<int>(0, 0, 640, SCREEN_HEIGHT), CRect<int>(0, 0, 640, SCREEN_HALF_HEIGHT), 128, 128, 128, 40);
     DispFade.FadeIn(Vif1Packet);
     DispFade.FadeOut(Vif1Packet);

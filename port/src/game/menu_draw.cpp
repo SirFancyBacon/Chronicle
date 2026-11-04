@@ -39,6 +39,7 @@
 #include "menuitemstep.hpp"
 #include "mglib.hpp"
 #include "rect.hpp"
+#include "render/passes.hpp"
 #include "savedata.hpp"
 #include "shop.hpp"
 #include "snd.hpp"
@@ -776,6 +777,7 @@ void AllFadeForMenu(int alpha) {
 }
 
 void FrameImageDraw(int brightness, int alpha) {
+    render::Layer2DScope layer(render::Layer2D::Window);
     CTexture *texture = TexManager.GetTexture("frame_image", -1);
 
     if (texture != nullptr) {

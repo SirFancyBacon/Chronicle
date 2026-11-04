@@ -51,6 +51,7 @@
 #include "render/draw2d.hpp"
 #include "render/draw3d.hpp"
 #include "render/gs_state.hpp"
+#include "render/passes.hpp"
 #include "savedata.hpp"
 #include "shop.hpp"
 #include "snd.hpp"
@@ -1806,6 +1807,7 @@ void EdDrawCharacter(CCharacter *player, int player_draw_mask, int npc_count, CN
         sceVu0CopyMatrix(saved_colour, light_colour);
         EdLimitShadowLight(shadow_direction, 3.0f);
         MGSetPLight(shadow_direction, light_colour);
+        render::PassScope shadows(render::Pass::Shadows);
         TexManager.ReloadTexture(Vif1Packet, 22);
         MGBeginDrawShadow(*reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("shadow_buff", -1)->tex0));
 

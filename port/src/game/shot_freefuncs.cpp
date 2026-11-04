@@ -38,6 +38,7 @@
 #include "nowload.hpp"
 #include "qol/features.hpp"
 #include "rect.hpp"
+#include "render/passes.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
 #include "userstatus.hpp"
@@ -496,6 +497,8 @@ void StatusBarFill(int frame_y, int cells, float value, float max, spRGBA *left,
 } // namespace
 
 void topStatusInfo(int y, int selected_item, int floor) {
+    // The bars touch the frame's top only as the HUD slides in from above it, which isn't a reach for the window's edge.
+    render::Layer2DScope layer(render::Layer2D::Ui, render::Layer2DScope::kDiffersFromRule);
     const int chara = UserStatus->cur_chara;
     if (chara < 0 || chara >= 6) {
         return;

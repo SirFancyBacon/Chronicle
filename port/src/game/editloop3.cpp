@@ -64,6 +64,7 @@
 #include "platform/config.hpp"
 #include "quest/host.hpp"
 #include "rect.hpp"
+#include "render/passes.hpp"
 #include "runscript.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
@@ -2450,6 +2451,7 @@ void EdGetFadeColor(float *colour) {
 
 // Rectangle coordinates are in sixteenths of a pixel, as the GS coordinate registers count them.
 void EdFadeInOut() {
+    render::PassScope pass(render::Pass::Fade);
     int      red = 0;
     int      green = 0;
     int      blue = 0;
