@@ -172,7 +172,7 @@ target_link_libraries(dc_port PRIVATE dc_options SDL3::SDL3 Vulkan::Vulkan nlohm
 # rasterizes with stb_truetype and platform/png_image.cpp decodes with stb_image, which Kazarov stages
 # (or fetches) for dc_host.
 function(dc_port_includes target)
-    target_include_directories(${target} PRIVATE ${PORT_DIR} ${SHADER_HEADER_DIR} ${CMAKE_SOURCE_DIR}/tools/dcdata)
+    target_include_directories(${target} PRIVATE ${NOKTUS_SOURCE_DIR}/include ${PORT_DIR} ${SHADER_HEADER_DIR} ${CMAKE_SOURCE_DIR}/tools/dcdata)
     get_target_property(dc_host_includes dc_host INCLUDE_DIRECTORIES)
     foreach(include_dir IN LISTS dc_host_includes)
         if(EXISTS ${include_dir}/stb_truetype.h OR EXISTS ${include_dir}/stb_image.h)

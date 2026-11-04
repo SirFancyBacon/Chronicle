@@ -2,3 +2,7 @@
 	path = tools/kazarov
 	url = https://github.com/TheMoonPeople/Kazarov.git
 	branch = master
+[submodule "tools/noktus"]
+	path = tools/noktus
+	url = git@github.com:SirFancyBacon/noktus-nimbus.git
+	branch = main

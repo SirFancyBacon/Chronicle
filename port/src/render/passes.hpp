@@ -92,6 +92,18 @@ private:
 void CountDraw();
 void CountCopy();
 
+/** A draw's state and texture, as they stand after the trip through Noktus's material. */
+struct Routed {
+    gfx::DrawState      state;
+    gfx::TextureBinding texture;
+};
+
+/**
+ * Takes a draw through the material Noktus would be given, and back to what today's renderer takes. A draw a material can't
+ * say yet goes on unchanged, and a trace counts it.
+ */
+Routed Route(const gfx::TextureBinding &texture, const gfx::DrawState &state);
+
 /** While a trace runs, notes what the renderer's rules will decide about a 2D draw, from its shape and state. */
 void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
             const gfx::DrawState &state);
@@ -110,27 +122,31 @@ inline void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vert
                    const gfx::DrawState &state, const gfx::Presentation2D *presentation = nullptr) {
     CountDraw();
     Note2D(primitive, vertices, texture, state);
-    gfx::Draw2D(primitive, vertices, texture, state, presentation);
+    const Routed routed = Route(texture, state);
+    gfx::Draw2D(primitive, vertices, routed.texture, routed.state, presentation);
 }
 
 inline void DrawDepthPlanes2D(const gfx::DepthPlanes2D &planes, std::span<const gfx::Vertex2D, 4> quad,
                               const gfx::TextureBinding &texture, const gfx::DrawState &state) {
     CountDraw();
-    gfx::DrawDepthPlanes2D(planes, quad, texture, state);
+    const Routed routed = Route(texture, state);
+    gfx::DrawDepthPlanes2D(planes, quad, routed.texture, routed.state);
 }
 
 inline void DrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint32_t index_count,
                      const gfx::MeshConstants &constants, const gfx::TextureBinding &texture, const gfx::DrawState &state,
                      const gfx::MeshTransform *transform = nullptr) {
     CountDraw();
-    gfx::DrawMesh(mesh, first_index, index_count, constants, texture, state, transform);
+    const Routed routed = Route(texture, state);
+    gfx::DrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
 }
 
 inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices,
                               const gfx::MeshConstants &constants, const gfx::TextureBinding &texture,
                               const gfx::DrawState &state, const gfx::MeshTransform *transform = nullptr) {
     CountDraw();
-    gfx::DrawMeshImmediate(vertices, indices, constants, texture, state, transform);
+    const Routed routed = Route(texture, state);
+    gfx::DrawMeshImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
 }
 
 inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, std::int32_t dst_x,

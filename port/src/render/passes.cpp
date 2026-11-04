@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "render/noktus_adapter.hpp"
+
 #if defined(DC_PASS_STACKS)
 #include <dlfcn.h>
 #include <execinfo.h>
@@ -67,6 +69,8 @@ int                          g_layer = -1;
 bool                         g_layer_differs = false;
 std::uint64_t                g_layer_differing = 0;
 std::uint64_t                g_layer_checked = 0;
+std::uint64_t                g_route_checked = 0;
+std::uint64_t                g_route_lost = 0;
 std::uint64_t                g_layer_wrong = 0;
 bool                         g_tracing = false;
 std::string                  g_path;
@@ -90,7 +94,7 @@ Span &Current() {
 void WriteTrace() {
     std::ofstream out(g_path);
     out << "{\n \"ticks\": " << g_ticks << ",\n \"counted\": " << g_counted << ",\n \"drawn\": " << g_drawn
-        << ",\n \"mismatched_ticks\": " << g_mismatched_ticks << ",\n \"unnamed\": " << g_unnamed << ",\n \"outside\": " << g_outside << ",\n \"layer_checked\": " << g_layer_checked << ",\n \"layer_wrong\": " << g_layer_wrong << ",\n \"layer_differing\": " << g_layer_differing << ",\n \"shapes\": [\n";
+        << ",\n \"mismatched_ticks\": " << g_mismatched_ticks << ",\n \"unnamed\": " << g_unnamed << ",\n \"outside\": " << g_outside << ",\n \"route_checked\": " << g_route_checked << ",\n \"route_lost\": " << g_route_lost << ",\n \"layer_checked\": " << g_layer_checked << ",\n \"layer_wrong\": " << g_layer_wrong << ",\n \"layer_differing\": " << g_layer_differing << ",\n \"shapes\": [\n";
     bool first = true;
     for (const auto &[key, shape] : g_shapes) {
         out << (first ? "" : ",\n") << "  {\"ticks\": " << shape.ticks << ", \"passes\": [";
@@ -215,6 +219,18 @@ void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
 #endif
         g_kinds[key]++;
     }
+}
+
+Routed Route(const gfx::TextureBinding &texture, const gfx::DrawState &state) {
+    Routed routed;
+    FromMaterial(ToMaterial(state, texture), routed.state, routed.texture);
+    g_route_checked++;
+    if (!DrawsTheSame(state, texture, routed.state, routed.texture)) {
+        // A draw a material can't say yet stays as it was, on the screens the scene set doesn't reach. A trace counts it.
+        g_route_lost++;
+        return {state, texture};
+    }
+    return routed;
 }
 
 void PassTraceStart() {

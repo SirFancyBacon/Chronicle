@@ -3,6 +3,7 @@ project(dcdecomp NONE)
 
 # Allows local candidate builds against an isolated Kazarov checkout.
 set(KAZAROV_SOURCE_DIR "${CMAKE_SOURCE_DIR}/tools/kazarov" CACHE PATH "Kazarov source tree")
+set(NOKTUS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/tools/noktus" CACHE PATH "Noktus Nimbus source tree")
 get_filename_component(KAZAROV_SOURCE_DIR "${KAZAROV_SOURCE_DIR}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
 
 # PLATFORM picks what is built: PS2 builds and verifies the retail images
