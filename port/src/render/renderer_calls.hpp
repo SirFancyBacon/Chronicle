@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string_view>
 #include <utility>
 
 #include "gfx/gfx.hpp"
@@ -19,8 +20,6 @@ namespace dc::render {
 DC_RENDERER_CALL(BeginFrame)
 DC_RENDERER_CALL(BeginRecording)
 DC_RENDERER_CALL(CanCopyMainDepth)
-DC_RENDERER_CALL(CopyMainDepthToTarget)
-DC_RENDERER_CALL(CreateRenderTarget)
 DC_RENDERER_CALL(CreateTexture)
 DC_RENDERER_CALL(CurrentFrameLayout)
 DC_RENDERER_CALL(CurrentRenderTarget)
@@ -28,7 +27,6 @@ DC_RENDERER_CALL(CutCameraInterpolation)
 DC_RENDERER_CALL(CutInterpolation)
 DC_RENDERER_CALL(DepthPlanesAvailable)
 DC_RENDERER_CALL(DepthResult)
-DC_RENDERER_CALL(DestroyTexture)
 DC_RENDERER_CALL(EndFrame)
 DC_RENDERER_CALL(EndRecording)
 DC_RENDERER_CALL(FindNamedRenderTarget)
@@ -41,11 +39,8 @@ DC_RENDERER_CALL(InvertAffineTransform)
 DC_RENDERER_CALL(LogicalFrame)
 DC_RENDERER_CALL(LogicalHeight)
 DC_RENDERER_CALL(LogicalWidth)
-DC_RENDERER_CALL(NamedRenderTarget)
 DC_RENDERER_CALL(ReadDepth)
 DC_RENDERER_CALL(Recording)
-DC_RENDERER_CALL(SetRenderTarget)
-DC_RENDERER_CALL(SnapshotFrame)
 DC_RENDERER_CALL(UpdateTextureNow)
 DC_RENDERER_CALL(VisibleLogicalRect)
 
@@ -71,6 +66,54 @@ inline void ClearStencil(std::uint8_t value, const gfx::LogicalRect *rect = null
         MirrorClearStencil();
     }
     gfx::ClearStencil(value, rect);
+}
+
+inline void SetRenderTarget(gfx::TextureHandle target) {
+    if (MirrorOn()) {
+        MirrorSetTarget(target);
+    }
+    gfx::SetRenderTarget(target);
+}
+
+inline gfx::TextureHandle CreateRenderTarget(std::uint32_t width, std::uint32_t height, bool has_alpha, bool share_main_depth = false, bool frame_target = false) {
+    const gfx::TextureHandle target = gfx::CreateRenderTarget(width, height, has_alpha, share_main_depth, frame_target);
+    if (MirrorOn()) {
+        MirrorSurface(target, width, height, has_alpha, share_main_depth, frame_target);
+    }
+    return target;
+}
+
+inline gfx::TextureHandle NamedRenderTarget(std::string_view name, std::uint32_t width, std::uint32_t height, bool has_alpha, bool share_main_depth = false,
+                                            bool frame_target = false) {
+    const gfx::TextureHandle target = gfx::NamedRenderTarget(name, width, height, has_alpha, share_main_depth, frame_target);
+    if (MirrorOn()) {
+        MirrorSurface(target, width, height, has_alpha, share_main_depth, frame_target);
+    }
+    return target;
+}
+
+inline bool CopyMainDepthToTarget(const gfx::LogicalRect &source) {
+    if (!gfx::CopyMainDepthToTarget(source)) {
+        return false;
+    }
+    if (MirrorOn()) {
+        MirrorCopyDepth(source);
+    }
+    return true;
+}
+
+inline bool SnapshotFrame(gfx::TextureHandle target) {
+    if (MirrorOn()) {
+        MirrorSnapshotFrame(target);
+    }
+    return gfx::SnapshotFrame(target);
+}
+
+inline void DestroyTexture(gfx::TextureHandle texture) {
+    if (MirrorOn()) {
+        MirrorDestroyTexture(texture);
+    }
+    gfx::DestroyTexture(texture);
 }
 
 inline void SetUiAnchor(const gfx::UiAnchor &anchor) {

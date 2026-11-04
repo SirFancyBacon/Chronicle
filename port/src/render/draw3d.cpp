@@ -6,6 +6,7 @@
 #include <optional>
 
 #include "render/screen.hpp"
+#include "render/renderer_calls.hpp"
 #include "renderinfo.hpp"
 
 namespace dc::render {
@@ -74,9 +75,9 @@ gfx::TextureHandle Draw3DFramePicture() {
     // after the copy, with nothing written to the frame in between.
     if (g_frame_picture_pending) {
         g_frame_picture_pending = false;
-        g_frame_picture = gfx::NamedRenderTarget("frame copy picture", static_cast<uint32_t>(kScreenWidth),
+        g_frame_picture = render::NamedRenderTarget("frame copy picture", static_cast<uint32_t>(kScreenWidth),
                                                  static_cast<uint32_t>(kScreenHeight), false, false, true);
-        if (g_frame_picture != gfx::kNullTexture && !gfx::SnapshotFrame(g_frame_picture)) {
+        if (g_frame_picture != gfx::kNullTexture && !render::SnapshotFrame(g_frame_picture)) {
             g_frame_picture = gfx::kNullTexture;
         }
     }

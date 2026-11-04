@@ -33,6 +33,7 @@
 #include "render/noktus_mirror.hpp"
 #include "render/passes.hpp"
 #include "render/screen.hpp"
+#include "render/renderer_calls.hpp"
 #include "texture.hpp"
 
 namespace dc::render {
@@ -693,7 +694,7 @@ unsigned PortRegisterNamedTarget(std::string_view name, unsigned width, unsigned
     entry.height = height;
     entry.has_alpha = has_alpha;
     if (RendererUp()) {
-        gfx::NamedRenderTarget(name, width, height, has_alpha, false, MGPortFrameTarget(name));
+        render::NamedRenderTarget(name, width, height, has_alpha, false, MGPortFrameTarget(name));
     }
     return key;
 }

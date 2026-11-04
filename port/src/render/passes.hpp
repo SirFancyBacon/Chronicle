@@ -177,6 +177,9 @@ inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::Texture
 inline bool BlitTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, gfx::Rect dst_rect,
                         gfx::Filter filter) {
     CountCopy();
+    if (MirrorOn()) {
+        MirrorBlit(src, src_rect, dst, dst_rect, filter);
+    }
     return gfx::BlitTexture(src, src_rect, dst, dst_rect, filter);
 }
 

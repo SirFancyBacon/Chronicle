@@ -9,6 +9,7 @@
 #include "rect.hpp"
 #include "render/gs_state.hpp"
 #include "render/screen.hpp"
+#include "render/renderer_calls.hpp"
 #include "snd.hpp"
 #include "text/textwipe.hpp"
 #include "texture.hpp"
@@ -70,9 +71,9 @@ bool Resolve(u_long tex0, u_long tex1, gfx::DrawState &state, Texture &texture) 
 
     if (texture.binding.texture == gfx::kMainTarget) {
         gfx::TextureHandle snapshot =
-            gfx::NamedRenderTarget(kFrameSnapshot, static_cast<uint32_t>(kScreenWidth),
+            render::NamedRenderTarget(kFrameSnapshot, static_cast<uint32_t>(kScreenWidth),
                                    static_cast<uint32_t>(kScreenHeight), true, false, true);
-        if (snapshot == gfx::kNullTexture || !gfx::SnapshotFrame(snapshot)) {
+        if (snapshot == gfx::kNullTexture || !render::SnapshotFrame(snapshot)) {
             return false;
         }
         texture.binding.texture = snapshot;
