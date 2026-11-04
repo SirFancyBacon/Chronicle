@@ -1051,7 +1051,8 @@ int EdLoadVillager(u_int *pack, char *name, CNPCharacter *villager, CDataAlloc2<
         CFrameAttr attr;
         attr.clip_enable = false;
         attr.fog_enable = true;
-        villager->frame->SetAttr(attr, 1, 4);
+        // Retail applies 4 here, the clip alone, so the fog set above never reaches the character.
+        villager->frame->SetAttr(attr, 1, 0x44);
     }
 
     villager->initialized = true;
@@ -3927,7 +3928,8 @@ int _LOAD_CHARA(RS_STACKDATA *stack, int argument_count) {
     npc->SetMotionCamera(EdEventInfo.camera);
 
     if (npc->frame != nullptr) {
-        npc->frame->SetAttr(attr, 1, 4);
+        // Retail applies 4 here, the clip alone, so the fog set above never reaches the character.
+        npc->frame->SetAttr(attr, 1, 0x44);
     }
 
     PrintMemory();

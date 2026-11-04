@@ -3636,7 +3636,8 @@ void LoadChara2(int chara, int keep_place, unsigned int *chara_data, unsigned in
         CharaHand.frame->SetAttr(hand_attr, 1, 0);
     }
 
-    CharaMain.frame->SetAttr(frame_attr, 1, 4);
+    // Retail applies 4 here, the clip alone, so the fog set above never reaches the character.
+    CharaMain.frame->SetAttr(frame_attr, 1, 0x44);
 
     if (keep_place == 0) {
         CharaMain.frame->SetPosition(pos);

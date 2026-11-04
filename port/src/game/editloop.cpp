@@ -4743,7 +4743,8 @@ void EdLoadMainChara(char *pack_path, char *info_name, CDataAlloc2<1> *arena) {
     CFrameAttr attr;
     attr.clip_enable = false;
     attr.fog_enable = true;
-    MainChara.frame->SetAttr(attr, 1, 4);
+    // Retail applies 4 here, the clip alone, so the fog set above never reaches the character.
+    MainChara.frame->SetAttr(attr, 1, 0x44);
     MainChara.SetPosition(0.0f, 0.0f, 0.0f);
     Chara = &MainChara;
 }
