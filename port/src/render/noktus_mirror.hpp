@@ -22,6 +22,17 @@ void MirrorTexturePixels(gfx::TextureHandle texture, std::uint32_t level, std::u
                          std::uint32_t height, const void *pixels);
 void MirrorDestroyTexture(gfx::TextureHandle texture);
 
+void MirrorCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHandle to, std::int32_t x, std::int32_t y);
+void MirrorClear(bool color, const std::uint8_t *rgba, bool depth, float depth_value);
+
+void MirrorCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices);
+void MirrorUpdateMesh(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices);
+void MirrorDestroyMesh(gfx::MeshHandle mesh);
+void MirrorDrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint32_t index_count, const gfx::MeshConstants &constants,
+                    const gfx::TextureBinding &texture, const gfx::DrawState &state, const gfx::MeshTransform *transform);
+void MirrorDrawImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices, const gfx::MeshConstants &constants,
+                         const gfx::TextureBinding &texture, const gfx::DrawState &state, const gfx::MeshTransform *transform);
+
 void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
                   const gfx::DrawState &state);
 

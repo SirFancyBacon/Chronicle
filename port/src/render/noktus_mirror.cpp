@@ -22,6 +22,8 @@ struct Mirror {
     std::string                                              path;
     std::unique_ptr<noktus::Renderer>                        renderer;
     std::unordered_map<gfx::TextureHandle, noktus::TextureId> textures;
+    std::unordered_map<gfx::MeshHandle, noktus::MeshId>       meshes;
+    std::uint64_t                                            meshes_drawn = 0;
     std::set<gfx::TextureHandle>                             wanted; // drawn with, and not made here: read across between ticks
     std::mutex                                               lock;
     bool                                                     open = false;
@@ -63,7 +65,7 @@ void WriteLastPicture() {
             gfx::WritePng(mirror.path, pixels.data(), width, height);
         });
         std::fprintf(stderr, "noktus mirror: %llu drawn, %llu skipped for a texture it lacks, %llu to other targets\n",
-                     static_cast<unsigned long long>(mirror.drawn), static_cast<unsigned long long>(mirror.skipped),
+                     static_cast<unsigned long long>(mirror.drawn + mirror.meshes_drawn), static_cast<unsigned long long>(mirror.skipped),
                      static_cast<unsigned long long>(mirror.elsewhere));
         mirror.renderer.reset();
     }
@@ -102,6 +104,54 @@ void ReadAcross(Mirror &mirror, gfx::TextureHandle handle) {
         found = mirror.textures.emplace(handle, mirror.renderer->CreateTexture(desc)).first;
     }
     mirror.renderer->UpdateTexture(found->second, 0, {0, 0, width, height}, pixels);
+}
+
+std::vector<noktus::Vertex3D> Converted(std::span<const gfx::Vertex3D> vertices) {
+    std::vector<noktus::Vertex3D> out;
+    out.reserve(vertices.size());
+    for (const gfx::Vertex3D &vertex : vertices) {
+        noktus::Vertex3D made;
+        made.position = {vertex.position[0], vertex.position[1], vertex.position[2]};
+        made.normal = {vertex.normal[0], vertex.normal[1], vertex.normal[2]};
+        made.u = vertex.uv[0];
+        made.v = vertex.uv[1];
+        made.color = {static_cast<float>(vertex.color[0]) / 128.0f, static_cast<float>(vertex.color[1]) / 128.0f,
+                      static_cast<float>(vertex.color[2]) / 128.0f, static_cast<float>(vertex.color[3]) / 128.0f};
+        out.push_back(made);
+    }
+    return out;
+}
+
+// A mesh draw as Noktus takes it, or false for one it can't take yet.
+bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::TextureBinding &texture, const gfx::DrawState &state,
+             const gfx::MeshTransform *transform, noktus::MeshDraw &draw) {
+    if (!mirror.open || transform == nullptr) {
+        return false;
+    }
+    if (gfx::CurrentRenderTarget() != gfx::kMainTarget) {
+        mirror.elsewhere++;
+        return false;
+    }
+    MeshScene scene = ToMeshScene(constants, *transform, texture, state);
+    if (scene.draw.material.shadow_volume != noktus::ShadowVolume::None) {
+        return false;
+    }
+    if (texture.texture != gfx::kNullTexture) {
+        const auto found = mirror.textures.find(texture.texture);
+        if (found == mirror.textures.end()) {
+            if (texture.texture != gfx::kPreviousFrame) {
+                mirror.wanted.insert(texture.texture);
+            }
+            mirror.skipped++;
+            return false;
+        }
+        scene.draw.material.albedo = found->second;
+    } else {
+        scene.draw.material.albedo = noktus::TextureId::None;
+    }
+    mirror.renderer->SetCamera(scene.camera);
+    draw = std::move(scene.draw);
+    return true;
 }
 
 noktus::Primitive2D ToPrimitive(gfx::Primitive primitive) {
@@ -216,6 +266,91 @@ void MirrorDestroyTexture(gfx::TextureHandle texture) {
     }
 }
 
+void MirrorCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHandle to, std::int32_t x, std::int32_t y) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    const auto       source = mirror.textures.find(from);
+    const auto       target = mirror.textures.find(to);
+    if (source != mirror.textures.end() && target != mirror.textures.end()) {
+        Guarded([&] {
+            mirror.renderer->CopyTexture(source->second,
+                                         {static_cast<std::uint32_t>(rect.x), static_cast<std::uint32_t>(rect.y), static_cast<std::uint32_t>(rect.w),
+                                          static_cast<std::uint32_t>(rect.h)},
+                                         target->second, static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
+        });
+    }
+}
+
+void MirrorClear(bool color, const std::uint8_t *rgba, bool depth, float depth_value) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (!mirror.open || gfx::CurrentRenderTarget() != gfx::kMainTarget) {
+        return;
+    }
+    noktus::Color clear = {0.0f, 0.0f, 0.0f, 0.0f};
+    if (color && rgba != nullptr) {
+        clear = {static_cast<float>(rgba[0]) / 255.0f, static_cast<float>(rgba[1]) / 255.0f, static_cast<float>(rgba[2]) / 255.0f, 1.0f};
+    }
+    Guarded([&] { mirror.renderer->Clear(clear, color, depth_value, depth); });
+}
+
+void MirrorCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    Guarded([&] {
+        Start(mirror);
+        mirror.meshes[mesh] = mirror.renderer->CreateMesh(Converted(vertices), indices);
+    });
+}
+
+void MirrorUpdateMesh(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    const auto       found = mirror.meshes.find(mesh);
+    if (found != mirror.meshes.end()) {
+        Guarded([&] { mirror.renderer->UpdateMesh(found->second, first, Converted(vertices)); });
+    }
+}
+
+void MirrorDestroyMesh(gfx::MeshHandle mesh) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    const auto       found = mirror.meshes.find(mesh);
+    if (found != mirror.meshes.end()) {
+        Guarded([&] { mirror.renderer->DestroyMesh(found->second); });
+        mirror.meshes.erase(found);
+    }
+}
+
+void MirrorDrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint32_t index_count, const gfx::MeshConstants &constants,
+                    const gfx::TextureBinding &texture, const gfx::DrawState &state, const gfx::MeshTransform *transform) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    const auto       found = mirror.meshes.find(mesh);
+    noktus::MeshDraw draw;
+    if (found == mirror.meshes.end() || !Prepare(mirror, constants, texture, state, transform, draw)) {
+        return;
+    }
+    draw.mesh = found->second;
+    draw.first_index = first_index;
+    draw.index_count = index_count;
+    Guarded([&] { mirror.renderer->Draw(draw); });
+    mirror.meshes_drawn++;
+}
+
+void MirrorDrawImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices, const gfx::MeshConstants &constants,
+                         const gfx::TextureBinding &texture, const gfx::DrawState &state, const gfx::MeshTransform *transform) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    noktus::MeshDraw draw;
+    if (!Prepare(mirror, constants, texture, state, transform, draw)) {
+        return;
+    }
+    draw.index_count = static_cast<std::uint32_t>(indices.size());
+    Guarded([&] { mirror.renderer->Draw(Converted(vertices), indices, draw); });
+    mirror.meshes_drawn++;
+}
+
 void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
                   const gfx::DrawState &state) {
     Mirror          &mirror = State();
@@ -230,6 +365,9 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     const bool textured = texture.texture != gfx::kNullTexture;
     noktus::Draw2D draw;
     draw.material = ToMaterial(state, texture);
+    if (draw.material.shadow_volume != noktus::ShadowVolume::None) {
+        return;
+    }
     if (textured) {
         const auto found = mirror.textures.find(texture.texture);
         if (found == mirror.textures.end()) {

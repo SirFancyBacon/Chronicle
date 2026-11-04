@@ -147,6 +147,9 @@ inline void DrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint3
     CountDraw();
     NoteMesh(constants, transform, texture, state);
     const Routed routed = Route(texture, state);
+    if (MirrorOn()) {
+        MirrorDrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
+    }
     gfx::DrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
 }
 
@@ -156,12 +159,18 @@ inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span
     CountDraw();
     NoteMesh(constants, transform, texture, state);
     const Routed routed = Route(texture, state);
+    if (MirrorOn()) {
+        MirrorDrawImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
+    }
     gfx::DrawMeshImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
 }
 
 inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, std::int32_t dst_x,
                         std::int32_t dst_y) {
     CountCopy();
+    if (MirrorOn()) {
+        MirrorCopyTexture(src, src_rect, dst, dst_x, dst_y);
+    }
     return gfx::CopyTexture(src, src_rect, dst, dst_x, dst_y);
 }
 
