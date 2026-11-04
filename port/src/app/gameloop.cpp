@@ -205,6 +205,9 @@ int  g_town_menu;
 int  g_town_event;
 // The dungeon --town-dungeon asked for, plus one; 0 for none.
 int  g_town_dungeon;
+int  g_town_clock;
+std::string g_town_interior;
+bool g_dungeon_ura;
 bool g_fast_load;
 bool g_autosave;
 int  g_developer_return_mode = GAME_MODE_TITLE;
@@ -707,6 +710,37 @@ bool GameSetTownDungeon(const char *number) {
 
 int GameTakeTownDungeon() {
     return std::exchange(g_town_dungeon, 0) - 1;
+}
+
+bool GameSetTownClock(const char *hour) {
+    const std::string_view digits = hour;
+    int                    value = -1;
+    auto [end, error] = std::from_chars(digits.data(), digits.data() + digits.size(), value);
+    if (error != std::errc{} || end != digits.data() + digits.size() || value < 0 || value > 23) {
+        return false;
+    }
+    g_town_clock = value + 1;
+    return true;
+}
+
+int GameTakeTownClock() {
+    return std::exchange(g_town_clock, 0) - 1;
+}
+
+void GameSetTownInterior(const char *name) {
+    g_town_interior = name;
+}
+
+std::string GameTakeTownInterior() {
+    return std::exchange(g_town_interior, {});
+}
+
+void GameSetDungeonUra() {
+    g_dungeon_ura = true;
+}
+
+bool GameTakeDungeonUra() {
+    return std::exchange(g_dungeon_ura, false);
 }
 
 bool GameSetJump(const char *spec) {

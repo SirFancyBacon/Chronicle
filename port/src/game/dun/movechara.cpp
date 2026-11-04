@@ -196,6 +196,11 @@ void DunMoveChara() {
 
     switch (gameTask) {
         case GAME_TASK_PLAY:
+            if (app::GameTakeDungeonUra()) {
+                gameTask = GAME_TASK_URA_SWAP;
+                break;
+            }
+
             if (CheckTrialEnd() != 0) {
                 tryalExit = 1;
             } else if (GamePad.Down(PAD_START) != 0) {

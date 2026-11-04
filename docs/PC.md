@@ -104,6 +104,7 @@ a language the data lacks, and its English button reads as the disc's art does.
 | `--jump MODE[:MAP]` | test hook: start in a mode (see "Test hooks"); also `DC_JUMP` |
 | `--fast-load` | test hook: loading-screen holds and fades of a few ticks; also `DC_FAST_LOAD=1` |
 | `--town-menu N`, `--town-event N` | test hooks: open a town menu, or raise a town program (see "Test hooks") |
+| `--town-clock H`, `--town-interior NAME`, `--dungeon-ura` | test hooks: set the town's clock, enter an interior, or swap to a floor's back side (see "Test hooks") |
 | `--give ITEM,...` | test hook: items and weapons the party is given when a town or dungeon starts (see "Test hooks"); also `DC_GIVE` |
 | `--display-per-tick N` | headless test aid: render N interpolated display frames per tick (offscreen, not presented) before presenting the tick's canonical image |
 | `--show-fps` | draw the FPS counter when headless too (a headless run leaves `show_fps` off) |
@@ -616,6 +617,11 @@ For tests and debugging only; nothing the game does depends on them.
 - `--town-dungeon N` (or `DC_TOWN_DUNGEON`) enters dungeon `N` (0-6) once the town walks, as the
   town's gate enters its own dungeon, so `--jump load:<slot>` reaches that dungeon's floor select
   with the save's floors, Atla and limits. Anything else exits with status 2.
+- `--town-clock H` (or `DC_TOWN_CLOCK`) sets the town's clock to hour `H` (0-23) once the town walks, through
+  `EdSetClock`, so a capture can show a time of day. Anything else exits with status 2.
+- `--town-interior NAME` (or `DC_TOWN_INTERIOR`) enters the town's interior `NAME` (`i01h01`, as its folder is named) once
+  the town walks, through `GotoInterior`, at the time of day the clock shows.
+- `--dungeon-ura` swaps to the floor's back side once the dungeon plays, as the script's request does.
 
 `darkcloud --headless --jump dungeon:0 --fast-load --frames 60` shows the first
 dungeon's floor select after about five seconds on lavapipe.

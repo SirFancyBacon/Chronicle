@@ -92,6 +92,9 @@ struct Options {
     const char  *give = nullptr;
     const char  *town_menu = nullptr;
     const char  *town_dungeon = nullptr;
+    const char  *town_clock = nullptr;
+    const char  *town_interior = nullptr;
+    bool         dungeon_ura = false;
     const char  *town_event = nullptr;
     bool         fast_load = false;
     bool         show_fps = false;
@@ -161,7 +164,10 @@ float g_switch_render_scale = 0.0f;
                  "  --town-menu N      open town menu N once a town walks: 8 fish exchange, 9 bait board,\n"
                  "                     10 fishing records, 11 rods board (DC_TOWN_MENU)\n"
                  "  --town-event N     raise town program N the first time Cross goes down in a town (DC_TOWN_EVENT)\n"
-                 "  --town-dungeon N   enter dungeon N (0-6) once a town walks, at its floor select (DC_TOWN_DUNGEON)\n",
+                 "  --town-dungeon N   enter dungeon N (0-6) once a town walks, at its floor select (DC_TOWN_DUNGEON)\n"
+                 "  --town-clock H     set the town's clock to hour H (0-23) once it walks (DC_TOWN_CLOCK)\n"
+                 "  --town-interior N  enter the town's interior N (i01h01) once it walks (DC_TOWN_INTERIOR)\n"
+                 "  --dungeon-ura      swap to the floor's back side once the dungeon plays\n",
                  program);
 #ifdef __SWITCH__
     std::fprintf(stderr, "  --switch-core-affinity separate|auto  pin game and render to separate cores "
@@ -217,6 +223,12 @@ Options ParseOptions(int argc, const char **argv) {
             options.town_event = value();
         } else if (arg == "--town-dungeon") {
             options.town_dungeon = value();
+        } else if (arg == "--town-clock") {
+            options.town_clock = value();
+        } else if (arg == "--town-interior") {
+            options.town_interior = value();
+        } else if (arg == "--dungeon-ura") {
+            options.dungeon_ura = true;
         } else if (arg == "--fast-load") {
             options.fast_load = true;
         } else if (arg == "--export-text") {
@@ -611,6 +623,22 @@ int Run(int argc, const char **argv) {
     if (options.town_dungeon != nullptr && *options.town_dungeon != '\0' && !GameSetTownDungeon(options.town_dungeon)) {
         std::fprintf(stderr, "bad --town-dungeon: %s\n", options.town_dungeon);
         std::exit(kExitUsage);
+    }
+    if (options.town_clock == nullptr) {
+        options.town_clock = std::getenv("DC_TOWN_CLOCK");
+    }
+    if (options.town_clock != nullptr && *options.town_clock != '\0' && !GameSetTownClock(options.town_clock)) {
+        std::fprintf(stderr, "bad --town-clock: %s\n", options.town_clock);
+        std::exit(kExitUsage);
+    }
+    if (options.town_interior == nullptr) {
+        options.town_interior = std::getenv("DC_TOWN_INTERIOR");
+    }
+    if (options.town_interior != nullptr && *options.town_interior != '\0') {
+        GameSetTownInterior(options.town_interior);
+    }
+    if (options.dungeon_ura) {
+        GameSetDungeonUra();
     }
     if (options.jump != nullptr && *options.jump != '\0' && !GameSetJump(options.jump)) {
         std::fprintf(stderr, "bad --jump: %s\n", options.jump);

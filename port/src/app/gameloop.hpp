@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include "app/presentation.hpp"
 
@@ -113,6 +114,38 @@ bool GameSetTownDungeon(const char *number);
  * The dungeon GameSetTownDungeon asked for, once; -1 for none.
  */
 int GameTakeTownDungeon();
+
+/**
+ * Test hook: an hour (0-23) to set the town's clock to once it is walking, as the clock's own setter
+ * does, so a capture can show a time of day. False for anything else.
+ */
+bool GameSetTownClock(const char *hour);
+
+/**
+ * The hour GameSetTownClock asked for, once; -1 for none.
+ */
+int GameTakeTownClock();
+
+/**
+ * Test hook: an interior of the current town (i01h01, as its folder is named) to enter once the town
+ * is walking, as its door does, so a capture can show one.
+ */
+void GameSetTownInterior(const char *name);
+
+/**
+ * The interior GameSetTownInterior asked for, once; empty for none.
+ */
+std::string GameTakeTownInterior();
+
+/**
+ * Test hook: swap to the floor's back side once the dungeon is playing, as the script's request does.
+ */
+void GameSetDungeonUra();
+
+/**
+ * Whether GameSetDungeonUra asked for the swap, once.
+ */
+bool GameTakeDungeonUra();
 
 /**
  * Test hook: cuts the loading screen's holds and fades to a few ticks.

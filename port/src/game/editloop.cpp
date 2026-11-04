@@ -1976,6 +1976,14 @@ int EditLoop() {
     // its own, once the town has settled as a player's press finds it.
     const bool settled = GameMode == ED_MODE_WALK && key_lock == 0 && loop_counter > 30;
     static int hook_dungeon = -1;
+    if (settled) {
+        if (const int hour = app::GameTakeTownClock(); hour >= 0) {
+            EdSetClock(static_cast<float>(hour));
+        }
+        if (std::string interior = app::GameTakeTownInterior(); !interior.empty()) {
+            GotoInterior(interior.data(), 0, 0, nullptr, -1);
+        }
+    }
     if (settled && goto_dungeon == 0) {
         if (const int dungeon = app::GameTakeTownDungeon(); dungeon >= 0) {
             hook_dungeon = dungeon;
