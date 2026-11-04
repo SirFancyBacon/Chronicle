@@ -24,6 +24,7 @@
 #include "platform/overlay.hpp"
 #include "platform/paths.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 
 namespace dc::text::textwipe {
 
@@ -247,18 +248,18 @@ float SweepPosition(double seconds) {
     const double cycle = 2.0 * (kSweepSeconds + kRestSeconds);
     double       t = std::fmod(std::max(0.0, seconds), cycle);
     if (t < kRestSeconds) {
-        return gfx::LogicalWidth();
+        return render::LogicalWidth();
     }
     t -= kRestSeconds;
     if (t < kSweepSeconds) {
-        return gfx::LogicalWidth() * (1.0f - Smooth(t / kSweepSeconds));
+        return render::LogicalWidth() * (1.0f - Smooth(t / kSweepSeconds));
     }
     t -= kSweepSeconds;
     if (t < kRestSeconds) {
         return 0.0f;
     }
     t -= kRestSeconds;
-    return gfx::LogicalWidth() * Smooth(t / kSweepSeconds);
+    return render::LogicalWidth() * Smooth(t / kSweepSeconds);
 }
 
 void Update() {
@@ -315,13 +316,13 @@ void Update() {
             g_divider = SweepPosition(std::chrono::duration<double>(std::chrono::steady_clock::now() - g_started).count());
             break;
         case Mode::ShowBefore:
-            g_divider = gfx::LogicalWidth();
+            g_divider = render::LogicalWidth();
             break;
         case Mode::ShowAfter:
             g_divider = 0.0f;
             break;
         case Mode::Overlay:
-            g_divider = gfx::LogicalWidth();
+            g_divider = render::LogicalWidth();
             break;
     }
 }
@@ -408,16 +409,16 @@ void Both(const std::function<void(bool runtime)> &draw) {
         SetDrawTint(nullptr);
         return;
     }
-    const float edge = std::clamp(g_divider, 0.0f, gfx::LogicalWidth());
+    const float edge = std::clamp(g_divider, 0.0f, render::LogicalWidth());
     // Scissors touching the logical frame boundary extend through widescreen margins.
     if (edge > 0.0f) {
-        const gfx::LogicalRect left = {.x = 0.0f, .y = 0.0f, .w = edge, .h = gfx::LogicalHeight()};
+        const gfx::LogicalRect left = {.x = 0.0f, .y = 0.0f, .w = edge, .h = render::LogicalHeight()};
         SetDrawClip(&left);
         draw(false);
     }
-    if (edge < gfx::LogicalWidth()) {
+    if (edge < render::LogicalWidth()) {
         const gfx::LogicalRect right = {
-            .x = edge, .y = 0.0f, .w = gfx::LogicalWidth() - edge, .h = gfx::LogicalHeight()};
+            .x = edge, .y = 0.0f, .w = render::LogicalWidth() - edge, .h = render::LogicalHeight()};
         SetDrawClip(&right);
         draw(true);
     }
@@ -439,7 +440,7 @@ void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
     }
     if (g_clip) {
         gfx::DrawState         clipped = state;
-        const gfx::LogicalRect own = state.scissor ? state.scissor_rect : gfx::LogicalFrame();
+        const gfx::LogicalRect own = state.scissor ? state.scissor_rect : render::LogicalFrame();
         const float            left = std::max(own.x, g_clip->x);
         const float            top = std::max(own.y, g_clip->y);
         const float            right = std::min(own.x + own.w, g_clip->x + g_clip->w);
@@ -456,12 +457,12 @@ void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
 }
 
 void DrawDivider() {
-    if (!g_on || !(gfx::Recording() || gfx::InFrame())) {
+    if (!g_on || !(render::Recording() || render::InFrame())) {
         return;
     }
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::kMainTarget);
-    const int                 pixel = OverlayPixelSize(gfx::GetLogicalMapping(gfx::kMainTarget));
-    const float               x = std::clamp(g_divider, 0.0f, gfx::LogicalWidth());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(gfx::kMainTarget);
+    const int                 pixel = OverlayPixelSize(render::GetLogicalMapping(gfx::kMainTarget));
+    const float               x = std::clamp(g_divider, 0.0f, render::LogicalWidth());
     const float               half = 1.0f / std::max(0.5f, mapping.scale_x) * static_cast<float>(pixel);
     auto                      vertex = [](float vx, float vy, unsigned char grey) {
         return gfx::Vertex2D{
@@ -478,8 +479,8 @@ void DrawDivider() {
         const float half_width = half * width;
         line.push_back(vertex(x - half_width, 0.0f, grey));
         line.push_back(vertex(x + half_width, 0.0f, grey));
-        line.push_back(vertex(x + half_width, gfx::LogicalHeight(), grey));
-        line.push_back(vertex(x - half_width, gfx::LogicalHeight(), grey));
+        line.push_back(vertex(x + half_width, render::LogicalHeight(), grey));
+        line.push_back(vertex(x - half_width, render::LogicalHeight(), grey));
     }
     if (g_mode != Mode::Overlay) {
         render::Draw2D(gfx::Primitive::Quads, line, {}, state);

@@ -34,6 +34,7 @@
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
@@ -1561,13 +1562,13 @@ gfx::TextureHandle BubbleTarget(CTexture *texture) {
     if (texture != nullptr) {
         PortTextureRef ref = draw2d::Get().texture(texture->tex0, 0);
         if (ref.valid) {
-            std::optional<gfx::TextureInfo> info = gfx::GetTextureInfo(ref.binding.texture);
+            std::optional<gfx::TextureInfo> info = render::GetTextureInfo(ref.binding.texture);
             if (info && info->render_target) {
                 return ref.binding.texture;
             }
         }
     }
-    return gfx::FindNamedRenderTarget(kBubbleTarget);
+    return render::FindNamedRenderTarget(kBubbleTarget);
 }
 
 void DrawMaru(sceVif1Packet * /*packet*/, int x, int y, int width, int height, int lift, int /*unused*/, int rough,
@@ -1836,8 +1837,8 @@ void ClsMes::MakeFukidashi(sceVif1Packet *packet) {
 
     const gfx::TextureHandle target = BubbleTarget(services.find_texture(kBubbleTarget));
     if (target != gfx::kNullTexture) {
-        const gfx::TextureHandle previous = gfx::CurrentRenderTarget();
-        gfx::SetRenderTarget(target);
+        const gfx::TextureHandle previous = render::CurrentRenderTarget();
+        render::SetRenderTarget(target);
 
         gfx::DrawState state = services.draw_state();
         state.blend = true;
@@ -1849,7 +1850,7 @@ void ClsMes::MakeFukidashi(sceVif1Packet *packet) {
         state.scissor = false;
 
         constexpr std::array<uint8_t, 4> none{};
-        gfx::Clear(false, none.data(), true, 1.0f);
+        render::Clear(false, none.data(), true, 1.0f);
 
         const auto                   fill_bottom = static_cast<float>(SCREEN_HALF_HEIGHT);
         std::array<gfx::Vertex2D, 4> fill = {
@@ -1888,7 +1889,7 @@ void ClsMes::MakeFukidashi(sceVif1Packet *packet) {
             draw2d::DrawTextured(gfx::Primitive::Quads, quads, paper->tex0, 0x61, tiles);
         }
 
-        gfx::SetRenderTarget(previous);
+        render::SetRenderTarget(previous);
     }
 
     g_shapes.clear();
@@ -2339,7 +2340,7 @@ void DrawLetters(const std::vector<PendingLetter> &letters) {
     if (letters.empty()) {
         return;
     }
-    const gfx::LogicalMapping  mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping  mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float                rows = draw2d::RowScale();
     const int                  size = std::clamp(static_cast<int>(std::lround(kCellH * mapping.scale_y * rows)), kCellH, 512);
     std::vector<gfx::Vertex2D> quads;
@@ -2549,7 +2550,7 @@ void TtfLayoutRows(ClsMes &mes, std::vector<float> &xs, std::vector<float> &sque
     if (mes.char_height <= 0 || mes.char_width <= 0) {
         return;
     }
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const ttffont::Metrics    metrics = ttffont::GetMetrics();
     const float               em = TtfEm(mes, metrics);
     const int                 em_px = static_cast<int>(em * mapping.scale_x + 0.5f);
@@ -2635,7 +2636,7 @@ bool QueueTtfGlyph(ClsMes &mes, int index, int dark, int offset_x, int offset_y,
     if (ch == 0 || mes.char_height <= 0 || mes.char_width <= 0 || static_cast<size_t>(index) >= xs.size()) {
         return false;
     }
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const ttffont::Metrics    metrics = ttffont::GetMetrics();
     const float               em = TtfEm(mes, metrics);

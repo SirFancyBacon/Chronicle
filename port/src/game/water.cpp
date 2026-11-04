@@ -13,6 +13,7 @@
 #include "mglib.hpp"
 #include "render/draw3d.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
 #include "renderinfo.hpp"
 #include "texture.hpp"
@@ -76,7 +77,7 @@ constexpr float kFieldCentreY = SCREEN_QUARTER_HEIGHT_F;
 // fallback.
 PortTextureRef FrameCopy() {
     gfx::TextureHandle copy = Draw3DLastFrameCopy();
-    if (std::optional<gfx::TextureInfo> info = gfx::GetTextureInfo(copy); copy != gfx::kNullTexture && info) {
+    if (std::optional<gfx::TextureInfo> info = render::GetTextureInfo(copy); copy != gfx::kNullTexture && info) {
         PortTextureRef ref;
         ref.binding.texture = copy;
         ref.width = info->width;
@@ -113,7 +114,7 @@ bool PrepareRefraction(Refraction &refraction) {
     static gfx::TextureHandle pictured = gfx::kNullTexture;
     static unsigned           copies = 0;
 
-    if (gfx::CurrentRenderTarget() != gfx::kMainTarget) {
+    if (render::CurrentRenderTarget() != gfx::kMainTarget) {
         return false;
     }
     refraction.frame = Draw3DFramePicture();
@@ -122,18 +123,18 @@ bool PrepareRefraction(Refraction &refraction) {
     }
     auto width = static_cast<uint32_t>(kScreenWidth);
     auto height = static_cast<uint32_t>(kScreenHeight);
-    refraction.visible = gfx::NamedRenderTarget("water visible", width, height, true, true);
-    refraction.refracted = gfx::NamedRenderTarget("water refracted", width, height, false, true);
+    refraction.visible = render::NamedRenderTarget("water visible", width, height, true, true);
+    refraction.refracted = render::NamedRenderTarget("water refracted", width, height, false, true);
     if (refraction.visible == gfx::kNullTexture || refraction.refracted == gfx::kNullTexture) {
         return false;
     }
     if (pictured != refraction.frame || copies != Draw3DFrameCopies()) {
         const uint8_t clear[4] = {};
-        gfx::SetRenderTarget(refraction.visible);
-        gfx::Clear(true, clear, false, 0.0f);
-        gfx::SetRenderTarget(refraction.refracted);
-        gfx::Clear(true, clear, false, 0.0f);
-        gfx::SetRenderTarget(gfx::kMainTarget);
+        render::SetRenderTarget(refraction.visible);
+        render::Clear(true, clear, false, 0.0f);
+        render::SetRenderTarget(refraction.refracted);
+        render::Clear(true, clear, false, 0.0f);
+        render::SetRenderTarget(gfx::kMainTarget);
         pictured = refraction.frame;
         copies = Draw3DFrameCopies();
     }
@@ -143,7 +144,7 @@ bool PrepareRefraction(Refraction &refraction) {
 // The surface's vertices with the ripple's shift as an offset from where each lands, in the
 // frame's normalised units; the shift down is in field rows, two to a row of the frame.
 std::vector<gfx::Vertex3D> RippledVertices(const CWater &water, const std::vector<gfx::Vertex3D> &vertices) {
-    gfx::LogicalMapping        mapping = gfx::GetLogicalMapping(gfx::kMainTarget);
+    gfx::LogicalMapping        mapping = render::GetLogicalMapping(gfx::kMainTarget);
     float                      across = mapping.pixel_width ? mapping.scale_x / static_cast<float>(mapping.pixel_width) : 0.0f;
     float                      down = mapping.pixel_height ? 2.0f * mapping.scale_y / static_cast<float>(mapping.pixel_height) : 0.0f;
     std::vector<gfx::Vertex3D> rippled = vertices;
@@ -188,9 +189,9 @@ void DrawRefracted(const CWater &water, const Refraction &refraction, const Draw
     binding.wrap_v = gfx::Wrap::Clamp;
 
     binding.texture = refraction.frame;
-    gfx::SetRenderTarget(refraction.visible);
+    render::SetRenderTarget(refraction.visible);
     render::DrawMeshImmediate(flat, visual.indices, plain, binding, copy, &transform);
-    gfx::SetRenderTarget(refraction.refracted);
+    render::SetRenderTarget(refraction.refracted);
     render::DrawMeshImmediate(flat, visual.indices, plain, binding, copy, &transform);
     binding.texture = refraction.visible;
     over.alpha = {.a = 2, .b = 1, .c = 0, .d = 1, .fix = 0x80};
@@ -198,7 +199,7 @@ void DrawRefracted(const CWater &water, const Refraction &refraction, const Draw
     over.alpha = {.a = 0, .b = 2, .c = 2, .d = 1, .fix = 0x80};
     render::DrawMeshImmediate(rippled, visual.indices, plain, binding, over, &transform);
 
-    gfx::SetRenderTarget(gfx::kMainTarget);
+    render::SetRenderTarget(gfx::kMainTarget);
     gfx::DrawState surface = state;
     surface.texa_aem = false;
     surface.texa_ta0 = 0x80;
@@ -222,8 +223,8 @@ int CWater::CreateVUData(unsigned int *output, RenderInfo *info) {
 
     PortTextureRef      copy = FrameCopy();
     gfx::LogicalMapping texels = {.scale_x = 1.0f, .scale_y = 1.0f, .offset_x = 0.0f, .offset_y = 0.0f, .pixel_width = copy.width, .pixel_height = copy.height};
-    if (copy.valid && gfx::GetTextureInfo(copy.binding.texture)) {
-        texels = gfx::GetLogicalMapping(copy.binding.texture);
+    if (copy.valid && render::GetTextureInfo(copy.binding.texture)) {
+        texels = render::GetLogicalMapping(copy.binding.texture);
     }
     float inv_width = copy.valid && texels.pixel_width ? 1.0f / static_cast<float>(texels.pixel_width) : 0.0f;
     float inv_height = copy.valid && texels.pixel_height ? 1.0f / static_cast<float>(texels.pixel_height) : 0.0f;
@@ -323,7 +324,7 @@ extern "C" int DrawVu1__6CWaterFP10RenderInfoP13sceVif1PacketP1(CWater *water, R
         } else {
             PortTextureRef      copy = FrameCopy();
             gfx::TextureBinding binding;
-            if (copy.valid && copy.binding.texture != gfx::CurrentRenderTarget() &&
+            if (copy.valid && copy.binding.texture != render::CurrentRenderTarget() &&
                 copy.binding.texture != gfx::kMainTarget) {
                 binding = copy.binding;
                 binding.filter = gfx::Filter::Linear;

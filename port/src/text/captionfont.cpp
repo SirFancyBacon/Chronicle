@@ -17,6 +17,7 @@
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #define STBTT_STATIC
+#include "render/renderer_calls.hpp"
 #include "stb_truetype.h"
 
 #include "platform/paths.hpp"
@@ -55,7 +56,7 @@ unsigned                     g_generation = 0;
 
 void ResetAtlas() {
     if (g_atlas.texture != gfx::kNullTexture) {
-        gfx::DestroyTexture(g_atlas.texture);
+        render::DestroyTexture(g_atlas.texture);
     }
     g_atlas = {};
     g_generation++;
@@ -76,7 +77,7 @@ void MakeRoom(int width, int height) {
         g_generation++;
         g_atlas.texture = keep;
         const std::vector<unsigned char> blank(static_cast<size_t>(kAtlasSize) * kAtlasSize * 4, 0);
-        gfx::UpdateTextureNow(keep, 0, 0, 0, kAtlasSize, kAtlasSize, blank.data());
+        render::UpdateTextureNow(keep, 0, 0, 0, kAtlasSize, kAtlasSize, blank.data());
     }
 }
 
@@ -86,7 +87,7 @@ bool EnsureAtlas() {
         desc.width = kAtlasSize;
         desc.height = kAtlasSize;
         desc.format = gfx::TextureFormat::Rgba8;
-        g_atlas.texture = gfx::CreateTexture(desc);
+        g_atlas.texture = render::CreateTexture(desc);
     }
     return g_atlas.texture != gfx::kNullTexture;
 }
@@ -649,7 +650,7 @@ bool GetShapedGlyph(char32_t ch, int em_px, int outline_px, int stretch, bool sm
                 pixels[texel + 3] = bitmap.alpha[static_cast<size_t>(row) * width + col];
             }
         }
-        gfx::UpdateTextureNow(g_atlas.texture, 0, static_cast<uint32_t>(g_atlas.x), static_cast<uint32_t>(g_atlas.y),
+        render::UpdateTextureNow(g_atlas.texture, 0, static_cast<uint32_t>(g_atlas.x), static_cast<uint32_t>(g_atlas.y),
                               static_cast<uint32_t>(w), static_cast<uint32_t>(h), pixels.data());
         glyph.u0 = static_cast<float>(g_atlas.x + kPad);
         glyph.v0 = static_cast<float>(g_atlas.y + kPad);
@@ -687,7 +688,7 @@ bool AddImage(const std::vector<unsigned char> &rgba, int w, int h, Glyph &out) 
         std::copy_n(&rgba[static_cast<size_t>(row) * w * 4], static_cast<size_t>(w) * 4,
                     &pixels[(static_cast<size_t>(row + kPad) * padded_w + kPad) * 4]);
     }
-    gfx::UpdateTextureNow(g_atlas.texture, 0, static_cast<uint32_t>(g_atlas.x), static_cast<uint32_t>(g_atlas.y),
+    render::UpdateTextureNow(g_atlas.texture, 0, static_cast<uint32_t>(g_atlas.x), static_cast<uint32_t>(g_atlas.y),
                           static_cast<uint32_t>(padded_w), static_cast<uint32_t>(padded_h), pixels.data());
     out = {};
     out.u0 = static_cast<float>(g_atlas.x + kPad);

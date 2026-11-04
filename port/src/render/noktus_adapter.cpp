@@ -137,6 +137,34 @@ gfx::GsBlend EffectiveBlend(const gfx::DrawState &state) {
 
 } // namespace
 
+noktus::Vertex2D ToVertex2D(const gfx::Vertex2D &vertex, bool textured) {
+    const float one = textured ? kOne : 255.0f;
+    return {.x = vertex.x,
+            .y = vertex.y,
+            .depth = vertex.z,
+            .u = vertex.u,
+            .v = vertex.v,
+            .fog = static_cast<float>(vertex.fog) / 255.0f,
+            .color = {static_cast<float>(vertex.color[0]) / one, static_cast<float>(vertex.color[1]) / one,
+                      static_cast<float>(vertex.color[2]) / one, static_cast<float>(vertex.color[3]) / one}};
+}
+
+gfx::Vertex2D FromVertex2D(const noktus::Vertex2D &vertex, bool textured) {
+    const float   one = textured ? kOne : 255.0f;
+    gfx::Vertex2D out = {};
+    out.x = vertex.x;
+    out.y = vertex.y;
+    out.z = vertex.depth;
+    out.u = vertex.u;
+    out.v = vertex.v;
+    out.color[0] = ToByte(vertex.color.r, one);
+    out.color[1] = ToByte(vertex.color.g, one);
+    out.color[2] = ToByte(vertex.color.b, one);
+    out.color[3] = ToByte(vertex.color.a, one);
+    out.fog = ToByte(vertex.fog, 255.0f);
+    return out;
+}
+
 noktus::Material ToMaterial(const gfx::DrawState &state, const gfx::TextureBinding &texture) {
     noktus::Material material;
     material.albedo = static_cast<noktus::TextureId>(texture.texture);

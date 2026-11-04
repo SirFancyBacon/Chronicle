@@ -17,6 +17,12 @@ void FromMaterial(const noktus::Material &material, gfx::DrawState &state, gfx::
 bool DrawsTheSame(const gfx::DrawState &a, const gfx::TextureBinding &a_texture, const gfx::DrawState &b,
                   const gfx::TextureBinding &b_texture);
 
+/** A 2D vertex in Noktus's words. With a texture its colour multiplies, and the game's 1 is 128; without, it's the colour itself. */
+noktus::Vertex2D ToVertex2D(const gfx::Vertex2D &vertex, bool textured);
+
+/** A 2D vertex for today's renderer. */
+gfx::Vertex2D FromVertex2D(const noktus::Vertex2D &vertex, bool textured);
+
 /** What a mesh draw comes to in Noktus's words. */
 struct MeshScene {
     noktus::Camera   camera;

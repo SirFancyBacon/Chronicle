@@ -17,6 +17,7 @@
 #include "render/draw2d.hpp"
 #include "render/draw3d.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
@@ -40,7 +41,7 @@ gfx::TextureHandle FogFrameForLayout(const gfx::LogicalRect &visible) {
         // Fall back to the continuously refreshed frame_image until this layout is captured.
         fog_frame = gfx::kNullTexture;
     }
-    return fog_frame == gfx::FindNamedRenderTarget("title fog frame") ? fog_frame : gfx::kNullTexture;
+    return fog_frame == render::FindNamedRenderTarget("title fog frame") ? fog_frame : gfx::kNullTexture;
 }
 
 } // namespace
@@ -57,14 +58,14 @@ void TitlePortFeedback(u_char alpha) {
 }
 
 void TitlePortCaptureFog() {
-    const gfx::LogicalRect visible = gfx::VisibleLogicalRect(gfx::kMainTarget);
+    const gfx::LogicalRect visible = render::VisibleLogicalRect(gfx::kMainTarget);
     fog_frame = gfx::kNullTexture;
     if (visible.y >= 0.0f) {
         return;
     }
-    gfx::TextureHandle frame = gfx::NamedRenderTarget("title fog frame", 640, 480, false, false, true);
+    gfx::TextureHandle frame = render::NamedRenderTarget("title fog frame", 640, 480, false, false, true);
     if (frame != gfx::kNullTexture) {
-        gfx::SnapshotFrame(frame);
+        render::SnapshotFrame(frame);
         fog_layout = visible;
         fog_frame = frame;
     }
@@ -98,7 +99,7 @@ void TitlePortFog(std::span<const TitleFogBand> bands) {
         return;
     }
 
-    const gfx::LogicalRect    visible = gfx::VisibleLogicalRect(gfx::kMainTarget);
+    const gfx::LogicalRect    visible = render::VisibleLogicalRect(gfx::kMainTarget);
     const gfx::TextureHandle  full_frame = FogFrameForLayout(visible);
     const bool                full_height = full_frame != gfx::kNullTexture;
     const float               last_texel = (full_height ? (visible.y + visible.h) * 0.5f : SCREEN_HALF_HEIGHT_F) - 0.5f;
@@ -177,7 +178,7 @@ float TitlePortBackdropScale() {
 }
 
 float TitlePortBackdropHeightScale() {
-    return std::max(1.0f, gfx::VisibleLogicalRect(gfx::kMainTarget).h / kScreenHeight);
+    return std::max(1.0f, render::VisibleLogicalRect(gfx::kMainTarget).h / kScreenHeight);
 }
 
 void TitlePortCard(CTexture *texture, float angle) {

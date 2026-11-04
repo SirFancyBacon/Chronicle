@@ -20,6 +20,7 @@
 #include "render/draw3d.hpp"
 #include "render/gs_state.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
 #include "texture.hpp"
 
@@ -222,12 +223,12 @@ struct BeyondArea {
 bool DrawBeyond(gfx::TextureHandle beyond, gfx::TextureHandle snapshot, float front, float back, bool feather,
                 const BeyondArea &area = {}) {
     const std::array<uint8_t, 4> clear{};
-    gfx::SetRenderTarget(beyond);
+    render::SetRenderTarget(beyond);
     // Colour only, after the copy: the target's depth is the main depth's, not a cleared one.
-    if (area.copy_depth && !gfx::CopyMainDepthToTarget(area.source)) {
+    if (area.copy_depth && !render::CopyMainDepthToTarget(area.source)) {
         return false;
     }
-    gfx::Clear(true, clear.data(), false, 0.0f);
+    render::Clear(true, clear.data(), false, 0.0f);
     gfx::DrawState state;
     state.depth_test = gfx::DepthTest::GEqual;
     state.texa_aem = false;
@@ -248,7 +249,7 @@ bool DrawBeyond(gfx::TextureHandle beyond, gfx::TextureHandle snapshot, float fr
     };
     // Where the renderer has it (KZ_DEPTH_PLANES=1), the eight planes are one call that shades each pixel once.
     // It draws them one by one itself whenever it cannot take them in one pass, to the same image.
-    if (feather && gfx::DepthPlanesAvailable()) {
+    if (feather && render::DepthPlanesAvailable()) {
         gfx::DepthPlanes2D planes;
         planes.count = static_cast<uint32_t>(samples);
         for (int i = 0; i < samples; i++) {
@@ -283,7 +284,7 @@ bool DrawBeyond(gfx::TextureHandle beyond, gfx::TextureHandle snapshot, float fr
 // src's texel rect resized over all of a width by height target.
 void Resize(gfx::TextureHandle src, float u0, float v0, float u1, float v1, gfx::TextureHandle dst, uint32_t width,
             uint32_t height) {
-    gfx::SetRenderTarget(dst);
+    render::SetRenderTarget(dst);
     gfx::TextureBinding binding;
     binding.texture = src;
     binding.filter = gfx::Filter::Linear;
@@ -402,13 +403,13 @@ bool SameMapping(const gfx::LogicalMapping &a, const gfx::LogicalMapping &b) {
 LowHaze PrepareLowHaze(gfx::TextureHandle snapshot, const gfx::LogicalRect &visible) {
     LowHaze                               low;
     const float                           scale = HazeScale();
-    const std::optional<gfx::TextureInfo> main_info = gfx::GetTextureInfo(gfx::kMainTarget);
+    const std::optional<gfx::TextureInfo> main_info = render::GetTextureInfo(gfx::kMainTarget);
     if (scale >= 1.0f || snapshot == gfx::kNullTexture || !main_info ||
         !std::isfinite(visible.x) || !std::isfinite(visible.y) || !(visible.w > 0.0f) || !(visible.h > 0.0f)) {
         return low;
     }
-    const gfx::LogicalMapping main_mapping = gfx::GetLogicalMapping(gfx::kMainTarget);
-    if (!SameMapping(main_mapping, gfx::GetLogicalMapping(snapshot))) {
+    const gfx::LogicalMapping main_mapping = render::GetLogicalMapping(gfx::kMainTarget);
+    if (!SameMapping(main_mapping, render::GetLogicalMapping(snapshot))) {
         return low;
     }
     const gfx::LogicalRect source = PixelAligned(main_mapping, visible);
@@ -417,11 +418,11 @@ LowHaze PrepareLowHaze(gfx::TextureHandle snapshot, const gfx::LogicalRect &visi
     }
     const float                           width = std::max(1.0f, std::ceil(source.w * scale));
     const float                           height = std::max(1.0f, std::ceil(source.h * scale));
-    gfx::TextureHandle                    image = gfx::NamedRenderTarget("dof haze low", static_cast<uint32_t>(width),
+    gfx::TextureHandle                    image = render::NamedRenderTarget("dof haze low", static_cast<uint32_t>(width),
                                                                          static_cast<uint32_t>(height), true, false, false);
-    const std::optional<gfx::TextureInfo> info = gfx::GetTextureInfo(image);
+    const std::optional<gfx::TextureInfo> info = render::GetTextureInfo(image);
     if (image == gfx::kNullTexture || !info || info->pixel_width >= main_info->pixel_width ||
-        info->pixel_height >= main_info->pixel_height || !gfx::CanCopyMainDepth(image)) {
+        info->pixel_height >= main_info->pixel_height || !render::CanCopyMainDepth(image)) {
         return low;
     }
     low.image = image;
@@ -445,10 +446,10 @@ LowHaze PrepareLowHaze(gfx::TextureHandle snapshot, const gfx::LogicalRect &visi
 // planes spaced in 1/z, so foreground objects stay stable while the distant scenery gains haze
 // gradually. The two outermost columns do not wander past the edges of the image.
 void DepthOfField(float *focus, int level, int alpha, int blur) {
-    gfx::TextureHandle target = gfx::CurrentRenderTarget();
+    gfx::TextureHandle target = render::CurrentRenderTarget();
     bool               haze = blur > 0;
     const HazeRange    range = HazeRangeOf(focus);
-    gfx::LogicalRect   visible = gfx::VisibleLogicalRect(target);
+    gfx::LogicalRect   visible = render::VisibleLogicalRect(target);
     int                left = std::min(0, static_cast<int>(std::floor(visible.x)));
     int                right = std::max(0x280, static_cast<int>(std::ceil(visible.x + visible.w)));
     uint32_t           half_width = static_cast<uint32_t>(right - left + 1) / 2;
@@ -487,8 +488,8 @@ void DepthOfField(float *focus, int level, int alpha, int blur) {
         screen[2][2] = screen[3][2] = static_cast<int>(far_front[2] / far_front[3]);
     }
 
-    gfx::TextureHandle snapshot = gfx::NamedRenderTarget("dof frame", 0x280, SCREEN_HEIGHT, false, false, true);
-    gfx::TextureHandle beyond = haze ? gfx::kNullTexture : gfx::NamedRenderTarget("dof beyond", 0x280, SCREEN_HEIGHT, true, true);
+    gfx::TextureHandle snapshot = render::NamedRenderTarget("dof frame", 0x280, SCREEN_HEIGHT, false, false, true);
+    gfx::TextureHandle beyond = haze ? gfx::kNullTexture : render::NamedRenderTarget("dof beyond", 0x280, SCREEN_HEIGHT, true, true);
     gfx::TextureHandle far_image = gfx::kNullTexture;
     // Matching fronts and nonfolding far strips let the later composite replace near alpha.
     // The identity-coordinate near copy only adds accumulation and blend rounding to RGB.
@@ -504,15 +505,15 @@ void DepthOfField(float *focus, int level, int alpha, int blur) {
     bool skip_near = false;
     if (fronts_match && HazeSkipsIdentityNear()) {
         far_image = low.image != gfx::kNullTexture ? low.image
-                                                   : gfx::NamedRenderTarget("dof far", 0x280, SCREEN_HEIGHT, true, true);
+                                                   : render::NamedRenderTarget("dof far", 0x280, SCREEN_HEIGHT, true, true);
         skip_near = far_image != gfx::kNullTexture;
     }
     gfx::TextureHandle near_image = skip_near ? gfx::kNullTexture
-                                    : haze    ? gfx::NamedRenderTarget("dof near", 0x280, SCREEN_HEIGHT, true, true)
-                                              : gfx::NamedRenderTarget("dof near", half_width, half_height, true);
+                                    : haze    ? render::NamedRenderTarget("dof near", 0x280, SCREEN_HEIGHT, true, true)
+                                              : render::NamedRenderTarget("dof near", half_width, half_height, true);
     bool               ready = snapshot != gfx::kNullTexture && (haze || beyond != gfx::kNullTexture) &&
                                (skip_near || near_image != gfx::kNullTexture) && target == gfx::kMainTarget &&
-                               gfx::SnapshotFrame(snapshot);
+                               render::SnapshotFrame(snapshot);
 
     if (ready) {
         if (!skip_near) {
@@ -534,16 +535,16 @@ void DepthOfField(float *focus, int level, int alpha, int blur) {
                 }
                 if (!low_drawn) {
                     if (far_image == gfx::kNullTexture) {
-                        far_image = gfx::NamedRenderTarget("dof far", 0x280, SCREEN_HEIGHT, true, true);
+                        far_image = render::NamedRenderTarget("dof far", 0x280, SCREEN_HEIGHT, true, true);
                     }
                     if (far_image != gfx::kNullTexture) {
                         DrawBeyond(far_image, snapshot, range.far_front, range.far_back, true);
                     }
                 }
             } else {
-                gfx::TextureHandle half = gfx::NamedRenderTarget("dof far half", half_width, half_height, true);
-                gfx::TextureHandle quarter = gfx::NamedRenderTarget("dof far quarter", quarter_width, quarter_height, true);
-                far_image = gfx::NamedRenderTarget("dof far", half_width, half_height, true);
+                gfx::TextureHandle half = render::NamedRenderTarget("dof far half", half_width, half_height, true);
+                gfx::TextureHandle quarter = render::NamedRenderTarget("dof far quarter", quarter_width, quarter_height, true);
+                far_image = render::NamedRenderTarget("dof far", half_width, half_height, true);
 
                 if (half != gfx::kNullTexture && quarter != gfx::kNullTexture && far_image != gfx::kNullTexture) {
                     DrawBeyond(beyond, snapshot, focus[1], focus[1], false);
@@ -558,7 +559,7 @@ void DepthOfField(float *focus, int level, int alpha, int blur) {
             }
         }
 
-        gfx::SetRenderTarget(target);
+        render::SetRenderTarget(target);
     }
 
     MGPortRestoreRegisters();

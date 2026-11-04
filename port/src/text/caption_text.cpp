@@ -21,6 +21,7 @@
 #include "menuetc.hpp"
 #include "platform/config.hpp"
 #include "render/draw2d.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/texture_registry.hpp"
 #include "text/captionfont.hpp"
 #include "text/gametext.hpp"
@@ -268,7 +269,7 @@ Layout Lay(std::string_view utf8, float box_width) {
     for (char32_t &ch : layout.text) {
         ch = Upper(ch);
     }
-    const float scale_x = gfx::GetUiMapping(gfx::CurrentRenderTarget()).scale_x;
+    const float scale_x = render::GetUiMapping(render::CurrentRenderTarget()).scale_x;
     float       natural = Natural(layout.text, layout.em, scale_x);
     if (box_width > 0 && natural > box_width) {
         layout.em = kEm * textwipe::Get(textwipe::Kind::Caption).size * std::max(kLeastShrink, box_width / natural);
@@ -332,7 +333,7 @@ void DrawLabel(const std::string &utf8, int x, int y, float box_width, const Cap
     }
     const textwipe::Tuning &tune = textwipe::Get(textwipe::Kind::Caption);
     alpha = static_cast<int>(static_cast<float>(alpha) * tune.opacity);
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const capfont::Metrics    metrics = capfont::GetMetrics();
     const float               em = cap / std::max(metrics.cap, 0.1f);
@@ -680,7 +681,7 @@ bool DrawButtonWord(std::string_view word, float x, float y, int bright, int alp
     if (first == std::end(kButtonLetters)) {
         return false;
     }
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const float               kx = mapping.scale_x;
     const float               ky = mapping.scale_y * rows;
@@ -835,7 +836,7 @@ bool DrawFloorLabel(std::string_view utf8, float left, float top, float right, f
         sx = sy * squeeze;
     }
 
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const float               kx = mapping.scale_x;
     const float               ky = mapping.scale_y * rows;
@@ -933,7 +934,7 @@ bool DrawAlphabetCell(int u, int v, int texel_width, int texel_height, float x, 
     if (cell == std::end(kAlphabet)) {
         return false;
     }
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     // Screen pixels to a cell pixel, across and down.
     const float    kx = mapping.scale_x * width / static_cast<float>(texel_width);
@@ -1104,7 +1105,7 @@ bool DrawBoardName(std::string_view utf8, float left_x, float cap_top, float squ
     } variant;
 
     const std::u32string      text = Decode(utf8);
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const capfont::Metrics    metrics = capfont::GetMetrics();
     const float               em = kBoardCap / std::max(metrics.cap, 0.1f);
@@ -1466,7 +1467,7 @@ bool Draw(int icon, int x, int y, int box_width, int alpha, int bright) {
     const textwipe::Tuning &tune = textwipe::Get(textwipe::Kind::Caption);
     alpha = static_cast<int>(static_cast<float>(alpha) * tune.opacity);
 
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const capfont::Metrics    metrics = capfont::GetMetrics();
     const int                 em_px = std::max(4, static_cast<int>(layout.em * mapping.scale_x + 0.5f));
@@ -1597,7 +1598,7 @@ bool DrawLine(std::string_view utf8, float center_x, float cap_top, float cap_he
         ~Variant() { capfont::UseFontSlot(0); }
     } variant(font_slot);
 
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const capfont::Metrics    metrics = capfont::GetMetrics();
     const std::u32string      text = Decode(utf8);
     float                     em = cap_height / std::max(0.2f, metrics.cap);

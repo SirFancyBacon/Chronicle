@@ -77,6 +77,7 @@
 #include "randomitem.hpp"
 #include "rect.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "runeffect.hpp"
 #include "runscript_opcodes.hpp"
 #include "savedata.hpp"
@@ -2572,7 +2573,7 @@ void DunMainDraw() {
 
         TexManager.ReloadTexture(Vif1Packet, 2);
 
-        gfx::SetUiAnchor(kStatusAnchor);
+        render::SetUiAnchor(kStatusAnchor);
 
         int gauge_alpha = rogoY3 + 0x60;
 
@@ -2609,7 +2610,7 @@ void DunMainDraw() {
 
         topStatusInfo(rogoY3, itemNowSel, UserStatus->cur_floor);
         BtStatusErrDraw(rogoY3);
-        gfx::SetUiAnchor({});
+        render::SetUiAnchor({});
 
         for (CHitValue &value : HitValue) {
             value.Draw();

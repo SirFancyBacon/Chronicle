@@ -6,6 +6,7 @@
 #include "gfx/gfx.hpp"
 #include "platform/input.hpp"
 #include "platform/window.hpp"
+#include "render/renderer_calls.hpp"
 #include "ui/name_mouse_layout.hpp"
 
 namespace dc::ui {
@@ -41,7 +42,7 @@ bool PadHeld() {
 
 // 640x480 units per count of mouse motion along each axis, through the mapping the 2D is drawn with.
 void UnitsPerCount(float &across, float &down) {
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::kMainTarget);
+    const gfx::LogicalMapping mapping = render::GetUiMapping(gfx::kMainTarget);
     int                       width = 0;
     int                       height = 0;
     // With no window the counts are target pixels, as a script gives them.

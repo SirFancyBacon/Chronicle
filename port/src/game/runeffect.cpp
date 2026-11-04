@@ -1,5 +1,6 @@
 #include "mathconst.h"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "runeffect.hpp"
 
 #include <libgraph.h>
@@ -43,19 +44,19 @@ public:
             return;
         }
         if (ref.binding.texture != gfx::kMainTarget) {
-            std::optional<gfx::TextureInfo> info = gfx::GetTextureInfo(ref.binding.texture);
+            std::optional<gfx::TextureInfo> info = render::GetTextureInfo(ref.binding.texture);
             if (!info || !info->render_target) {
                 return;
             }
         }
-        previous = gfx::CurrentRenderTarget();
-        gfx::SetRenderTarget(ref.binding.texture);
+        previous = render::CurrentRenderTarget();
+        render::SetRenderTarget(ref.binding.texture);
         bound = true;
     }
 
     ~TargetScope() {
         if (bound) {
-            gfx::SetRenderTarget(previous);
+            render::SetRenderTarget(previous);
         }
     }
 

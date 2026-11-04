@@ -16,6 +16,7 @@
 #include "mglib.hpp"
 #include "platform/load_work_profile.hpp"
 #include "render/draw3d.hpp"
+#include "render/renderer_calls.hpp"
 #include "renderinfo.hpp"
 #include "texture.hpp"
 #include "tim2.hpp"
@@ -797,7 +798,7 @@ int CVisualVu1::CreateVUdataFromMDTRemake(u_int *block, u_int *data, int /*unkno
     // Record stationary poses too: a display frame needs both ends when animation starts or stops.
     Draw3DInvalidateStripRuns(*visual);
     if (visual->mesh != gfx::kNullMesh) {
-        gfx::UpdateMeshVertices(visual->mesh, 0, visual->vertices);
+        render::UpdateMeshVertices(visual->mesh, 0, visual->vertices);
     }
     return vu_size;
 }

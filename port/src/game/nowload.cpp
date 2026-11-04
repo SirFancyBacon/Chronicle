@@ -23,6 +23,7 @@
 #include "platform/clock.hpp"
 #include "rect.hpp"
 #include "render/gs_state.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/texture_registry.hpp"
 #include "text/textwipe.hpp"
 #include "texture.hpp"
@@ -223,19 +224,19 @@ void DrawSprite() {
 // Presents the loading screen from the clock pump: never inside a frame the game has open, since a
 // mode's Init can be between MGBeginFrame and MGEndFrame when it waits.
 void PresentLoadingFrame() {
-    if (end_flag != 0 || gfx::InFrame()) {
+    if (end_flag != 0 || render::InFrame()) {
         return;
     }
     textwipe::Update();
-    if (gfx::BeginFrame()) {
+    if (render::BeginFrame()) {
         const std::uint8_t black[4] = {0, 0, 0, 0x80};
-        gfx::Clear(true, black, true, 0.0f);
+        render::Clear(true, black, true, 0.0f);
         if (sprite.visible) {
             DrawSprite();
         }
         textwipe::DrawDivider();
     }
-    gfx::EndFrame();
+    render::EndFrame();
 }
 
 } // namespace

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "gfx/gfx.hpp"
+#include "render/renderer_calls.hpp"
 #include "text/caption_text.hpp"
 #include "text/captionfont.hpp"
 #include "text/textwipe.hpp"
@@ -175,7 +176,7 @@ int MeasureScaledText(std::string_view text, float scale, float xscale, FontWeig
         }
     } guard(slot);
 
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const capfont::Metrics    metrics = capfont::GetMetrics();
     const float               cap_height = detail::kBaseCapHeight * scale;
     const float               em = cap_height / std::max(0.2f, metrics.cap);
@@ -267,7 +268,7 @@ void DrawScaledText(std::string_view text, float center_x, float cap_top, float 
 
     const float snapped_x = std::round(center_x);
     // The painted buttons' lettering is placed to the screen's pixel, the rest to the game's.
-    const float paint_y = gfx::GetUiMapping(gfx::CurrentRenderTarget()).scale_y;
+    const float paint_y = render::GetUiMapping(render::CurrentRenderTarget()).scale_y;
     const float snapped_top = params.painted ? std::round(cap_top * paint_y) / paint_y : std::round(cap_top);
     const float cap_height = detail::kBaseCapHeight * scale;
     const float rows = draw2d::RowScale();

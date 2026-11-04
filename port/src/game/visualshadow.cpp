@@ -22,6 +22,7 @@
 #include "mglib.hpp"
 #include "render/draw3d.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/shadowclip.hpp"
 #include "renderinfo.hpp"
 
@@ -432,12 +433,12 @@ Projection Project(const RenderInfo &info, float (*matrix)[4]) {
     Draw3DMul(drop, info.shadow, matrix);
     Draw3DMul(projection.drop_to_eye, info.view_scaled, drop);
     Draw3DEyeToClip(info, projection.eye_to_clip);
-    projection.transform = gfx::IdentityMeshTransform();
+    projection.transform = render::IdentityMeshTransform();
     gfx::MeshTransform &transform = projection.transform;
     std::memcpy(transform.projection, projection.eye_to_clip, sizeof(transform.projection));
     std::memcpy(transform.view, info.view_scaled, sizeof(transform.view));
     std::memcpy(transform.model, matrix, sizeof(transform.model));
-    projection.has_transform = gfx::InvertAffineTransform(&projection.model_to_eye[0][0], transform.local);
+    projection.has_transform = render::InvertAffineTransform(&projection.model_to_eye[0][0], transform.local);
     auto row_dot = [&](int row) {
         return Dot({.x = matrix[row][0], .y = matrix[row][1], .z = matrix[row][2]}, light);
     };

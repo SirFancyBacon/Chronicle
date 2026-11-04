@@ -166,4 +166,37 @@ TEST(NoktusAdapter, AMeshThatDiffersIsCaught) {
     EXPECT_STREQ(render::MeshSceneDifference(scene, other), "matrix");
 }
 
+TEST(NoktusAdapter, EveryVertexByteSurvivesTheTrip) {
+    for (bool textured : {false, true}) {
+        for (int value = 0; value < 256; value++) {
+            gfx::Vertex2D vertex = {};
+            vertex.x = 1.5f;
+            vertex.y = 2.5f;
+            vertex.z = 0.25f;
+            vertex.u = 3.5f;
+            vertex.v = 4.5f;
+            for (std::uint8_t &channel : vertex.color) {
+                channel = static_cast<std::uint8_t>(value);
+            }
+            vertex.fog = static_cast<std::uint8_t>(value);
+            const gfx::Vertex2D back = render::FromVertex2D(render::ToVertex2D(vertex, textured), textured);
+            EXPECT_EQ(back.x, vertex.x);
+            EXPECT_EQ(back.y, vertex.y);
+            EXPECT_EQ(back.z, vertex.z);
+            EXPECT_EQ(back.u, vertex.u);
+            EXPECT_EQ(back.v, vertex.v);
+            EXPECT_EQ(back.fog, vertex.fog);
+            for (int channel = 0; channel < 4; channel++) {
+                EXPECT_EQ(back.color[channel], vertex.color[channel]);
+            }
+        }
+    }
+}
+
+TEST(NoktusAdapter, ATexturedVertexOf128MultipliesByOne) {
+    gfx::Vertex2D vertex = {};
+    vertex.color[0] = 128;
+    EXPECT_FLOAT_EQ(render::ToVertex2D(vertex, true).color.r, 1.0f);
+}
+
 } // namespace dc::test

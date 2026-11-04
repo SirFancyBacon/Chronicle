@@ -10,6 +10,7 @@
 
 #include "rect.hpp"
 #include "render/draw2d.hpp"
+#include "render/renderer_calls.hpp"
 #include "text/caption_text.hpp"
 #include "text/captionfont.hpp"
 #include "text/textwipe.hpp"
@@ -368,7 +369,7 @@ void Quad(std::vector<gfx::Vertex2D> &out, const capfont::Glyph &glyph, float x,
 
 // One line, its ink's top left at origin_x, origin_y (logical), where the painted line's lands on the screen.
 void LayLine(const CreditLine &line, float origin_x, float origin_y, int alpha, Layers &layers) {
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const std::u32string      text = Decode(line.text);
     const float               want_w = static_cast<float>(line.right - line.left) * mapping.scale_x;
@@ -501,7 +502,7 @@ bool DrawBand(const char *texture, const CRect_i_ &screen, const CRect_i_ &texel
     Layers                     layers;
     std::vector<gfx::Vertex2D> bars;
     // The underlines: a bar with round ends, a dot of its height at each, over the same soft shadow as the words'.
-    const gfx::LogicalMapping mapping = gfx::GetUiMapping(gfx::CurrentRenderTarget());
+    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     capfont::Paint            shade = {0.0f, 0.0f, 0.0f, 0, 0.0f, {}, {}, {}};
     shade.shadow_only = true;
