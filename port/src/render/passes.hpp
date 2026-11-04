@@ -5,6 +5,7 @@
 #include <span>
 
 #include "gfx/gfx.hpp"
+#include "render/noktus_mirror.hpp"
 #include "render/passes.hpp"
 
 namespace dc::render {
@@ -127,6 +128,9 @@ inline void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vert
     CountDraw();
     Note2D(primitive, vertices, texture, state);
     const Routed routed = Route(texture, state);
+    if (MirrorOn()) {
+        MirrorDraw2D(primitive, vertices, routed.texture, routed.state);
+    }
     gfx::Draw2D(primitive, vertices, routed.texture, routed.state, presentation);
 }
 

@@ -138,6 +138,7 @@ gfx::GsBlend EffectiveBlend(const gfx::DrawState &state) {
 } // namespace
 
 noktus::Vertex2D ToVertex2D(const gfx::Vertex2D &vertex, bool textured) {
+    // Without a texture a colour is written as it is, but alpha is always a factor, whose 1 is the game's 128.
     const float one = textured ? kOne : 255.0f;
     return {.x = vertex.x,
             .y = vertex.y,
@@ -146,7 +147,7 @@ noktus::Vertex2D ToVertex2D(const gfx::Vertex2D &vertex, bool textured) {
             .v = vertex.v,
             .fog = static_cast<float>(vertex.fog) / 255.0f,
             .color = {static_cast<float>(vertex.color[0]) / one, static_cast<float>(vertex.color[1]) / one,
-                      static_cast<float>(vertex.color[2]) / one, static_cast<float>(vertex.color[3]) / one}};
+                      static_cast<float>(vertex.color[2]) / one, static_cast<float>(vertex.color[3]) / kOne}};
 }
 
 gfx::Vertex2D FromVertex2D(const noktus::Vertex2D &vertex, bool textured) {
@@ -160,7 +161,7 @@ gfx::Vertex2D FromVertex2D(const noktus::Vertex2D &vertex, bool textured) {
     out.color[0] = ToByte(vertex.color.r, one);
     out.color[1] = ToByte(vertex.color.g, one);
     out.color[2] = ToByte(vertex.color.b, one);
-    out.color[3] = ToByte(vertex.color.a, one);
+    out.color[3] = ToByte(vertex.color.a, kOne);
     out.fog = ToByte(vertex.fog, 255.0f);
     return out;
 }

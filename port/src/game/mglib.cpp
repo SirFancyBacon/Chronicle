@@ -395,6 +395,7 @@ void MGInitVif1Packet(u_long128 * /*buffer0*/, u_long128 * /*buffer1*/) {}
 // with gfx::BeginFrame is drawn into as it is.
 void MGBeginFrame() {
     render::PassTraceBeginTick();
+    render::MirrorBeginTick();
     if (!render::InFrame()) {
         render::BeginRecording();
         if (MGPortTakeInterpolationCut()) {
@@ -440,6 +441,7 @@ void MGBeginFrame() {
 // game asked not to wait twice (mgWaitVSync 0). The count only moves when the clock is pumped, so
 // it is pumped first to see whether a tick went by.
 void MGEndFrame() {
+    render::MirrorEndTick();
     static const bool                        trace_phases = std::getenv("DC_PERF_END_FRAME") != nullptr;
     std::array<EndFrameClock::time_point, 5> stamps{};
     uint32_t                                 depth_picks = 0;

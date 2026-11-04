@@ -30,6 +30,7 @@
 #include "platform/load_work_profile.hpp"
 #include "platform/png_image.hpp"
 #include "render/gs_state.hpp"
+#include "render/noktus_mirror.hpp"
 #include "render/passes.hpp"
 #include "render/screen.hpp"
 #include "texture.hpp"
@@ -662,11 +663,15 @@ unsigned PortCreateTexture(const PortDecodedTexture &decoded, PortTextureOwner o
         desc.has_alpha = decoded.has_alpha;
         entry.texture = gfx::CreateTexture(desc);
         entry.owns_texture = true;
+        MirrorTexture(entry.texture, desc);
         for (size_t level = 0; entry.texture != gfx::kNullTexture && level < decoded.levels.size(); level++) {
             const uint32_t level_width = std::max(1u, decoded.width >> level);
             const uint32_t level_height = std::max(1u, decoded.height >> level);
             gfx::UpdateTexture(entry.texture, static_cast<uint32_t>(level), 0, 0, level_width, level_height,
                                decoded.levels[level].data());
+            if (decoded.format == gfx::TextureFormat::Rgba8) {
+                MirrorTexturePixels(entry.texture, static_cast<uint32_t>(level), 0, 0, level_width, level_height, decoded.levels[level].data());
+            }
         }
     }
     if (decoded.format == gfx::TextureFormat::Index8) {
@@ -728,6 +733,7 @@ void PortReleaseKey(unsigned key) {
         return;
     }
     if (entry->owns_texture && entry->texture != gfx::kNullTexture && RendererUp()) {
+        MirrorDestroyTexture(entry->texture);
         gfx::DestroyTexture(entry->texture);
     }
     *entry = Entry{};

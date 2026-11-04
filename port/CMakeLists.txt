@@ -163,6 +163,7 @@ file(CONFIGURE OUTPUT ${SHADER_HEADER_DIR}/options/credits.hpp
     CONTENT "#pragma once\ninline constexpr const char *kCredits[] = {${credit_names}};\n")
 
 kz_port_sce_sources(DC_SCE_SOURCES LIBS libvu0 libpad libmc sifdev sifrpc eekernel libcdvd libgraph libdma libpkt)
+add_subdirectory(${NOKTUS_SOURCE_DIR} ${CMAKE_BINARY_DIR}/noktus)
 add_library(dc_port OBJECT ${PORT_LIB_SOURCES} ${DC_SCE_SOURCES})
 if(NINTENDO_SWITCH)
     dc_switch_port(dc_port)
@@ -212,7 +213,7 @@ endif()
 
 function(dc_link_game target)
     target_sources(${target} PRIVATE $<TARGET_OBJECTS:dc_port> $<TARGET_OBJECTS:dc_ps2>)
-    target_link_libraries(${target} PRIVATE dc_options dc_host kz_port_headers SDL3::SDL3 Vulkan::Vulkan fastgltf::fastgltf)
+    target_link_libraries(${target} PRIVATE noktus_vulkan dc_options dc_host kz_port_headers SDL3::SDL3 Vulkan::Vulkan fastgltf::fastgltf)
     target_include_directories(${target} PRIVATE ${PORT_DIR} ${CMAKE_SOURCE_DIR}/tools/dcdata)
     target_compile_options(${target} PRIVATE -Wall -Wno-mismatched-tags -Wno-unused-label
         -Wno-overloaded-virtual -Wno-unused-function)
