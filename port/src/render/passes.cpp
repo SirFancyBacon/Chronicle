@@ -70,6 +70,8 @@ bool                         g_layer_differs = false;
 std::uint64_t                g_layer_differing = 0;
 std::uint64_t                g_layer_checked = 0;
 std::uint64_t                g_route_checked = 0;
+std::uint64_t                g_mesh_checked = 0;
+std::uint64_t                g_mesh_lost = 0;
 std::uint64_t                g_route_lost = 0;
 std::uint64_t                g_layer_wrong = 0;
 bool                         g_tracing = false;
@@ -94,7 +96,7 @@ Span &Current() {
 void WriteTrace() {
     std::ofstream out(g_path);
     out << "{\n \"ticks\": " << g_ticks << ",\n \"counted\": " << g_counted << ",\n \"drawn\": " << g_drawn
-        << ",\n \"mismatched_ticks\": " << g_mismatched_ticks << ",\n \"unnamed\": " << g_unnamed << ",\n \"outside\": " << g_outside << ",\n \"route_checked\": " << g_route_checked << ",\n \"route_lost\": " << g_route_lost << ",\n \"layer_checked\": " << g_layer_checked << ",\n \"layer_wrong\": " << g_layer_wrong << ",\n \"layer_differing\": " << g_layer_differing << ",\n \"shapes\": [\n";
+        << ",\n \"mismatched_ticks\": " << g_mismatched_ticks << ",\n \"unnamed\": " << g_unnamed << ",\n \"outside\": " << g_outside << ",\n \"mesh_checked\": " << g_mesh_checked << ",\n \"mesh_lost\": " << g_mesh_lost << ",\n \"route_checked\": " << g_route_checked << ",\n \"route_lost\": " << g_route_lost << ",\n \"layer_checked\": " << g_layer_checked << ",\n \"layer_wrong\": " << g_layer_wrong << ",\n \"layer_differing\": " << g_layer_differing << ",\n \"shapes\": [\n";
     bool first = true;
     for (const auto &[key, shape] : g_shapes) {
         out << (first ? "" : ",\n") << "  {\"ticks\": " << shape.ticks << ", \"passes\": [";
@@ -231,6 +233,19 @@ Routed Route(const gfx::TextureBinding &texture, const gfx::DrawState &state) {
         return {state, texture};
     }
     return routed;
+}
+
+void NoteMesh(const gfx::MeshConstants &constants, const gfx::MeshTransform *transform, const gfx::TextureBinding &texture,
+              const gfx::DrawState &state) {
+    if (!g_tracing) {
+        return;
+    }
+    g_mesh_checked++;
+    const char *difference = transform == nullptr ? "no transform" : MeshSceneDifference(ToMeshScene(constants, *transform, texture, state), constants);
+    if (difference != nullptr) {
+        g_mesh_lost++;
+        g_kinds[std::string("mesh ") + difference + " flags " + std::to_string(constants.flags) + " " + PassName(g_pass)]++;
+    }
 }
 
 void PassTraceStart() {

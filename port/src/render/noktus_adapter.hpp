@@ -1,7 +1,7 @@
 #pragma once
 
 #include "gfx/gfx.hpp"
-#include "noktus/material.hpp"
+#include "noktus/scene.hpp"
 
 namespace dc::render {
 
@@ -16,5 +16,18 @@ void FromMaterial(const noktus::Material &material, gfx::DrawState &state, gfx::
 /** Whether two states draw the same, leaving out what can't matter: a blend's settings with blending off, or an alpha test that can't fail. */
 bool DrawsTheSame(const gfx::DrawState &a, const gfx::TextureBinding &a_texture, const gfx::DrawState &b,
                   const gfx::TextureBinding &b_texture);
+
+/** What a mesh draw comes to in Noktus's words. */
+struct MeshScene {
+    noktus::Camera   camera;
+    noktus::MeshDraw draw;
+};
+
+/** The camera and draw a mesh draw's constants and transform come to. */
+MeshScene ToMeshScene(const gfx::MeshConstants &constants, const gfx::MeshTransform &transform, const gfx::TextureBinding &texture,
+                      const gfx::DrawState &state);
+
+/** What can't be got back from what ToMeshScene made of a mesh draw's constants, the matrices to within rounding, or nullptr. */
+const char *MeshSceneDifference(const MeshScene &scene, const gfx::MeshConstants &constants);
 
 } // namespace dc::render

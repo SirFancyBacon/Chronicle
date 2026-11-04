@@ -1,5 +1,6 @@
 #include "render/noktus_adapter.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <utility>
@@ -212,6 +213,114 @@ void FromMaterial(const noktus::Material &material, gfx::DrawState &state, gfx::
         state.scissor = true;
         state.scissor_rect = {material.clip->x, material.clip->y, material.clip->w, material.clip->h};
     }
+}
+
+namespace {
+
+constexpr std::uint32_t kKnownMeshFlags = gfx::kMeshLit | gfx::kMeshVertexColor | gfx::kMeshFog | gfx::kMeshShadow | gfx::kMeshScreenUv | gfx::kMeshWorldUv;
+
+noktus::Mat4 ToMat4(const float *matrix) {
+    noktus::Mat4 out;
+    std::copy_n(matrix, 16, out.begin());
+    return out;
+}
+
+noktus::Mat4 Multiply(const noktus::Mat4 &a, const noktus::Mat4 &b) {
+    noktus::Mat4 out{};
+    for (int column = 0; column < 4; column++) {
+        for (int row = 0; row < 4; row++) {
+            float sum = 0.0f;
+            for (int i = 0; i < 4; i++) {
+                sum += a[static_cast<std::size_t>(i * 4 + row)] * b[static_cast<std::size_t>(column * 4 + i)];
+            }
+            out[static_cast<std::size_t>(column * 4 + row)] = sum;
+        }
+    }
+    return out;
+}
+
+bool SameRgb(const float *a, const noktus::Color &b) {
+    return a[0] == b.r && a[1] == b.g && a[2] == b.b;
+}
+
+} // namespace
+
+MeshScene ToMeshScene(const gfx::MeshConstants &constants, const gfx::MeshTransform &transform, const gfx::TextureBinding &texture,
+                      const gfx::DrawState &state) {
+    MeshScene         scene;
+    noktus::MeshDraw &draw = scene.draw;
+    scene.camera.view = ToMat4(transform.view);
+    scene.camera.projection = ToMat4(transform.projection);
+    draw.transform = ToMat4(transform.model);
+    draw.local = ToMat4(transform.local);
+    draw.projection = ToMat4(transform.middle);
+    draw.material = ToMaterial(state, texture);
+    draw.material.lit = (constants.flags & gfx::kMeshLit) != 0;
+    draw.material.fogged = (constants.flags & gfx::kMeshFog) != 0;
+    draw.material.tint = {constants.diffuse[0], constants.diffuse[1], constants.diffuse[2], 1.0f};
+    draw.ambient_tint = {constants.ambient_material[0], constants.ambient_material[1], constants.ambient_material[2], 1.0f};
+    draw.opacity = constants.diffuse[3];
+    draw.vertex_colors = (constants.flags & gfx::kMeshVertexColor) != 0;
+    draw.uv_source = (constants.flags & gfx::kMeshScreenUv) != 0  ? noktus::UvSource::Screen
+                     : (constants.flags & gfx::kMeshWorldUv) != 0 ? noktus::UvSource::World
+                                                                  : noktus::UvSource::Mesh;
+    std::copy_n(constants.world_uv[0], 4, draw.world_u.begin());
+    std::copy_n(constants.world_uv[1], 4, draw.world_v.begin());
+    noktus::Lighting &lighting = draw.lighting;
+    lighting.ambient = {constants.ambient[0], constants.ambient[1], constants.ambient[2], 1.0f};
+    lighting.light_count = static_cast<int>(constants.light_count);
+    for (std::size_t i = 0; i < noktus::kMaxDirectionalLights; i++) {
+        lighting.lights[i].direction = {constants.light_direction[i][0], constants.light_direction[i][1], constants.light_direction[i][2]};
+        lighting.lights[i].color = {constants.light_color[i][0], constants.light_color[i][1], constants.light_color[i][2], 1.0f};
+    }
+    lighting.fog.offset = constants.fog[0];
+    lighting.fog.scale = constants.fog[1];
+    lighting.fog.minimum = constants.fog[2];
+    lighting.fog.maximum = constants.fog[3];
+    return scene;
+}
+
+const char *MeshSceneDifference(const MeshScene &scene, const gfx::MeshConstants &constants) {
+    const noktus::MeshDraw &draw = scene.draw;
+    const noktus::Lighting &lighting = draw.lighting;
+    std::uint32_t           flags = (draw.material.lit ? gfx::kMeshLit : 0u) | (draw.vertex_colors ? gfx::kMeshVertexColor : 0u) |
+                          (draw.material.fogged ? gfx::kMeshFog : 0u) |
+                          (draw.uv_source == noktus::UvSource::Screen  ? gfx::kMeshScreenUv
+                           : draw.uv_source == noktus::UvSource::World ? gfx::kMeshWorldUv
+                                                                       : 0u);
+    // The shadow flag only skips lighting and vertex colours, which a mesh with neither skips anyway.
+    const std::uint32_t given = constants.flags & ~static_cast<std::uint32_t>(gfx::kMeshShadow);
+    if (flags != (given & kKnownMeshFlags) || (given & ~kKnownMeshFlags) != 0) {
+        return "flags";
+    }
+    if (!SameRgb(constants.diffuse, draw.material.tint) || !SameRgb(constants.ambient_material, draw.ambient_tint) ||
+        constants.diffuse[3] != draw.opacity || !SameRgb(constants.ambient, lighting.ambient) ||
+        static_cast<int>(constants.light_count) != lighting.light_count) {
+        return "colours";
+    }
+    for (std::size_t i = 0; i < static_cast<std::size_t>(lighting.light_count); i++) {
+        const noktus::Vec3 &direction = lighting.lights[i].direction;
+        if (constants.light_direction[i][0] != direction.x || constants.light_direction[i][1] != direction.y ||
+            constants.light_direction[i][2] != direction.z || !SameRgb(constants.light_color[i], lighting.lights[i].color)) {
+            return "lights";
+        }
+    }
+    if (constants.fog[0] != lighting.fog.offset || constants.fog[1] != lighting.fog.scale || constants.fog[2] != lighting.fog.minimum ||
+        constants.fog[3] != lighting.fog.maximum) {
+        return "fog";
+    }
+    const noktus::Mat4 mvp = Multiply(Multiply(Multiply(Multiply(scene.camera.projection, scene.camera.view), draw.projection), draw.transform), draw.local);
+    float              largest = 0.0f;
+    for (float value : constants.mvp) {
+        largest = std::max(largest, std::abs(value));
+    }
+    for (std::size_t i = 0; i < 16; i++) {
+        // Shadow volumes multiply a matrix by its own inverse, which rounds further than the rest.
+        if (std::abs(mvp[i] - constants.mvp[i]) > largest * 1e-3f) {
+            return "matrix";
+        }
+    }
+    return nullptr;
 }
 
 bool DrawsTheSame(const gfx::DrawState &a, const gfx::TextureBinding &a_texture, const gfx::DrawState &b,
