@@ -771,6 +771,7 @@ int Run(int argc, const char **argv) {
     if (status == kExitOk && options.screenshot != nullptr) {
         status = Screenshot(options.screenshot);
     }
+    render::MirrorStop();
     ReportPresentStats();
 #ifdef __SWITCH__
     if (options.perf_log && std::getenv("DC_PERF_HOLD") != nullptr) {

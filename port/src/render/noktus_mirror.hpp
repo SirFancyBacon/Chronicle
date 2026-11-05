@@ -11,6 +11,8 @@ namespace dc::render {
 // DC_NOKTUS_MIRROR=<path>: alongside today's renderer, draws the same 2D through Noktus Nimbus, offscreen, and writes its last picture
 // to path at exit. Noktus is built up against today's picture this way while the game keeps running on today's renderer.
 // DC_NOKTUS_MOMENT=<0 to 1>: also writes the last tick as drawn that far from the tick before, beside it as <name>.between.png.
+// DC_NOKTUS_WINDOW=1: shows Noktus live in a second window, on its own thread and paced to the display, for judging motion by eye. The game keeps its own window and input.
+// DC_NOKTUS_CUSHION=<ticks> sets how far behind the newest tick it stands, and DC_NOKTUS_INTERPOLATE=0 shows each tick as it ended. How the frames went is printed at exit.
 
 /** Whether a mirror was asked for. */
 bool MirrorOn();
@@ -20,6 +22,9 @@ std::optional<float> MirrorMoment();
 
 void MirrorBeginTick();
 void MirrorEndTick();
+
+/** Finishes the mirror while its window can still be used. */
+void MirrorStop();
 
 /** Who the mesh draws from now on belong to, and how they move between ticks. */
 void MirrorMotion(gfx::InterpKey key, bool no_interpolation, float teleport_distance, bool blend_vertices);

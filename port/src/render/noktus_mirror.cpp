@@ -10,11 +10,17 @@
 #include <mutex>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
+
 #include "noktus/vulkan_renderer.hpp"
+#include "platform/clock.hpp"
 #include "render/noktus_adapter.hpp"
 #include "render/passes.hpp"
 
@@ -24,6 +30,8 @@ namespace {
 
 struct Mirror {
     std::string                                              path;
+    SDL_Window                                              *window = nullptr;
+    int                                                      ticks_since_report = 0;
     std::unique_ptr<noktus::Renderer>                        renderer;
     std::unordered_map<gfx::TextureHandle, noktus::TextureId> textures;
     std::unordered_map<gfx::MeshHandle, noktus::MeshId>       meshes;
@@ -65,10 +73,28 @@ const char *RequestedPath() {
     return path != nullptr && *path != '\0' ? path : nullptr;
 }
 
+bool WindowRequested() {
+    static const bool requested = [] {
+        const char *setting = std::getenv("DC_NOKTUS_WINDOW");
+        return setting != nullptr && std::string_view(setting) == "1";
+    }();
+    return requested;
+}
+
+void ReportPace(Mirror &mirror) {
+    const noktus::PaceReport pace = noktus::TakePace(*mirror.renderer);
+    std::fprintf(stderr, "noktus pacing: %llu frames, %llu ticks, mean %.2f ms, slowest 1%% %.2f ms, worst %.2f ms, held %llu, missed %llu, %d ahead, display timing %s, %s\n",
+                 static_cast<unsigned long long>(pace.frames), static_cast<unsigned long long>(pace.ticks), pace.mean_interval, pace.slowest_1_percent, pace.worst_interval,
+                 static_cast<unsigned long long>(pace.held), static_cast<unsigned long long>(pace.missed), pace.frames_ahead, pace.display_timing ? "yes" : "no", pace.variable ? "variable" : "fixed");
+}
+
 void WriteLastPicture() {
     Mirror &mirror = State();
     if (mirror.renderer) {
         Guarded([&] {
+            if (mirror.path.empty()) {
+                return;
+            }
             std::uint32_t                   width = 0;
             std::uint32_t                   height = 0;
             const std::vector<std::uint8_t> pixels = noktus::ReadScreen(*mirror.renderer, &width, &height);
@@ -86,7 +112,14 @@ void WriteLastPicture() {
         std::fprintf(stderr, "noktus mirror: %llu drawn, %llu skipped for a texture it lacks, %llu to other targets, %llu dropped\n",
                      static_cast<unsigned long long>(mirror.drawn + mirror.meshes_drawn), static_cast<unsigned long long>(mirror.skipped),
                      static_cast<unsigned long long>(mirror.elsewhere), static_cast<unsigned long long>(mirror.renderer->DroppedDraws()));
+        if (mirror.window != nullptr) {
+            ReportPace(mirror);
+        }
         mirror.renderer.reset();
+        if (mirror.window != nullptr) {
+            SDL_DestroyWindow(mirror.window);
+            mirror.window = nullptr;
+        }
     }
 }
 
@@ -94,14 +127,42 @@ void Start(Mirror &mirror) {
     if (mirror.renderer) {
         return;
     }
-    mirror.path = RequestedPath();
+    mirror.path = RequestedPath() != nullptr ? RequestedPath() : "";
     const gfx::LogicalMapping mapping = gfx::GetLogicalMapping(gfx::kMainTarget);
     noktus::VulkanHost        host;
     host.pixel_size = [width = mapping.pixel_width, height = mapping.pixel_height](std::uint32_t *w, std::uint32_t *h) {
         *w = width;
         *h = height;
     };
-    mirror.renderer = noktus::CreateVulkanRenderer(host);
+    if (WindowRequested()) {
+        // Not focusable: the keyboard stays with the game's own window.
+        mirror.window = SDL_CreateWindow("Noktus Nimbus", static_cast<int>(mapping.pixel_width), static_cast<int>(mapping.pixel_height), SDL_WINDOW_VULKAN | SDL_WINDOW_NOT_FOCUSABLE);
+        if (mirror.window == nullptr) {
+            throw std::runtime_error(SDL_GetError());
+        }
+        std::uint32_t      count = 0;
+        const char *const *names = SDL_Vulkan_GetInstanceExtensions(&count);
+        host.instance_extensions.assign(names, names + count);
+        host.create_surface = [window = mirror.window](void *instance, void **surface) {
+            return SDL_Vulkan_CreateSurface(window, static_cast<VkInstance>(instance), nullptr, reinterpret_cast<VkSurfaceKHR *>(surface));
+        };
+        host.paced = true;
+        host.tick_rate = ClockTickRate();
+        if (const char *cushion = std::getenv("DC_NOKTUS_CUSHION")) {
+            host.cushion = std::strtod(cushion, nullptr);
+        }
+        const char *interpolate = std::getenv("DC_NOKTUS_INTERPOLATE");
+        host.interpolate = interpolate == nullptr || std::string_view(interpolate) != "0";
+    }
+    try {
+        mirror.renderer = noktus::CreateVulkanRenderer(host);
+    } catch (...) {
+        if (mirror.window != nullptr) {
+            SDL_DestroyWindow(mirror.window);
+            mirror.window = nullptr;
+        }
+        throw;
+    }
     mirror.textures[gfx::kPreviousFrame] = mirror.renderer->LastFrame();
     std::atexit(WriteLastPicture);
 }
@@ -207,7 +268,12 @@ noktus::Layer2D ToLayer(Layer2D layer) {
 } // namespace
 
 bool MirrorOn() {
-    return RequestedPath() != nullptr && !g_failed;
+    return (RequestedPath() != nullptr || WindowRequested()) && !g_failed;
+}
+
+void MirrorStop() {
+    WriteLastPicture();
+    g_failed = true; // it's finished, and nothing is to start it again
 }
 
 std::optional<float> MirrorMoment() {
@@ -229,6 +295,10 @@ void MirrorBeginTick() {
         for (gfx::TextureHandle handle : mirror.wanted) {
             ReadAcross(mirror, handle);
         }
+        // Reading a texture back stalls the GPU, which a window beside the game would show as a missed refresh at every tick. Once is enough for it, and a picture being compared needs them fresh.
+        if (mirror.window != nullptr) {
+            mirror.wanted.clear();
+        }
         mirror.renderer->BeginTick();
         mirror.open = true;
         mirror.target_known = true;
@@ -244,6 +314,11 @@ void MirrorEndTick() {
     if (mirror.open) {
         Guarded([&] { mirror.renderer->EndTick(); });
         mirror.open = false;
+        // Every few seconds, so that a load doesn't hide how play went.
+        if (mirror.window != nullptr && ++mirror.ticks_since_report == 300) {
+            mirror.ticks_since_report = 0;
+            ReportPace(mirror);
+        }
     }
 }
 
