@@ -93,6 +93,9 @@ bool GameShowingFps();
  */
 std::string GameFpsText();
 
+/** Draws the FPS counter through Noktus, which has the window when today's renderer doesn't. */
+void GameDrawFpsForNoktus();
+
 /**
  * Test hook for --screenshot-fps: the newest tick's image with the FPS counter over it, as a window
  * shows it, read back. False where the counter is off or no display render can be made.

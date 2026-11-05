@@ -6,6 +6,8 @@
 
 #include "gfx/gfx.hpp"
 
+struct SDL_Window;
+
 namespace dc::render {
 
 // DC_NOKTUS_MIRROR=<path>: alongside today's renderer, draws the same 2D through Noktus Nimbus, offscreen, and writes its last picture
@@ -17,6 +19,21 @@ namespace dc::render {
 
 /** Whether a mirror was asked for. */
 bool MirrorOn();
+
+/**
+ * video.renderer noktus: Noktus draws to the game's own window, on its own thread and paced to the display, and today's renderer runs without one. A failure then ends the game, since
+ * nothing else would be showing it.
+ */
+void MirrorTakeWindow(SDL_Window *window, bool interpolate);
+
+/** Whether it has the game's window. */
+bool MirrorHasWindow();
+
+/** Motion between ticks, as the setting changes. */
+void MirrorInterpolate(bool interpolate);
+
+/** Frames shown a second, over the last few ticks. */
+double MirrorFramesPerSecond();
 
 /** The moment asked for by DC_NOKTUS_MOMENT, if any. */
 std::optional<float> MirrorMoment();
@@ -57,6 +74,6 @@ void MirrorDrawImmediate(std::span<const gfx::Vertex3D> vertices, std::span<cons
                          const gfx::TextureBinding &texture, const gfx::DrawState &state, const gfx::MeshTransform *transform);
 
 void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
-                  const gfx::DrawState &state);
+                  const gfx::DrawState &state, bool over_the_window = false);
 
 } // namespace dc::render

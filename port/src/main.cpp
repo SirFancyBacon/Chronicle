@@ -449,6 +449,8 @@ gfx::PresentMode PresentMode(ConfigPresentMode mode) {
 #endif
 }
 
+bool g_noktus_window = false;
+
 GamePresentSettings PresentSettings(const Config &config) {
 #ifdef __SWITCH__
     return {.interpolation = false,
@@ -457,7 +459,8 @@ GamePresentSettings PresentSettings(const Config &config) {
             .show_fps = g_options.show_fps || (config.show_fps && !g_options.headless),
             .fps_detail = config.fps_detail};
 #else
-    return {.interpolation = config.interpolation,
+    // With Noktus drawing the window, today's renderer draws each tick once and nothing more: nobody sees its frames between ticks.
+    return {.interpolation = config.interpolation && !g_noktus_window,
             .max_fps = config.max_fps,
             .display_per_tick = g_options.display_per_tick,
             .show_fps = g_options.show_fps || (config.show_fps && !g_options.headless),
@@ -488,6 +491,9 @@ void ApplyConfigChange(const Config &before, const Config &after) {
     if (after.interpolation != before.interpolation || after.max_fps != before.max_fps ||
         after.show_fps != before.show_fps || after.fps_detail != before.fps_detail) {
         GameSetPresentSettings(PresentSettings(after));
+    }
+    if (g_noktus_window) {
+        render::MirrorInterpolate(after.interpolation);
     }
     gfx::SetPresentMode(PresentMode(after.present_mode));
     gfx::SetAnisotropy(after.anisotropy);
@@ -689,6 +695,12 @@ int Run(int argc, const char **argv) {
     bool offscreen = options.offscreen || (options.headless && !gfx::HeadlessSurfaceAvailable());
     window.vulkan = !offscreen;
     WindowInit(window);
+    const char *const asked_renderer = std::getenv("DC_RENDERER");
+    const bool        noktus_window = !offscreen && !options.headless && (asked_renderer != nullptr ? std::string_view(asked_renderer) == "noktus" : config.renderer == ConfigRenderer::Noktus);
+    if (noktus_window) {
+        render::MirrorTakeWindow(WindowHandle(), config.interpolation);
+        g_noktus_window = true;
+    }
     DC_ANDROID_TRACE("Run: window initialized");
     InputInit();
 #ifdef __ANDROID__
@@ -707,7 +719,7 @@ int Run(int argc, const char **argv) {
     g_switch_render_scale = renderer.render_scale;
 #endif
     renderer.progress = ReportShaderProgress;
-    renderer.offscreen = offscreen;
+    renderer.offscreen = offscreen || noktus_window;
     renderer.render_thread = config.render_thread;
     if (const char *mode = SettingsEnv("RENDER_THREAD")) {
         if (const auto parsed = gfx::ParseRenderThreadMode(mode)) {

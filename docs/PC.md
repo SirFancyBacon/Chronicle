@@ -973,6 +973,13 @@ copies, blits, depth readback and screenshots. `tools/kazarov/src/cpp/gfx/README
 contract: spaces, colour and alpha units, how the GS blend equation maps to
 Vulkan blending and where it does not.
 
+### Which renderer draws the window
+
+`video.renderer` in `config.json` is `kazarov`, the default, or `noktus`, and `DC_RENDERER` overrides it. With
+`noktus`, Noktus Nimbus (`tools/noktus`) draws to the game's window on a thread of its own, paced to the display,
+and Kazarov runs offscreen, since the game still reads depth and other results from it. VSync mode, Frame Limit
+and Anisotropic Filter don't apply to Noktus yet.
+
 ### Window aspect
 
 The logical 640x480 frame is centred in the window at `min(W / 640, H / 480)`

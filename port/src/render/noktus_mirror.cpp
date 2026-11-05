@@ -1,6 +1,10 @@
 #include "render/noktus_mirror.hpp"
 
 #include <algorithm>
+#include <array>
+#include <atomic>
+#include <bit>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -14,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <SDL3/SDL.h>
@@ -28,6 +33,15 @@ namespace dc::render {
 
 namespace {
 
+// A texture Chronicle doesn't tell the mirror about. Reading one back costs the game's thread time, so it isn't done every tick: a new letter shows itself by coordinates not seen before.
+struct Foreign {
+    std::array<std::uint32_t, 2>    size = {};
+    std::unordered_set<std::uint64_t> seen;
+};
+
+// An atlas that starts again reuses its coordinates, so now and then what's being drawn is read regardless.
+constexpr int kForeignRefreshTicks = 120;
+
 struct Mirror {
     std::string                                              path;
     SDL_Window                                              *window = nullptr;
@@ -39,6 +53,13 @@ struct Mirror {
     bool                                                     target_known = true; // false: drawing to a target the mirror lacks
     std::uint64_t                                            meshes_drawn = 0;
     std::set<gfx::TextureHandle>                             wanted; // drawn with, and not made here: read across between ticks
+    std::unordered_map<gfx::TextureHandle, Foreign>          foreign; // read across before: the message font's atlas, which grows as text needs it
+    std::set<gfx::TextureHandle>                             foreign_drawn; // since the last look
+    int                                                      ticks_to_refresh = kForeignRefreshTicks;
+    std::uint64_t                                            frames_at_rate = 0;
+    std::chrono::steady_clock::time_point                    rate_since;
+    double                                                   frames_per_second = 0.0;
+    std::set<gfx::TextureHandle>                             frame_images; // hold a picture of the frame, so they lie where it does
     std::mutex                                               lock;
     bool                                                     open = false;
     std::uint64_t                                            drawn = 0;
@@ -50,8 +71,13 @@ struct Mirror {
     bool                                                     vertices_move = false;
 };
 
-// A mirror is a test tool: whatever goes wrong in it, the game plays on.
-bool g_failed = false;
+// A mirror is a test tool: whatever goes wrong in it, the game plays on. With the game's own window it's what the player sees, and it can't.
+bool        g_failed = false;
+SDL_Window *g_game_window = nullptr;
+bool        g_interpolate = true;
+// For a swapchain that asks, on the render thread.
+std::atomic<std::uint32_t> g_window_width = 0;
+std::atomic<std::uint32_t> g_window_height = 0;
 
 template <typename Work>
 void Guarded(Work work) {
@@ -60,6 +86,10 @@ void Guarded(Work work) {
     } catch (const std::exception &error) {
         std::fprintf(stderr, "noktus mirror: stopped: %s\n", error.what());
         g_failed = true;
+        if (g_game_window != nullptr) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Noktus Nimbus", error.what(), g_game_window);
+            std::_Exit(1);
+        }
     }
 }
 
@@ -73,12 +103,24 @@ const char *RequestedPath() {
     return path != nullptr && *path != '\0' ? path : nullptr;
 }
 
+bool InterpolationForcedOff() {
+    const char *setting = std::getenv("DC_NOKTUS_INTERPOLATE");
+    return setting != nullptr && std::string_view(setting) == "0";
+}
+
 bool WindowRequested() {
     static const bool requested = [] {
         const char *setting = std::getenv("DC_NOKTUS_WINDOW");
         return setting != nullptr && std::string_view(setting) == "1";
     }();
     return requested;
+}
+
+void DropWindow(Mirror &mirror) {
+    if (mirror.window != nullptr && mirror.window != g_game_window) {
+        SDL_DestroyWindow(mirror.window);
+    }
+    mirror.window = nullptr;
 }
 
 void ReportPace(Mirror &mirror) {
@@ -116,10 +158,7 @@ void WriteLastPicture() {
             ReportPace(mirror);
         }
         mirror.renderer.reset();
-        if (mirror.window != nullptr) {
-            SDL_DestroyWindow(mirror.window);
-            mirror.window = nullptr;
-        }
+        DropWindow(mirror);
     }
 }
 
@@ -134,9 +173,10 @@ void Start(Mirror &mirror) {
         *w = width;
         *h = height;
     };
-    if (WindowRequested()) {
+    if (WindowRequested() || g_game_window != nullptr) {
         // Not focusable: the keyboard stays with the game's own window.
-        mirror.window = SDL_CreateWindow("Noktus Nimbus", static_cast<int>(mapping.pixel_width), static_cast<int>(mapping.pixel_height), SDL_WINDOW_VULKAN | SDL_WINDOW_NOT_FOCUSABLE);
+        mirror.window = g_game_window != nullptr ? g_game_window
+                                                 : SDL_CreateWindow("Noktus Nimbus", static_cast<int>(mapping.pixel_width), static_cast<int>(mapping.pixel_height), SDL_WINDOW_VULKAN | SDL_WINDOW_NOT_FOCUSABLE);
         if (mirror.window == nullptr) {
             throw std::runtime_error(SDL_GetError());
         }
@@ -146,13 +186,21 @@ void Start(Mirror &mirror) {
         host.create_surface = [window = mirror.window](void *instance, void **surface) {
             return SDL_Vulkan_CreateSurface(window, static_cast<VkInstance>(instance), nullptr, reinterpret_cast<VkSurfaceKHR *>(surface));
         };
+        int width = 0;
+        int height = 0;
+        SDL_GetWindowSizeInPixels(mirror.window, &width, &height);
+        g_window_width.store(static_cast<std::uint32_t>(width));
+        g_window_height.store(static_cast<std::uint32_t>(height));
+        host.pixel_size = [](std::uint32_t *w, std::uint32_t *h) {
+            *w = g_window_width.load();
+            *h = g_window_height.load();
+        };
         host.paced = true;
         host.tick_rate = ClockTickRate();
         if (const char *cushion = std::getenv("DC_NOKTUS_CUSHION")) {
             host.cushion = std::strtod(cushion, nullptr);
         }
-        const char *interpolate = std::getenv("DC_NOKTUS_INTERPOLATE");
-        host.interpolate = interpolate == nullptr || std::string_view(interpolate) != "0";
+        host.interpolate = g_interpolate && !InterpolationForcedOff();
     }
     if (const char *workers = std::getenv("DC_NOKTUS_WORKERS")) {
         host.workers = static_cast<int>(std::strtol(workers, nullptr, 10));
@@ -163,10 +211,7 @@ void Start(Mirror &mirror) {
     try {
         mirror.renderer = noktus::CreateVulkanRenderer(host);
     } catch (...) {
-        if (mirror.window != nullptr) {
-            SDL_DestroyWindow(mirror.window);
-            mirror.window = nullptr;
-        }
+        DropWindow(mirror);
         throw;
     }
     mirror.textures[gfx::kPreviousFrame] = mirror.renderer->LastFrame();
@@ -183,6 +228,14 @@ void ReadAcross(Mirror &mirror, gfx::TextureHandle handle) {
         return;
     }
     auto found = mirror.textures.find(handle);
+    const std::array<std::uint32_t, 2> size = {width, height};
+    Foreign                           &foreign = mirror.foreign[handle];
+    if (foreign.size != size && found != mirror.textures.end()) {
+        mirror.renderer->DestroyTexture(found->second); // a handle used again, or an atlas grown
+        mirror.textures.erase(found);
+        found = mirror.textures.end();
+    }
+    foreign.size = size;
     if (found == mirror.textures.end()) {
         noktus::TextureDesc desc;
         desc.width = width;
@@ -207,6 +260,19 @@ std::vector<noktus::Vertex3D> Converted(std::span<const gfx::Vertex3D> vertices)
         out.push_back(made);
     }
     return out;
+}
+
+void NoteForeignDrawn(Mirror &mirror, gfx::TextureHandle texture, std::span<const gfx::Vertex2D> vertices) {
+    const auto foreign = mirror.foreign.find(texture);
+    if (foreign == mirror.foreign.end()) {
+        return;
+    }
+    mirror.foreign_drawn.insert(texture);
+    for (const gfx::Vertex2D &vertex : vertices) {
+        if (foreign->second.seen.insert((static_cast<std::uint64_t>(std::bit_cast<std::uint32_t>(vertex.u)) << 32) | std::bit_cast<std::uint32_t>(vertex.v)).second) {
+            mirror.wanted.insert(texture);
+        }
+    }
 }
 
 // A mesh draw as Noktus takes it, or false for one it can't take yet.
@@ -274,7 +340,31 @@ noktus::Layer2D ToLayer(Layer2D layer) {
 } // namespace
 
 bool MirrorOn() {
-    return (RequestedPath() != nullptr || WindowRequested()) && !g_failed;
+    return (RequestedPath() != nullptr || WindowRequested() || g_game_window != nullptr) && !g_failed;
+}
+
+bool MirrorHasWindow() {
+    return g_game_window != nullptr;
+}
+
+void MirrorInterpolate(bool interpolate) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    g_interpolate = interpolate;
+    if (mirror.renderer) {
+        noktus::SetInterpolation(*mirror.renderer, interpolate && !InterpolationForcedOff());
+    }
+}
+
+double MirrorFramesPerSecond() {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    return mirror.frames_per_second;
+}
+
+void MirrorTakeWindow(SDL_Window *window, bool interpolate) {
+    g_game_window = window;
+    g_interpolate = interpolate;
 }
 
 void MirrorStop() {
@@ -298,12 +388,32 @@ void MirrorBeginTick() {
     std::scoped_lock      guard(mirror.lock);
     Guarded([&] {
         Start(mirror);
-        for (gfx::TextureHandle handle : mirror.wanted) {
-            ReadAcross(mirror, handle);
-        }
-        // Reading a texture back stalls the GPU, which a window beside the game would show as a missed refresh at every tick. Once is enough for it, and a picture being compared needs them fresh.
+        // What's being drawn to: the window if there is one, or else what today's renderer is drawing, to compare with.
+        const gfx::LogicalMapping main = gfx::GetLogicalMapping(gfx::kMainTarget);
+        int                       width = static_cast<int>(main.pixel_width);
+        int                       height = static_cast<int>(main.pixel_height);
         if (mirror.window != nullptr) {
-            mirror.wanted.clear();
+            SDL_GetWindowSizeInPixels(mirror.window, &width, &height);
+            g_window_width.store(static_cast<std::uint32_t>(width));
+            g_window_height.store(static_cast<std::uint32_t>(height));
+        }
+        mirror.renderer->Resize(static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height));
+        const gfx::FrameLayout layout = gfx::CurrentFrameLayout();
+        mirror.renderer->SetLayout({.fit = layout.aspect == gfx::AspectMode::Fill ? noktus::FrameFit::Fill : noktus::FrameFit::Letterbox, .interface_scale = layout.ui_scale});
+        // Today's renderer can't read a texture back inside a frame, as a loading frame is by now: what's wanted waits for the next tick that isn't.
+        if (!gfx::InFrame()) {
+            for (gfx::TextureHandle handle : mirror.wanted) {
+                ReadAcross(mirror, handle);
+            }
+            // With a window, only what's asked for above. A picture being compared needs them all fresh, every tick.
+            if (mirror.window != nullptr) {
+                mirror.wanted.clear();
+                if (--mirror.ticks_to_refresh <= 0) {
+                    mirror.ticks_to_refresh = kForeignRefreshTicks;
+                    mirror.wanted = mirror.foreign_drawn;
+                    mirror.foreign_drawn.clear();
+                }
+            }
         }
         mirror.renderer->BeginTick();
         mirror.open = true;
@@ -320,6 +430,16 @@ void MirrorEndTick() {
     if (mirror.open) {
         Guarded([&] { mirror.renderer->EndTick(); });
         mirror.open = false;
+        if (mirror.window != nullptr) {
+            const auto now = std::chrono::steady_clock::now();
+            const double seconds = std::chrono::duration<double>(now - mirror.rate_since).count();
+            if (seconds >= 0.5) {
+                const std::uint64_t frames = noktus::FramesShown(*mirror.renderer);
+                mirror.frames_per_second = static_cast<double>(frames - mirror.frames_at_rate) / seconds;
+                mirror.frames_at_rate = frames;
+                mirror.rate_since = now;
+            }
+        }
         // Every few seconds, so that a load doesn't hide how play went.
         if (mirror.window != nullptr && ++mirror.ticks_since_report == 300) {
             mirror.ticks_since_report = 0;
@@ -396,7 +516,10 @@ void MirrorDestroyTexture(gfx::TextureHandle texture) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     mirror.wanted.erase(texture);
+    mirror.foreign.erase(texture);
+    mirror.foreign_drawn.erase(texture);
     mirror.surfaces.erase(texture);
+    mirror.frame_images.erase(texture);
     const auto found = mirror.textures.find(texture);
     if (found != mirror.textures.end()) {
         mirror.renderer->DestroyTexture(found->second);
@@ -463,6 +586,9 @@ void MirrorSurface(gfx::TextureHandle target, std::uint32_t width, std::uint32_t
         desc.has_alpha = has_alpha;
         desc.shares_scene_depth = shares_depth;
         desc.follows_window = frame_target;
+        if (shares_depth || frame_target) {
+            mirror.frame_images.insert(target);
+        }
         const noktus::SurfaceId surface = mirror.renderer->Surface(desc);
         mirror.surfaces[target] = surface;
         mirror.textures[target] = mirror.renderer->SurfaceTexture(surface);
@@ -582,7 +708,7 @@ void MirrorDrawImmediate(std::span<const gfx::Vertex3D> vertices, std::span<cons
 }
 
 void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
-                  const gfx::DrawState &state) {
+                  const gfx::DrawState &state, bool over_the_window) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (!mirror.open) {
@@ -603,6 +729,7 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
             return;
         }
         draw.material.albedo = found->second;
+        NoteForeignDrawn(mirror, texture.texture, vertices);
     } else {
         draw.material.albedo = noktus::TextureId::None;
     }
@@ -614,6 +741,7 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     draw.vertices = converted;
     draw.primitive = ToPrimitive(primitive);
     draw.layer = ToLayer(CurrentLayer2D());
+    draw.over_the_window = over_the_window;
     // Whole draws anchor by the centre of their bounds, as today's renderer decides it.
     const gfx::UiAnchor anchor = gfx::CurrentUiAnchor();
     float               low_x = vertices[0].x, high_x = vertices[0].x, low_y = vertices[0].y, high_y = vertices[0].y;
@@ -625,9 +753,13 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     }
     const float centre_x = (low_x + high_x) * 0.5f;
     const float centre_y = (low_y + high_y) * 0.5f;
-    if (state.depth_test == gfx::DepthTest::Always && !state.depth_write) {
+    // Depth places a draw among the meshes, and a picture of the frame lies where the frame does.
+    draw.follows_interface_size = state.depth_test == gfx::DepthTest::Always && !state.depth_write && texture.texture != gfx::kPreviousFrame && !mirror.frame_images.contains(texture.texture);
+    if (draw.follows_interface_size) {
         draw.anchor.x = centre_x < anchor.left_until ? -1 : centre_x >= anchor.right_from ? 1 : 0;
         draw.anchor.y = centre_y < anchor.top_until ? -1 : centre_y >= anchor.bottom_from ? 1 : 0;
+        draw.anchor.max_aspect = anchor.max_aspect;
+        draw.anchor.moves_clip = anchor.scissor && (draw.anchor.x != 0 || draw.anchor.y != 0);
     }
     Guarded([&] { mirror.renderer->Draw(draw); });
     mirror.drawn++;

@@ -9,11 +9,14 @@
 #include <format>
 #include <mutex>
 #include <thread>
+#include <variant>
 
+#include "gfx/displaylist.hpp"
 #include "main.hpp"
 #include "platform/clock.hpp"
 #include "platform/input.hpp"
 #include "platform/overlay.hpp"
+#include "render/noktus_mirror.hpp"
 #include "render/passes.hpp"
 #include "text/caption_text.hpp"
 #include "text/textwipe.hpp"
@@ -545,6 +548,18 @@ void GamePresentTickEnd() {
     g_tick_shown = true;
 }
 
+void GameDrawFpsForNoktus() {
+    if (!g_fps.on || !g_fps.list) {
+        return;
+    }
+    render::Layer2DScope layer(render::Layer2D::Ui);
+    for (const auto &entry : g_fps.list->entries) {
+        if (const auto *draw = std::get_if<gfx::detail::Draw2DEntry>(&entry)) {
+            render::MirrorDraw2D(draw->primitive, draw->vertices, draw->binding, draw->state, true);
+        }
+    }
+}
+
 void GameSetPerfLog(bool on) {
     g_perf = {};
     g_perf.on = on;
@@ -573,7 +588,8 @@ bool GameShowingFps() {
 }
 
 std::string GameFpsText() {
-    std::string text = std::format("FPS {:.1f}", PresentAsync() ? g_async_fps.load() : g_fps.frames.PerSecond());
+    const double fps = render::MirrorHasWindow() ? render::MirrorFramesPerSecond() : PresentAsync() ? g_async_fps.load() : g_fps.frames.PerSecond();
+    std::string  text = std::format("FPS {:.1f}", fps);
     if (g_present.fps_detail != ConfigFpsDetail::Fps) {
         text += std::format("  TICK {:.1f}/{:g}", g_fps.ticks.PerSecond(), ClockTickRate());
     }

@@ -18,15 +18,12 @@ namespace dc::render {
         return gfx::name(std::forward<Args>(args)...);            \
     }
 
-DC_RENDERER_CALL(BeginFrame)
 DC_RENDERER_CALL(BeginRecording)
 DC_RENDERER_CALL(CanCopyMainDepth)
-DC_RENDERER_CALL(CreateTexture)
 DC_RENDERER_CALL(CurrentFrameLayout)
 DC_RENDERER_CALL(CurrentRenderTarget)
 DC_RENDERER_CALL(DepthPlanesAvailable)
 DC_RENDERER_CALL(DepthResult)
-DC_RENDERER_CALL(EndFrame)
 DC_RENDERER_CALL(EndRecording)
 DC_RENDERER_CALL(FindNamedRenderTarget)
 DC_RENDERER_CALL(GetLogicalMapping)
@@ -40,10 +37,40 @@ DC_RENDERER_CALL(LogicalHeight)
 DC_RENDERER_CALL(LogicalWidth)
 DC_RENDERER_CALL(ReadDepth)
 DC_RENDERER_CALL(Recording)
-DC_RENDERER_CALL(UpdateTextureNow)
 DC_RENDERER_CALL(VisibleLogicalRect)
 
 #undef DC_RENDERER_CALL
+
+// A frame outside the game's ticks, as the loading screen draws: to Noktus it's a tick like any other.
+inline bool BeginFrame() {
+    const bool open = gfx::BeginFrame();
+    if (open && MirrorOn()) {
+        MirrorBeginTick();
+    }
+    return open;
+}
+
+inline void EndFrame() {
+    if (MirrorOn()) {
+        MirrorEndTick();
+    }
+    gfx::EndFrame();
+}
+
+inline gfx::TextureHandle CreateTexture(const gfx::TextureDesc &desc) {
+    const gfx::TextureHandle texture = gfx::CreateTexture(desc);
+    if (MirrorOn() && texture != gfx::kNullTexture) {
+        MirrorTexture(texture, desc);
+    }
+    return texture;
+}
+
+inline bool UpdateTextureNow(gfx::TextureHandle texture, std::uint32_t mip, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, const void *pixels) {
+    if (MirrorOn()) {
+        MirrorTexturePixels(texture, mip, x, y, width, height, pixels);
+    }
+    return gfx::UpdateTextureNow(texture, mip, x, y, width, height, pixels);
+}
 
 inline void CutInterpolation() {
     if (MirrorOn()) {

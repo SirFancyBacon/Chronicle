@@ -441,6 +441,10 @@ void MGBeginFrame() {
 // game asked not to wait twice (mgWaitVSync 0). The count only moves when the clock is pumped, so
 // it is pumped first to see whether a tick went by.
 void MGEndFrame() {
+    if (render::MirrorHasWindow()) {
+        render::MirrorSetTarget(gfx::kMainTarget);
+        app::GameDrawFpsForNoktus();
+    }
     render::MirrorEndTick();
     static const bool                        trace_phases = std::getenv("DC_PERF_END_FRAME") != nullptr;
     std::array<EndFrameClock::time_point, 5> stamps{};

@@ -125,6 +125,21 @@ double Shortest(float value) {
     return std::stod(std::format("{}", value));
 }
 
+bool ReadRenderer(const Json &value, ConfigRenderer &out) {
+    if (!value.is_string()) {
+        return false;
+    }
+    const std::string renderer = Lower(value.get<std::string>());
+    if (renderer == "kazarov") {
+        out = ConfigRenderer::Kazarov;
+    } else if (renderer == "noktus") {
+        out = ConfigRenderer::Noktus;
+    } else {
+        return false;
+    }
+    return true;
+}
+
 bool ReadAspect(const Json &value, ConfigAspect &out) {
     if (!value.is_string()) {
         return false;
@@ -533,6 +548,9 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         return ReadBool(value, config.fullscreen);
 #endif
     }
+    if (name == "video.renderer") {
+        return ReadRenderer(value, config.renderer);
+    }
     if (name == "video.aspect") {
 #ifdef __SWITCH__
         return true;
@@ -764,6 +782,7 @@ std::string ConfigSerialize(const Config &config) {
     root["video"]["width"] = config.window_width;
     root["video"]["height"] = config.window_height;
     root["video"]["fullscreen"] = config.fullscreen;
+    root["video"]["renderer"] = config.renderer == ConfigRenderer::Noktus ? "noktus" : "kazarov";
     root["video"]["aspect"] = config.aspect == ConfigAspect::FourThree ? "4:3" : "auto";
     root["video"]["ui_scale"] = Shortest(config.ui_scale);
 #ifdef __ANDROID__

@@ -13,6 +13,7 @@
 #include <string_view>
 
 #include "app/gameloop.hpp"
+#include "app/presentation.hpp"
 #include "data/data_read.hpp"
 #include "dataread.hpp"
 #include "gfx/gfx.hpp"
@@ -235,6 +236,9 @@ void PresentLoadingFrame() {
             DrawSprite();
         }
         textwipe::DrawDivider();
+        if (render::MirrorHasWindow()) {
+            app::GameDrawFpsForNoktus();
+        }
     }
     render::EndFrame();
 }
