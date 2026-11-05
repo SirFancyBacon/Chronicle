@@ -83,9 +83,10 @@ bool WindowRequested() {
 
 void ReportPace(Mirror &mirror) {
     const noktus::PaceReport pace = noktus::TakePace(*mirror.renderer);
-    std::fprintf(stderr, "noktus pacing: %llu frames, %llu ticks, mean %.2f ms, slowest 1%% %.2f ms, worst %.2f ms, held %llu, missed %llu, %d ahead, display timing %s, %s\n",
+    std::fprintf(stderr, "noktus pacing: %llu frames, %llu ticks, mean %.2f ms, slowest 1%% %.2f ms, worst %.2f ms, held %llu, missed %llu, %d ahead, display timing %s, %s, work: frame %.3f ms, tick %.3f ms, link %.3f ms, %d workers\n",
                  static_cast<unsigned long long>(pace.frames), static_cast<unsigned long long>(pace.ticks), pace.mean_interval, pace.slowest_1_percent, pace.worst_interval,
-                 static_cast<unsigned long long>(pace.held), static_cast<unsigned long long>(pace.missed), pace.frames_ahead, pace.display_timing ? "yes" : "no", pace.variable ? "variable" : "fixed");
+                 static_cast<unsigned long long>(pace.held), static_cast<unsigned long long>(pace.missed), pace.frames_ahead, pace.display_timing ? "yes" : "no", pace.variable ? "variable" : "fixed",
+                 pace.mean_frame_work, pace.mean_tick_work, pace.mean_link_work, pace.workers);
 }
 
 void WriteLastPicture() {
@@ -102,8 +103,7 @@ void WriteLastPicture() {
                 gfx::WritePng(mirror.path, pixels.data(), width, height);
             }
             if (const std::optional<float> moment = MirrorMoment()) {
-                mirror.renderer->DrawBetweenTicks(*moment);
-                const std::vector<std::uint8_t> between = noktus::ReadScreen(*mirror.renderer, &width, &height);
+                const std::vector<std::uint8_t> between = noktus::ReadMoment(*mirror.renderer, *moment, &width, &height);
                 if (!between.empty()) {
                     gfx::WritePng(std::filesystem::path(mirror.path).replace_extension(".between.png"), between.data(), width, height);
                 }
@@ -153,6 +153,12 @@ void Start(Mirror &mirror) {
         }
         const char *interpolate = std::getenv("DC_NOKTUS_INTERPOLATE");
         host.interpolate = interpolate == nullptr || std::string_view(interpolate) != "0";
+    }
+    if (const char *workers = std::getenv("DC_NOKTUS_WORKERS")) {
+        host.workers = static_cast<int>(std::strtol(workers, nullptr, 10));
+    }
+    if (const char *from = std::getenv("DC_NOKTUS_PARALLEL_FROM")) {
+        host.parallel_from = std::strtoull(from, nullptr, 10);
     }
     try {
         mirror.renderer = noktus::CreateVulkanRenderer(host);

@@ -13,6 +13,7 @@ namespace dc::render {
 // DC_NOKTUS_MOMENT=<0 to 1>: also writes the last tick as drawn that far from the tick before, beside it as <name>.between.png.
 // DC_NOKTUS_WINDOW=1: shows Noktus live in a second window, on its own thread and paced to the display, for judging motion by eye. The game keeps its own window and input.
 // DC_NOKTUS_CUSHION=<ticks> sets how far behind the newest tick it stands, and DC_NOKTUS_INTERPOLATE=0 shows each tick as it ended. How the frames went is printed at exit.
+// DC_NOKTUS_WORKERS=<n> sets the threads sharing the work, and DC_NOKTUS_PARALLEL_FROM=<draws> how many mesh draws a tick needs before they're shared.
 
 /** Whether a mirror was asked for. */
 bool MirrorOn();
