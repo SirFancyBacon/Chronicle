@@ -15,22 +15,49 @@ namespace dc::render {
 // DC_NOKTUS_MOMENT=<0 to 1>: also writes the last tick as drawn that far from the tick before, beside it as <name>.between.png.
 // DC_NOKTUS_WINDOW=1: shows Noktus live in a second window, on its own thread and paced to the display, for judging motion by eye. The game keeps its own window and input.
 // DC_NOKTUS_CUSHION=<ticks> sets how far behind the newest tick it stands, and DC_NOKTUS_INTERPOLATE=0 shows each tick as it ended. How the frames went is printed at exit.
+// DC_NOKTUS_DEPTH_PROBE=1 asks for the depth at the middle of the frame every tick, so that a run compares Noktus's answers with today's whatever the game asks. How they went is printed at exit.
 // DC_NOKTUS_WORKERS=<n> sets the threads sharing the work, and DC_NOKTUS_PARALLEL_FROM=<draws> how many mesh draws a tick needs before they're shared.
+
+/** What the Options screen says about drawing. */
+struct MirrorSettings {
+    bool             interpolate = true;
+    gfx::PresentMode present_mode = gfx::PresentMode::Fifo;
+    double           max_fps = 0.0;
+    int              anisotropy = 0;
+};
 
 /** Whether a mirror was asked for. */
 bool MirrorOn();
 
 /**
- * video.renderer noktus: Noktus draws to the game's own window, on its own thread and paced to the display, and today's renderer runs without one. A failure then ends the game, since
+ * video.renderer noktus: Noktus draws to the game's own window, on its own thread and paced to the display, and today's renderer draws nothing. It stays for what isn't drawing: the
+ * game's textures, render targets and its frames' housekeeping. Set keep_todays_drawing to have it draw as well, for a picture of it to compare. A failure ends the game, since
  * nothing else would be showing it.
  */
-void MirrorTakeWindow(SDL_Window *window, bool interpolate);
+void MirrorTakeWindow(SDL_Window *window, bool keep_todays_drawing);
 
 /** Whether it has the game's window. */
 bool MirrorHasWindow();
 
-/** Motion between ticks, as the setting changes. */
-void MirrorInterpolate(bool interpolate);
+/** Whether nothing is to reach today's renderer but textures and meshes. */
+bool MirrorDrawsAlone();
+
+/** Takes the settings as they stand, now and for when the mirror starts. */
+void MirrorApply(const MirrorSettings &settings);
+
+/** The ticks a second to expect, as the setting changes. */
+void MirrorTickRate(double ticks_per_second);
+
+/** Mesh and 2D draws the last tick made. */
+std::uint64_t MirrorDrawsLastTick();
+
+/** Asks how far away the scene is under part of the frame, as the tick stands now. Answers come some ticks later: see MirrorDepthResult. */
+void MirrorReadDepth(std::uint32_t slot, const gfx::LogicalRect &area);
+std::optional<float> MirrorDepthResult(std::uint32_t slot);
+/** For a mirror beside today's renderer: looks for its answer among Noktus's recent ones, since the two come a tick or so apart. How they went is printed at exit. */
+void MirrorCompareDepth(std::uint32_t slot, float today);
+/** Whether DC_NOKTUS_DEPTH_PROBE asked for a read every tick. */
+bool MirrorDepthProbe();
 
 /** Frames shown a second, over the last few ticks. */
 double MirrorFramesPerSecond();

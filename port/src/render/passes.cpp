@@ -168,12 +168,18 @@ void CountCopy() {
     }
 }
 
+namespace {
+
+struct Shape2D {
+    Layer2D rule = Layer2D::Ui;
+    bool    covers = false;
+    bool    on_main = false;
+    bool    has_edges = false; // false: a surface with nothing past its frame, where every layer means the same
+    bool    one_quad = false;  // Noktus takes a layer for a whole draw, and a cover stretches every rectangle in it
+};
+
 // The renderer's rules for a 2D draw (Kazarov's gfx/draw.cpp, Draw2DSided), as it decides them from shape and state.
-void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
-            const gfx::DrawState &state) {
-    if (!g_tracing || vertices.empty()) {
-        return;
-    }
+Shape2D ReadShape(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture, const gfx::DrawState &state) {
     const gfx::TextureHandle target = gfx::CurrentRenderTarget();
     const auto               info = gfx::GetTextureInfo(texture.texture);
     const bool               samples_frame = texture.texture == gfx::kPreviousFrame ||
@@ -185,7 +191,10 @@ void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
     const bool             on_main = target == gfx::kMainTarget;
     const gfx::LogicalRect frame = on_main || !drawn_on ? gfx::LogicalFrame()
                                                         : gfx::LogicalRect{0.0f, 0.0f, static_cast<float>(drawn_on->width), static_cast<float>(drawn_on->height)};
-    bool covers = false;
+    Shape2D shape;
+    shape.on_main = on_main;
+    shape.has_edges = on_main || (drawn_on && (drawn_on->shares_main_depth || drawn_on->frame_target));
+    shape.one_quad = vertices.size() == 4;
     bool reaches = false;
     if (quads) {
         for (std::size_t first = 0; first + 4 <= vertices.size(); first += 4) {
@@ -196,22 +205,45 @@ void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
                 low_y = std::min(low_y, vertices[i].y);
                 high_y = std::max(high_y, vertices[i].y);
             }
-            covers |= low_x <= frame.x && high_x >= frame.x + frame.w && low_y <= frame.y && high_y >= frame.y + frame.h;
+            shape.covers |= low_x <= frame.x && high_x >= frame.x + frame.w && low_y <= frame.y && high_y >= frame.y + frame.h;
             reaches |= (low_x <= frame.x && high_x > frame.x) || (high_x >= frame.x + frame.w && low_x < frame.x + frame.w) ||
                        (low_y <= frame.y && high_y > frame.y) || (high_y >= frame.y + frame.h && low_y < frame.y + frame.h);
         }
     }
-    // A surface with nothing past its frame has no edges to carry a draw out to, so every layer means the same there.
-    if (!on_main && !(drawn_on && (drawn_on->shares_main_depth || drawn_on->frame_target))) {
+    shape.rule = ui ? Layer2D::Ui : Layer2D::World;
+    if (shape.covers && !untextured && !samples_frame) {
+        shape.rule = Layer2D::Cover;
+    } else if (reaches && (untextured || samples_frame)) {
+        shape.rule = Layer2D::Window;
+    }
+    return shape;
+}
+
+Layer2D Settled(Layer2D named, const Shape2D &shape) {
+    const bool reaches_out = shape.rule == Layer2D::Window || (shape.rule == Layer2D::Cover && shape.one_quad);
+    return named == Layer2D::Ui && !g_layer_differs && shape.has_edges && reaches_out ? shape.rule : named;
+}
+
+} // namespace
+
+Layer2D DrawLayer2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture, const gfx::DrawState &state) {
+    const Layer2D named = CurrentLayer2D();
+    return named == Layer2D::Ui && !vertices.empty() ? Settled(named, ReadShape(primitive, vertices, texture, state)) : named;
+}
+
+void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
+            const gfx::DrawState &state) {
+    if (!g_tracing || vertices.empty()) {
         return;
     }
-    const Layer2D declared = CurrentLayer2D();
-    Layer2D       rule = ui ? Layer2D::Ui : Layer2D::World;
-    if (covers && !untextured && !samples_frame) {
-        rule = Layer2D::Cover;
-    } else if (reaches && (untextured || samples_frame)) {
-        rule = Layer2D::Window;
+    const Shape2D shape = ReadShape(primitive, vertices, texture, state);
+    if (!shape.has_edges) {
+        return;
     }
+    const Layer2D declared = Settled(CurrentLayer2D(), shape);
+    const Layer2D rule = shape.rule;
+    const bool    covers = shape.covers;
+    const bool    on_main = shape.on_main;
     // A window-wide draw tiled like a fade has tiles that reach no edge: only the rule's layers that can't be a tile of it disagree.
     // Off the screen nothing follows the interface size, so Ui and World are one.
     const auto stays = [](Layer2D layer) { return layer == Layer2D::Ui || layer == Layer2D::World; };
@@ -280,7 +312,7 @@ void PassTraceBeginTick() {
     g_spans.clear();
 }
 
-void PassTraceTick(std::uint32_t drawn) {
+void PassTraceTick(std::uint32_t drawn, bool list_has_draws) {
     if (!g_tracing) {
         return;
     }
@@ -305,7 +337,7 @@ void PassTraceTick(std::uint32_t drawn) {
     g_ticks++;
     g_counted += counted;
     g_drawn += drawn;
-    g_mismatched_ticks += counted != drawn ? 1 : 0;
+    g_mismatched_ticks += list_has_draws && counted != drawn ? 1 : 0;
     g_spans.clear();
 }
 

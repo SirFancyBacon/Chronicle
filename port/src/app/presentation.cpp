@@ -435,13 +435,13 @@ void GameRenderTick(gfx::DisplayListRef list) {
     };
     g_stats.ticks++;
     gfx::DisplayListStats counts = gfx::ListStats(*list);
-    render::PassTraceTick(counts.mesh_draws + counts.draws_2d);
+    render::PassTraceTick(counts.mesh_draws + counts.draws_2d, !render::MirrorDrawsAlone());
     g_stats.mesh_draws += counts.mesh_draws;
     g_stats.keyed_mesh_draws += counts.keyed_mesh_draws;
     g_stats.draws_2d += counts.draws_2d;
     g_stats.stateful += counts.stateful;
     g_stats.max_draws = std::max<std::uint64_t>(g_stats.max_draws, counts.mesh_draws + counts.draws_2d);
-    g_stats.last_draws = counts.mesh_draws + counts.draws_2d;
+    g_stats.last_draws = render::MirrorDrawsAlone() ? render::MirrorDrawsLastTick() : counts.mesh_draws + counts.draws_2d;
     g_fps.ticks.Count(PresentClock::now());
     note_tail(g_perf.tail_stats);
     g_previous_list = std::move(g_list);
@@ -552,7 +552,7 @@ void GameDrawFpsForNoktus() {
     if (!g_fps.on || !g_fps.list) {
         return;
     }
-    render::Layer2DScope layer(render::Layer2D::Ui);
+    render::Layer2DScope layer(render::Layer2D::Ui, render::Layer2DScope::kDiffersFromRule); // text in the window's corner, whatever its shape
     for (const auto &entry : g_fps.list->entries) {
         if (const auto *draw = std::get_if<gfx::detail::Draw2DEntry>(&entry)) {
             render::MirrorDraw2D(draw->primitive, draw->vertices, draw->binding, draw->state, true);

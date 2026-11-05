@@ -74,6 +74,12 @@ private:
 /** The layer a 2D draw is in now: the one a scope gives, or else the pass's usual one. */
 Layer2D CurrentLayer2D();
 
+/**
+ * The layer a 2D draw ends up in. World, Window and Cover are kept. The interface is where retail's 2D falls when nothing names it, so a draw there takes what its shape and
+ * what it samples say, unless its scope says kDiffersFromRule: a picture of the frame behind a menu reaches the window's edges, on every screen, without each having to say so.
+ */
+Layer2D DrawLayer2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture, const gfx::DrawState &state);
+
 /** Puts the 2D drawn inside it in a layer other than its pass's usual one. */
 class Layer2DScope {
 public:
@@ -122,7 +128,7 @@ void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
  */
 void PassTraceStart();
 void PassTraceBeginTick();
-void PassTraceTick(std::uint32_t drawn);
+void PassTraceTick(std::uint32_t drawn, bool list_has_draws = true);
 
 // Drawing goes through these rather than gfx, so that each draw is counted against a pass.
 
@@ -134,7 +140,9 @@ inline void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vert
     if (MirrorOn()) {
         MirrorDraw2D(primitive, vertices, routed.texture, routed.state);
     }
-    gfx::Draw2D(primitive, vertices, routed.texture, routed.state, presentation);
+    if (!MirrorDrawsAlone()) {
+        gfx::Draw2D(primitive, vertices, routed.texture, routed.state, presentation);
+    }
 }
 
 inline void DrawDepthPlanes2D(const gfx::DepthPlanes2D &planes, std::span<const gfx::Vertex2D, 4> quad,
@@ -152,7 +160,9 @@ inline void DrawDepthPlanes2D(const gfx::DepthPlanes2D &planes, std::span<const 
             MirrorDraw2D(gfx::Primitive::Quads, plane, routed.texture, routed.state);
         }
     }
-    gfx::DrawDepthPlanes2D(planes, quad, routed.texture, routed.state);
+    if (!MirrorDrawsAlone()) {
+        gfx::DrawDepthPlanes2D(planes, quad, routed.texture, routed.state);
+    }
 }
 
 inline void DrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint32_t index_count,
@@ -164,7 +174,9 @@ inline void DrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint3
     if (MirrorOn()) {
         MirrorDrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
     }
-    gfx::DrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
+    if (!MirrorDrawsAlone()) {
+        gfx::DrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
+    }
 }
 
 inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices,
@@ -176,7 +188,9 @@ inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span
     if (MirrorOn()) {
         MirrorDrawImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
     }
-    gfx::DrawMeshImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
+    if (!MirrorDrawsAlone()) {
+        gfx::DrawMeshImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
+    }
 }
 
 inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, std::int32_t dst_x,
@@ -186,7 +200,7 @@ inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::Texture
     if (MirrorOn()) {
         MirrorCopyTexture(src, src_rect, dst, dst_x, dst_y);
     }
-    return gfx::CopyTexture(src, src_rect, dst, dst_x, dst_y);
+    return MirrorDrawsAlone() || gfx::CopyTexture(src, src_rect, dst, dst_x, dst_y);
 }
 
 inline bool BlitTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, gfx::Rect dst_rect,
@@ -196,7 +210,7 @@ inline bool BlitTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::Texture
     if (MirrorOn()) {
         MirrorBlit(src, src_rect, dst, dst_rect, filter);
     }
-    return gfx::BlitTexture(src, src_rect, dst, dst_rect, filter);
+    return MirrorDrawsAlone() || gfx::BlitTexture(src, src_rect, dst, dst_rect, filter);
 }
 
 } // namespace dc::render

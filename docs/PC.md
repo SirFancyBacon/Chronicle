@@ -977,8 +977,19 @@ Vulkan blending and where it does not.
 
 `video.renderer` in `config.json` is `kazarov`, the default, or `noktus`, and `DC_RENDERER` overrides it. With
 `noktus`, Noktus Nimbus (`tools/noktus`) draws to the game's window on a thread of its own, paced to the display,
-and Kazarov runs offscreen, since the game still reads depth and other results from it. VSync mode, Frame Limit
-and Anisotropic Filter don't apply to Noktus yet.
+and Kazarov draws nothing: draws, clears and copies stop at the wrappers in `port/src/render` (`MirrorDrawsAlone`).
+Kazarov stays for what isn't drawing: it holds the game's textures and render targets, and each tick still runs an
+empty frame through it, which is what flushes its uploads and retires what's destroyed. `--screenshot` keeps it
+drawing, since a screenshot is its picture.
+
+The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion and Anisotropic Filter
+change as the game runs. The depth picks behind the lens flare are read from Noktus, whose answers come a tick
+before Kazarov's would.
+
+Noktus decides where 2D reaches past the frame from the layer it's told. A screen can name one; a draw left in the
+interface layer, where retail's 2D falls when nothing names it, takes the answer of Kazarov's rule for its shape and
+what it samples (`DrawLayer2D`, `port/src/render/passes.cpp`), so the frame picture behind a menu reaches the window's
+edges on every screen without each saying so.
 
 ### Window aspect
 

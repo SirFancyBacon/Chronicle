@@ -1,6 +1,7 @@
 #pragma once
 
 #include <limits>
+#include <optional>
 #include <string_view>
 #include <utility>
 
@@ -23,7 +24,6 @@ DC_RENDERER_CALL(CanCopyMainDepth)
 DC_RENDERER_CALL(CurrentFrameLayout)
 DC_RENDERER_CALL(CurrentRenderTarget)
 DC_RENDERER_CALL(DepthPlanesAvailable)
-DC_RENDERER_CALL(DepthResult)
 DC_RENDERER_CALL(EndRecording)
 DC_RENDERER_CALL(FindNamedRenderTarget)
 DC_RENDERER_CALL(GetLogicalMapping)
@@ -35,7 +35,6 @@ DC_RENDERER_CALL(InvertAffineTransform)
 DC_RENDERER_CALL(LogicalFrame)
 DC_RENDERER_CALL(LogicalHeight)
 DC_RENDERER_CALL(LogicalWidth)
-DC_RENDERER_CALL(ReadDepth)
 DC_RENDERER_CALL(Recording)
 DC_RENDERER_CALL(VisibleLogicalRect)
 
@@ -72,6 +71,26 @@ inline bool UpdateTextureNow(gfx::TextureHandle texture, std::uint32_t mip, std:
     return gfx::UpdateTextureNow(texture, mip, x, y, width, height, pixels);
 }
 
+inline void ReadDepth(std::uint32_t id, float x, float y, float width, float height) {
+    if (MirrorOn()) {
+        MirrorReadDepth(id, {x, y, width, height});
+    }
+    if (!MirrorDrawsAlone()) {
+        gfx::ReadDepth(id, x, y, width, height);
+    }
+}
+
+inline std::optional<float> DepthResult(std::uint32_t id) {
+    if (MirrorDrawsAlone()) {
+        return MirrorDepthResult(id);
+    }
+    const std::optional<float> depth = gfx::DepthResult(id);
+    if (depth && MirrorOn()) {
+        MirrorCompareDepth(id, *depth);
+    }
+    return depth;
+}
+
 inline void CutInterpolation() {
     if (MirrorOn()) {
         MirrorCutMotion();
@@ -95,7 +114,9 @@ inline void UpdateMeshVertices(gfx::MeshHandle mesh, std::uint32_t first, std::s
     if (MirrorOn()) {
         MirrorUpdateMesh(mesh, first, vertices);
     }
-    gfx::UpdateMeshVertices(mesh, first, vertices);
+    if (!MirrorDrawsAlone()) {
+        gfx::UpdateMeshVertices(mesh, first, vertices);
+    }
 }
 
 inline void Clear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect = nullptr,
@@ -103,14 +124,18 @@ inline void Clear(bool color, const std::uint8_t *rgba, bool depth, float depth_
     if (MirrorOn()) {
         MirrorClear(color, rgba, depth, depth_value, rect);
     }
-    gfx::Clear(color, rgba, depth, depth_value, rect, presentation_rect);
+    if (!MirrorDrawsAlone()) {
+        gfx::Clear(color, rgba, depth, depth_value, rect, presentation_rect);
+    }
 }
 
 inline void ClearStencil(std::uint8_t value, const gfx::LogicalRect *rect = nullptr) {
     if (MirrorOn()) {
         MirrorClearStencil();
     }
-    gfx::ClearStencil(value, rect);
+    if (!MirrorDrawsAlone()) {
+        gfx::ClearStencil(value, rect);
+    }
 }
 
 inline void SetRenderTarget(gfx::TextureHandle target) {
@@ -143,7 +168,7 @@ inline gfx::TextureHandle NamedRenderTarget(std::string_view name, std::uint32_t
 }
 
 inline bool CopyMainDepthToTarget(const gfx::LogicalRect &source) {
-    if (!gfx::CopyMainDepthToTarget(source)) {
+    if (MirrorDrawsAlone() ? !gfx::CanCopyMainDepth(gfx::CurrentRenderTarget()) : !gfx::CopyMainDepthToTarget(source)) {
         return false;
     }
     if (MirrorOn()) {
@@ -156,7 +181,7 @@ inline bool SnapshotFrame(gfx::TextureHandle target) {
     if (MirrorOn()) {
         MirrorSnapshotFrame(target);
     }
-    return gfx::SnapshotFrame(target);
+    return MirrorDrawsAlone() || gfx::SnapshotFrame(target);
 }
 
 inline void DestroyTexture(gfx::TextureHandle texture) {

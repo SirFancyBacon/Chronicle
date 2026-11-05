@@ -445,7 +445,6 @@ void MGEndFrame() {
         render::MirrorSetTarget(gfx::kMainTarget);
         app::GameDrawFpsForNoktus();
     }
-    render::MirrorEndTick();
     static const bool                        trace_phases = std::getenv("DC_PERF_END_FRAME") != nullptr;
     std::array<EndFrameClock::time_point, 5> stamps{};
     uint32_t                                 depth_picks = 0;
@@ -456,6 +455,11 @@ void MGEndFrame() {
         gfx::RenderLease lease;
         if (trace_phases) {
             stamps[1] = EndFrameClock::now();
+        }
+        if (render::MirrorDepthProbe()) {
+            mgPickZBuff[15].enable = true;
+            mgPickZBuff[15].x = 320;
+            mgPickZBuff[15].y = SCREEN_HEIGHT / 2;
         }
         for (int i = 0; i < 16; i++) {
             g_pick_pending[i].reset();
@@ -475,9 +479,13 @@ void MGEndFrame() {
         }
 
         render::SetRenderTarget(gfx::kMainTarget);
-        gfx::DisplayListRef list;
-        if (render::Recording()) {
+        const bool recording = render::Recording();
+        if (recording) {
             textwipe::DrawDivider();
+        }
+        render::MirrorEndTick(); // last: the picks and the divider are part of the tick
+        gfx::DisplayListRef list;
+        if (recording) {
             list = render::EndRecording();
             if (trace_phases) {
                 stamps[2] = EndFrameClock::now();

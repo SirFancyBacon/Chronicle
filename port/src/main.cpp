@@ -451,6 +451,10 @@ gfx::PresentMode PresentMode(ConfigPresentMode mode) {
 
 bool g_noktus_window = false;
 
+render::MirrorSettings MirrorSettingsOf(const Config &config) {
+    return {.interpolate = config.interpolation, .present_mode = PresentMode(config.present_mode), .max_fps = config.max_fps, .anisotropy = config.anisotropy};
+}
+
 GamePresentSettings PresentSettings(const Config &config) {
 #ifdef __SWITCH__
     return {.interpolation = false,
@@ -486,16 +490,17 @@ void ApplyConfigChange(const Config &before, const Config &after) {
 #else
     if (after.tick_rate != before.tick_rate) {
         ClockSetTickRate(after.tick_rate);
+        render::MirrorTickRate(after.tick_rate);
     }
 #endif
     if (after.interpolation != before.interpolation || after.max_fps != before.max_fps ||
         after.show_fps != before.show_fps || after.fps_detail != before.fps_detail) {
         GameSetPresentSettings(PresentSettings(after));
     }
-    if (g_noktus_window) {
-        render::MirrorInterpolate(after.interpolation);
+    render::MirrorApply(MirrorSettingsOf(after));
+    if (!g_noktus_window) {
+        gfx::SetPresentMode(PresentMode(after.present_mode)); // otherwise it would only remake its images
     }
-    gfx::SetPresentMode(PresentMode(after.present_mode));
     gfx::SetAnisotropy(after.anisotropy);
 #ifdef __ANDROID__
     if (after.render_scale != before.render_scale) {
@@ -698,9 +703,10 @@ int Run(int argc, const char **argv) {
     const char *const asked_renderer = std::getenv("DC_RENDERER");
     const bool        noktus_window = !offscreen && !options.headless && (asked_renderer != nullptr ? std::string_view(asked_renderer) == "noktus" : config.renderer == ConfigRenderer::Noktus);
     if (noktus_window) {
-        render::MirrorTakeWindow(WindowHandle(), config.interpolation);
+        render::MirrorTakeWindow(WindowHandle(), options.screenshot != nullptr); // a screenshot is today's renderer's picture
         g_noktus_window = true;
     }
+    render::MirrorApply(MirrorSettingsOf(config));
     DC_ANDROID_TRACE("Run: window initialized");
     InputInit();
 #ifdef __ANDROID__

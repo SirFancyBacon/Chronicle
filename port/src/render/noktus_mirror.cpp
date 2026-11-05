@@ -5,6 +5,7 @@
 #include <atomic>
 #include <bit>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -39,6 +40,10 @@ struct Foreign {
     std::unordered_set<std::uint64_t> seen;
 };
 
+// How many of Noktus's depth answers to look through for one of today's: the two answer a tick or so apart.
+constexpr std::size_t kDepthAnswersKept = 4;
+constexpr float       kDepthAgrees = 0.0005f;
+
 // An atlas that starts again reuses its coordinates, so now and then what's being drawn is read regardless.
 constexpr int kForeignRefreshTicks = 120;
 
@@ -69,12 +74,21 @@ struct Mirror {
     bool                                                     still = false;
     float                                                    jump_distance = std::numeric_limits<float>::infinity();
     bool                                                     vertices_move = false;
+    std::uint64_t                                            draws_at_tick_end = 0;
+    std::uint64_t                                            draws_last_tick = 0;
+    std::uint64_t                                            depth_compared = 0;
+    float                                                    depth_difference = 0.0f; // the largest seen
+    std::uint64_t                                            depth_differing = 0;
+    std::uint64_t                                            depth_on_something = 0;  // not open sky: a read of nothing but sky would prove little
+    std::array<std::array<float, kDepthAnswersKept>, noktus::Renderer::kDepthReads> depth_answers{}; // Noktus's latest, per slot, going round
+    std::array<std::uint32_t, noktus::Renderer::kDepthReads>                       depth_answer_count{};
 };
 
 // A mirror is a test tool: whatever goes wrong in it, the game plays on. With the game's own window it's what the player sees, and it can't.
 bool        g_failed = false;
 SDL_Window *g_game_window = nullptr;
-bool        g_interpolate = true;
+bool        g_draws_alone = false;
+MirrorSettings g_settings;
 // For a swapchain that asks, on the render thread.
 std::atomic<std::uint32_t> g_window_width = 0;
 std::atomic<std::uint32_t> g_window_height = 0;
@@ -154,12 +168,28 @@ void WriteLastPicture() {
         std::fprintf(stderr, "noktus mirror: %llu drawn, %llu skipped for a texture it lacks, %llu to other targets, %llu dropped\n",
                      static_cast<unsigned long long>(mirror.drawn + mirror.meshes_drawn), static_cast<unsigned long long>(mirror.skipped),
                      static_cast<unsigned long long>(mirror.elsewhere), static_cast<unsigned long long>(mirror.renderer->DroppedDraws()));
+        if (mirror.depth_compared != 0) {
+            std::fprintf(stderr, "noktus depth: %llu reads compared, %llu on something, %llu differing, largest difference %.6f\n", static_cast<unsigned long long>(mirror.depth_compared),
+                         static_cast<unsigned long long>(mirror.depth_on_something), static_cast<unsigned long long>(mirror.depth_differing), static_cast<double>(mirror.depth_difference));
+        }
         if (mirror.window != nullptr) {
             ReportPace(mirror);
         }
         mirror.renderer.reset();
         DropWindow(mirror);
     }
+}
+
+noktus::PresentMode ToPresentMode(gfx::PresentMode mode) {
+    switch (mode) {
+        case gfx::PresentMode::Mailbox:
+            return noktus::PresentMode::Fast;
+        case gfx::PresentMode::Immediate:
+            return noktus::PresentMode::Off;
+        case gfx::PresentMode::Fifo:
+            break;
+    }
+    return noktus::PresentMode::VSync;
 }
 
 void Start(Mirror &mirror) {
@@ -200,8 +230,11 @@ void Start(Mirror &mirror) {
         if (const char *cushion = std::getenv("DC_NOKTUS_CUSHION")) {
             host.cushion = std::strtod(cushion, nullptr);
         }
-        host.interpolate = g_interpolate && !InterpolationForcedOff();
     }
+    host.interpolate = g_settings.interpolate && !InterpolationForcedOff();
+    host.present_mode = ToPresentMode(g_settings.present_mode);
+    host.frame_limit = g_settings.max_fps;
+    host.anisotropy = g_settings.anisotropy;
     if (const char *workers = std::getenv("DC_NOKTUS_WORKERS")) {
         host.workers = static_cast<int>(std::strtol(workers, nullptr, 10));
     }
@@ -347,12 +380,80 @@ bool MirrorHasWindow() {
     return g_game_window != nullptr;
 }
 
-void MirrorInterpolate(bool interpolate) {
+bool MirrorDepthProbe() {
+    static const bool probe = [] {
+        const char *setting = std::getenv("DC_NOKTUS_DEPTH_PROBE");
+        return setting != nullptr && std::string_view(setting) == "1";
+    }();
+    return probe;
+}
+
+bool MirrorDrawsAlone() {
+    return g_draws_alone;
+}
+
+void MirrorApply(const MirrorSettings &settings) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
-    g_interpolate = interpolate;
+    g_settings = settings;
     if (mirror.renderer) {
-        noktus::SetInterpolation(*mirror.renderer, interpolate && !InterpolationForcedOff());
+        noktus::SetInterpolation(*mirror.renderer, settings.interpolate && !InterpolationForcedOff());
+        noktus::SetPresentMode(*mirror.renderer, ToPresentMode(settings.present_mode));
+        noktus::SetFrameLimit(*mirror.renderer, settings.max_fps);
+        noktus::SetAnisotropy(*mirror.renderer, settings.anisotropy);
+    }
+}
+
+void MirrorTickRate(double ticks_per_second) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.renderer) {
+        noktus::SetTickRate(*mirror.renderer, ticks_per_second);
+    }
+}
+
+std::uint64_t MirrorDrawsLastTick() {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    return mirror.draws_last_tick;
+}
+
+void MirrorReadDepth(std::uint32_t slot, const gfx::LogicalRect &area) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.open) {
+        Guarded([&] { mirror.renderer->ReadDepth(slot, {area.x, area.y, area.w, area.h}); });
+    }
+}
+
+std::optional<float> MirrorDepthResult(std::uint32_t slot) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    return mirror.renderer ? mirror.renderer->DepthResult(slot) : std::nullopt;
+}
+
+void MirrorCompareDepth(std::uint32_t slot, float today) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (!mirror.renderer || slot >= noktus::Renderer::kDepthReads) {
+        return;
+    }
+    const std::optional<float> answer = mirror.renderer->DepthResult(slot);
+    if (!answer) {
+        return;
+    }
+    std::array<float, kDepthAnswersKept> &kept = mirror.depth_answers[slot];
+    std::uint32_t                        &count = mirror.depth_answer_count[slot];
+    kept[count++ % kDepthAnswersKept] = *answer;
+    if (count >= kDepthAnswersKept) {
+        float nearest = std::numeric_limits<float>::infinity();
+        for (const float value : kept) {
+            nearest = std::min(nearest, std::abs(today - value));
+        }
+        mirror.depth_compared++;
+        mirror.depth_on_something += today > 0.0f ? 1 : 0;
+        mirror.depth_differing += nearest > kDepthAgrees ? 1 : 0;
+        mirror.depth_difference = std::max(mirror.depth_difference, nearest);
     }
 }
 
@@ -362,9 +463,9 @@ double MirrorFramesPerSecond() {
     return mirror.frames_per_second;
 }
 
-void MirrorTakeWindow(SDL_Window *window, bool interpolate) {
+void MirrorTakeWindow(SDL_Window *window, bool keep_todays_drawing) {
     g_game_window = window;
-    g_interpolate = interpolate;
+    g_draws_alone = !keep_todays_drawing;
 }
 
 void MirrorStop() {
@@ -430,6 +531,8 @@ void MirrorEndTick() {
     if (mirror.open) {
         Guarded([&] { mirror.renderer->EndTick(); });
         mirror.open = false;
+        mirror.draws_last_tick = mirror.drawn + mirror.meshes_drawn - mirror.draws_at_tick_end;
+        mirror.draws_at_tick_end = mirror.drawn + mirror.meshes_drawn;
         if (mirror.window != nullptr) {
             const auto now = std::chrono::steady_clock::now();
             const double seconds = std::chrono::duration<double>(now - mirror.rate_since).count();
@@ -740,7 +843,7 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     }
     draw.vertices = converted;
     draw.primitive = ToPrimitive(primitive);
-    draw.layer = ToLayer(CurrentLayer2D());
+    draw.layer = ToLayer(DrawLayer2D(primitive, vertices, texture, state));
     draw.over_the_window = over_the_window;
     // Whole draws anchor by the centre of their bounds, as today's renderer decides it.
     const gfx::UiAnchor anchor = gfx::CurrentUiAnchor();
