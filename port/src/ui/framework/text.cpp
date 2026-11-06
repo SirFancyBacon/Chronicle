@@ -5,8 +5,8 @@
 #include <tuple>
 #include <vector>
 
-#include "gfx/gfx.hpp"
 #include "render/renderer_calls.hpp"
+#include "render/types.hpp"
 #include "text/caption_text.hpp"
 #include "text/captionfont.hpp"
 #include "text/textwipe.hpp"
@@ -176,7 +176,7 @@ int MeasureScaledText(std::string_view text, float scale, float xscale, FontWeig
         }
     } guard(slot);
 
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const capfont::Metrics    metrics = capfont::GetMetrics();
     const float               cap_height = detail::kBaseCapHeight * scale;
     const float               em = cap_height / std::max(0.2f, metrics.cap);

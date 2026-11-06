@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <vector>
 
-#include "gfx/gfx.hpp"
+#include "render/types.hpp"
 
 namespace dc::text::capfont {
 
@@ -182,7 +182,7 @@ unsigned Generation();
 /**
  * The atlas texture, linearly filtered, for drawing glyphs.
  */
-gfx::TextureBinding Binding();
+render::TextureBinding Binding();
 
 /**
  * The active font's vertical metrics and figure advance, as fractions of the em.

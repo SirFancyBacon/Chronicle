@@ -14,6 +14,7 @@
 #include "menuetc.hpp"
 #include "platform/png_image.hpp"
 #include "render/texture_registry.hpp"
+#include "render/types.hpp"
 #include "text/gametext.hpp"
 #include "ui/framework.hpp"
 
@@ -122,7 +123,7 @@ bool Prepare(const char *name, render::PortDecodedTexture &texture) {
     const auto           sheet_height = static_cast<int>(texture.height);
     std::vector<uint8_t> rgba(static_cast<std::size_t>(sheet_width) * sheet_height * 4);
     for (std::size_t pixel = 0; pixel < static_cast<std::size_t>(sheet_width) * sheet_height; pixel++) {
-        if (texture.format == gfx::TextureFormat::Index8) {
+        if (texture.format == render::TextureFormat::Index8) {
             const uint32_t colour = texture.palette[texture.levels[0][pixel]];
             std::memcpy(&rgba[pixel * 4], &colour, 4);
         } else {
@@ -142,7 +143,7 @@ bool Prepare(const char *name, render::PortDecodedTexture &texture) {
         levels.push_back(level == 0 ? rgba : localize::LocalizeResample(rgba.data(), sheet_width, sheet_height, level_width, level_height));
     }
     texture.levels = std::move(levels);
-    texture.format = gfx::TextureFormat::Rgba8;
+    texture.format = render::TextureFormat::Rgba8;
     texture.has_alpha = true;
     texture.four_bit = false;
     g_blank = true;

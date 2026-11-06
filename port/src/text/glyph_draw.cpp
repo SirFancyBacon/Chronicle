@@ -6,6 +6,7 @@
 
 #include "platform/config.hpp"
 #include "render/draw2d.hpp"
+#include "render/types.hpp"
 #include "text/text_shadow.hpp"
 #include "text/textwipe.hpp"
 
@@ -97,7 +98,7 @@ bool GlyphDrawSlot(glyphs::Button button, const CRect_i_ &slot, int alpha, float
     const auto alpha_byte = static_cast<u_char>(alpha);
     // In text the symbol casts a shadow in its own shape, like the words beside it; config glyph_shadow
     // sets its strength. Painted over art it has none (the art has its own).
-    std::vector<gfx::Vertex2D> quad;
+    std::vector<render::Vertex2D> quad;
     auto                       add = [&](float ox, float oy, u_char r, u_char g, u_char b, u_char a) {
         quad.push_back(draw2d::Vertex(x + ox, y + oy, 0.0f, image.u0, image.v0, r, g, b, a));
         quad.push_back(draw2d::Vertex(x + ox + width, y + oy, 0.0f, image.u1, image.v0, r, g, b, a));
@@ -112,7 +113,7 @@ bool GlyphDrawSlot(glyphs::Button button, const CRect_i_ &slot, int alpha, float
         });
     }
     add(0.0f, 0.0f, 0x80, 0x80, 0x80, alpha_byte);
-    textwipe::Draw2D(gfx::Primitive::Quads, quad, image.binding, draw2d::SpriteState());
+    textwipe::Draw2D(render::Primitive::Quads, quad, image.binding, draw2d::SpriteState());
     draw2d::RestoreTestZbuf();
     return true;
 }

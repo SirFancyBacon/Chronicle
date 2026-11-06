@@ -89,7 +89,7 @@ void MirrorClearStencil();
 void MirrorSurface(gfx::TextureHandle target, std::uint32_t width, std::uint32_t height, bool has_alpha, bool shares_depth, bool frame_target);
 void MirrorSetTarget(gfx::TextureHandle target);
 void MirrorSnapshotFrame(gfx::TextureHandle target);
-void MirrorCopyDepth(const gfx::LogicalRect &source);
+bool MirrorCopyDepth(const gfx::LogicalRect &source);
 void MirrorBlit(gfx::TextureHandle from, gfx::Rect from_rect, gfx::TextureHandle to, gfx::Rect to_rect, gfx::Filter filter);
 
 void MirrorCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices);

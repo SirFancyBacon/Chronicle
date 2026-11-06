@@ -64,6 +64,13 @@ inline gfx::TextureHandle CreateTexture(const gfx::TextureDesc &desc) {
     return texture;
 }
 
+inline bool UpdateTexture(gfx::TextureHandle texture, std::uint32_t mip, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, const void *pixels) {
+    if (MirrorOn()) {
+        MirrorTexturePixels(texture, mip, x, y, width, height, pixels);
+    }
+    return gfx::UpdateTexture(texture, mip, x, y, width, height, pixels);
+}
+
 inline bool UpdateTextureNow(gfx::TextureHandle texture, std::uint32_t mip, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, const void *pixels) {
     if (MirrorOn()) {
         MirrorTexturePixels(texture, mip, x, y, width, height, pixels);
@@ -168,7 +175,10 @@ inline gfx::TextureHandle NamedRenderTarget(std::string_view name, std::uint32_t
 }
 
 inline bool CopyMainDepthToTarget(const gfx::LogicalRect &source) {
-    if (MirrorDrawsAlone() ? !gfx::CanCopyMainDepth(gfx::CurrentRenderTarget()) : !gfx::CopyMainDepthToTarget(source)) {
+    if (MirrorDrawsAlone()) {
+        return MirrorCopyDepth(source);
+    }
+    if (!gfx::CopyMainDepthToTarget(source)) {
         return false;
     }
     if (MirrorOn()) {

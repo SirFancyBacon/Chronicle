@@ -37,6 +37,7 @@
 #include "dataset.hpp"
 #include "debugfont.hpp"
 #include "dialog/npc.hpp"
+#include "dialog/script_question.hpp"
 #include "dispctrl.hpp"
 #include "dngstatusdata.hpp"
 #include "ebattle.hpp"
@@ -53,14 +54,12 @@
 #include "effectgroup.hpp"
 #include "effectmacro.hpp"
 #include "fishing.hpp"
-#include "dialog/script_question.hpp"
 #include "fishing/host.hpp"
 #include "frame.hpp"
 #include "framevu1.hpp"
 #include "gamemode.hpp"
 #include "gamepad.hpp"
 #include "gameutil.hpp"
-#include "gfx/gfx.hpp"
 #include "input/camera_zoom.hpp"
 #include "input/mouse_look.hpp"
 #include "itemdata.hpp"
@@ -83,6 +82,7 @@
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/passes.hpp"
+#include "render/types.hpp"
 #include "runeffect.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
@@ -3368,7 +3368,7 @@ void DrawSysGra() {
 // Kept in the window's top right corner.
 void EdDrawClock(int x, int y) {
     if (draw_clock != 0 && EditMapInfo->time_stop == 0) {
-        gfx::UiAnchorScope anchor(gfx::UiAnchor::Side(1, -1));
+        render::UiAnchorScope anchor(render::UiAnchor::Side(1, -1));
 
         TexManager.ReloadTexture(Vif1Packet, 20);
         setbilinear(0);
@@ -5448,7 +5448,7 @@ void set2DSpriteRot(sceVif1Packet * /*packet*/, CTexture *texture, const CRect_i
     const auto v1 = static_cast<float>(texel.y + texel.height);
 
     // The second corner's u spans the screen width, not the texel width, as in retail.
-    std::array<gfx::Vertex2D, 4> strip = {
+    std::array<render::Vertex2D, 4> strip = {
         draw2d::Vertex(x[0], y[0], 0.0f, u0, v0, 0x80, 0x80, 0x80, alpha),
         draw2d::Vertex(x[1], y[1], 0.0f, static_cast<float>(texel.x + screen.width), v0, 0x80, 0x80, 0x80,
                        alpha),
@@ -5456,7 +5456,7 @@ void set2DSpriteRot(sceVif1Packet * /*packet*/, CTexture *texture, const CRect_i
         draw2d::Vertex(x[3], y[3], 0.0f, static_cast<float>(texel.x + texel.width), v1, 0x80, 0x80, 0x80,
                        alpha),
     };
-    draw2d::DrawTextured(gfx::Primitive::TriangleStrip, strip, texture->tex0, 0x41, draw2d::SpriteState());
+    draw2d::DrawTextured(render::Primitive::TriangleStrip, strip, texture->tex0, 0x41, draw2d::SpriteState());
     draw2d::RestoreTestZbuf();
 }
 

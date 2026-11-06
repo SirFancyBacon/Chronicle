@@ -3,7 +3,7 @@
 #include <functional>
 #include <span>
 
-#include "gfx/gfx.hpp"
+#include "render/types.hpp"
 
 namespace dc::text::textwipe {
 
@@ -114,7 +114,7 @@ void DrawDivider();
 /**
  * Applies the active comparison clip or tint before submitting text geometry.
  */
-void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &binding,
-            const gfx::DrawState &state);
+void Draw2D(render::Primitive primitive, std::span<const render::Vertex2D> vertices, const render::TextureBinding &binding,
+            const render::DrawState &state);
 
 } // namespace dc::text::textwipe

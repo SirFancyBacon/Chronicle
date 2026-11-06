@@ -29,21 +29,22 @@
 #include "main.hpp"
 #include "mglib.hpp"
 #include "platform/config.hpp"
-#include "platform/glyphs.hpp"
-#include "platform/ttffont.hpp"
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
 #include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
+#include "render/types.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
 #include "text/caption_text.hpp"
 #include "text/captionfont.hpp"
 #include "text/gametext.hpp"
 #include "text/glyph_draw.hpp"
+#include "text/glyphs.hpp"
 #include "text/text_shadow.hpp"
 #include "text/textwipe.hpp"
+#include "text/ttffont.hpp"
 #include "texture.hpp"
 #include "ui/menu_pointer.hpp"
 
@@ -260,10 +261,10 @@ void Myset2DSprite(sceVif1Packet * /*packet*/, CTexture *texture, const CRect_i_
         return;
     }
 
-    gfx::DrawState state = draw2d::Get().draw_state();
+    render::DrawState state = draw2d::Get().draw_state();
     state.blend = true;
     state.fog = false;
-    state.cull = gfx::CullMode::None;
+    state.cull = render::CullMode::None;
     MGPortApplyZbuf(state, mgZBuffer);
 
     const auto x0 = static_cast<float>(src.x);
@@ -275,13 +276,13 @@ void Myset2DSprite(sceVif1Packet * /*packet*/, CTexture *texture, const CRect_i_
     const auto u1 = static_cast<float>(dst.x + dst.width);
     const auto v1 = static_cast<float>(dst.y + dst.height);
 
-    std::array<gfx::Vertex2D, 4> quad = {
+    std::array<render::Vertex2D, 4> quad = {
         draw2d::Vertex(x0, y0, 0.0f, u0, v0, r, g, b, a),
         draw2d::Vertex(x1, y0, 0.0f, u1, v0, r, g, b, a),
         draw2d::Vertex(x1, y1, 0.0f, u1, v1, r, g, b, a),
         draw2d::Vertex(x0, y1, 0.0f, u0, v1, r, g, b, a),
     };
-    draw2d::DrawTextured(gfx::Primitive::Quads, quad, texture->tex0, 0x61, state);
+    draw2d::DrawTextured(render::Primitive::Quads, quad, texture->tex0, 0x61, state);
     draw2d::Get().set_zbuf(nullptr);
 }
 
@@ -1539,30 +1540,30 @@ void ClsMes::Myset2DSprite_Fuchi(sceVif1Packet *packet, CTexture *texture, int x
 namespace {
 
 struct Shape {
-    gfx::Primitive             primitive;
-    std::vector<gfx::Vertex2D> vertices;
+    render::Primitive             primitive;
+    std::vector<render::Vertex2D> vertices;
 };
 
 // What MakeFukidashi_sub and DrawMaru put in the packet for MakeFukidashi to draw: every PRIM write
 // starts a fan or a triangle list, every XYZF2 is a point in fukidashibase's texel rows.
 std::vector<Shape> g_shapes;
 
-void BeginShape(gfx::Primitive primitive) { g_shapes.push_back({.primitive = primitive, .vertices = {}}); }
+void BeginShape(render::Primitive primitive) { g_shapes.push_back({.primitive = primitive, .vertices = {}}); }
 
 void ShapePoint(int x, int y) {
     if (g_shapes.empty()) {
-        BeginShape(gfx::Primitive::TriangleFan);
+        BeginShape(render::Primitive::TriangleFan);
     }
     g_shapes.back().vertices.push_back(draw2d::Vertex(x, y, 0.0f, 0.0f, 0.0f, 0xBF, 0xBF, 0xBF, 0x80));
 }
 
 constexpr const char *kBubbleTarget = "fukidashibase";
 
-gfx::TextureHandle BubbleTarget(CTexture *texture) {
+render::TextureHandle BubbleTarget(CTexture *texture) {
     if (texture != nullptr) {
         PortTextureRef ref = draw2d::Get().texture(texture->tex0, 0);
         if (ref.valid) {
-            std::optional<gfx::TextureInfo> info = render::GetTextureInfo(ref.binding.texture);
+            std::optional<render::TextureInfo> info = render::GetTextureInfo(ref.binding.texture);
             if (info && info->render_target) {
                 return ref.binding.texture;
             }
@@ -1573,7 +1574,7 @@ gfx::TextureHandle BubbleTarget(CTexture *texture) {
 
 void DrawMaru(sceVif1Packet * /*packet*/, int x, int y, int width, int height, int lift, int /*unused*/, int rough,
               int /*prim*/) {
-    BeginShape(gfx::Primitive::TriangleFan);
+    BeginShape(render::Primitive::TriangleFan);
 
     int px = x + (width >> 1);
     int py = y + (height >> 1) - lift;
@@ -1679,7 +1680,7 @@ void ClsMes::MakeFukidashi_sub(sceVif1Packet *packet, int prim) {
     };
 
     if (this->fukidashi_shape == 0) {
-        BeginShape(gfx::Primitive::TriangleFan);
+        BeginShape(render::Primitive::TriangleFan);
 
         int base_x = static_cast<int>(LinerInterpolation(this->grow_x, this->win_x, this->fade));
         int base_y = static_cast<int>(LinerInterpolation(this->grow_y, this->win_y, this->fade));
@@ -1732,7 +1733,7 @@ void ClsMes::MakeFukidashi_sub(sceVif1Packet *packet, int prim) {
         x = static_cast<int>(LinerInterpolation(this->grow_x, this->win_x, this->fade));
         y = static_cast<int>(LinerInterpolation(this->grow_y, this->win_y, this->fade));
 
-        BeginShape(gfx::Primitive::TriangleFan);
+        BeginShape(render::Primitive::TriangleFan);
 
         int oval_width = static_cast<int>(grown_width);
         int oval_height = static_cast<int>(grown_height);
@@ -1798,7 +1799,7 @@ void ClsMes::MakeFukidashi_sub(sceVif1Packet *packet, int prim) {
             y = static_cast<int>(LinerInterpolation(this->grow_y, this->tail_tip_y, this->fade));
             DrawMaru(packet, x - 5, y - 5, 10, 10, top, 0x20, 0, prim);
         } else {
-            BeginShape(gfx::Primitive::Triangles);
+            BeginShape(render::Primitive::Triangles);
 
             x = static_cast<int>(LinerInterpolation(this->grow_x, this->tail_tip_x, this->fade));
             y = static_cast<int>(LinerInterpolation(this->grow_y, this->tail_tip_y, this->fade));
@@ -1835,33 +1836,33 @@ void ClsMes::MakeFukidashi(sceVif1Packet *packet) {
     this->MakeFukidashi_sub(packet, 1);
     this->MakeFukidashi_sub(packet, 0);
 
-    const gfx::TextureHandle target = BubbleTarget(services.find_texture(kBubbleTarget));
-    if (target != gfx::kNullTexture) {
-        const gfx::TextureHandle previous = render::CurrentRenderTarget();
+    const render::TextureHandle target = BubbleTarget(services.find_texture(kBubbleTarget));
+    if (target != render::kNullTexture) {
+        const render::TextureHandle previous = render::CurrentRenderTarget();
         render::SetRenderTarget(target);
 
-        gfx::DrawState state = services.draw_state();
+        render::DrawState state = services.draw_state();
         state.blend = true;
         state.alpha_test = false;
-        state.depth_test = gfx::DepthTest::Always;
+        state.depth_test = render::DepthTest::Always;
         state.depth_write = false;
         state.fog = false;
-        state.cull = gfx::CullMode::None;
+        state.cull = render::CullMode::None;
         state.scissor = false;
 
         constexpr std::array<uint8_t, 4> none{};
         render::Clear(false, none.data(), true, 1.0f);
 
         const auto                   fill_bottom = static_cast<float>(SCREEN_HALF_HEIGHT);
-        std::array<gfx::Vertex2D, 4> fill = {
+        std::array<render::Vertex2D, 4> fill = {
             draw2d::Vertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0, 0),
             draw2d::Vertex(kScreenWidth, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0, 0),
             draw2d::Vertex(kScreenWidth, fill_bottom, 0.0f, 0.0f, 0.0f, 0, 0, 0, 0),
             draw2d::Vertex(0.0f, fill_bottom, 0.0f, 0.0f, 0.0f, 0, 0, 0, 0),
         };
-        textwipe::Draw2D(gfx::Primitive::Quads, fill, {}, state);
+        textwipe::Draw2D(render::Primitive::Quads, fill, {}, state);
 
-        gfx::DrawState fans = state;
+        render::DrawState fans = state;
         fans.depth_write = true;
         for (const Shape &shape : g_shapes) {
             if (shape.vertices.size() >= 3) {
@@ -1871,10 +1872,10 @@ void ClsMes::MakeFukidashi(sceVif1Packet *packet) {
 
         CTexture *paper = services.find_texture("fuki256");
         if (paper != nullptr) {
-            gfx::DrawState tiles = state;
-            tiles.depth_test = gfx::DepthTest::GEqual;
+            render::DrawState tiles = state;
+            tiles.depth_test = render::DepthTest::GEqual;
             const u_char               alpha = std::min(this->edge_alpha, 0x80);
-            std::vector<gfx::Vertex2D> quads;
+            std::vector<render::Vertex2D> quads;
             for (int row = 0; row < 4; row++) {
                 for (int col = 0; col < 5; col++) {
                     const auto x0 = static_cast<float>(col * 0x80);
@@ -1886,7 +1887,7 @@ void ClsMes::MakeFukidashi(sceVif1Packet *packet) {
                     quads.push_back(draw2d::Vertex(x0, y0 + 0x80, 0.0f, 0.0f, 0x80, 0x80, 0x80, 0x80, alpha));
                 }
             }
-            draw2d::DrawTextured(gfx::Primitive::Quads, quads, paper->tex0, 0x61, tiles);
+            draw2d::DrawTextured(render::Primitive::Quads, quads, paper->tex0, 0x61, tiles);
         }
 
         render::SetRenderTarget(previous);
@@ -2340,10 +2341,10 @@ void DrawLetters(const std::vector<PendingLetter> &letters) {
     if (letters.empty()) {
         return;
     }
-    const gfx::LogicalMapping  mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping  mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float                rows = draw2d::RowScale();
     const int                  size = std::clamp(static_cast<int>(std::lround(kCellH * mapping.scale_y * rows)), kCellH, 512);
-    std::vector<gfx::Vertex2D> quads;
+    std::vector<render::Vertex2D> quads;
     // Made again, once, if the atlas started over while the cells were drawn into it (that would leave the first ones
     // stale).
     for (int attempt = 0; attempt < 2; attempt++) {
@@ -2379,7 +2380,7 @@ void DrawLetters(const std::vector<PendingLetter> &letters) {
         }
     }
     if (!quads.empty()) {
-        textwipe::Draw2D(gfx::Primitive::Quads, quads, capfont::Binding(), draw2d::SpriteState());
+        textwipe::Draw2D(render::Primitive::Quads, quads, capfont::Binding(), draw2d::SpriteState());
         draw2d::RestoreTestZbuf();
     }
 }
@@ -2511,7 +2512,7 @@ void GlyphTint(int clut, int dark, int wide, int &r, int &g, int &b, int &alpha)
     }
 }
 
-void TtfQuad(std::vector<gfx::Vertex2D> &out, const ttffont::Glyph &glyph, float x, float y, float width,
+void TtfQuad(std::vector<render::Vertex2D> &out, const ttffont::Glyph &glyph, float x, float y, float width,
              float height, int r, int g, int b, int alpha) {
     auto         clamp = [](int v) { return static_cast<u_char>(std::clamp(v, 0, 255)); };
     const u_char red = clamp(r);
@@ -2550,7 +2551,7 @@ void TtfLayoutRows(ClsMes &mes, std::vector<float> &xs, std::vector<float> &sque
     if (mes.char_height <= 0 || mes.char_width <= 0) {
         return;
     }
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const ttffont::Metrics    metrics = ttffont::GetMetrics();
     const float               em = TtfEm(mes, metrics);
     const int                 em_px = static_cast<int>(em * mapping.scale_x + 0.5f);
@@ -2629,14 +2630,14 @@ void TtfLayoutRows(ClsMes &mes, std::vector<float> &xs, std::vector<float> &sque
 // Queues the font's glyph for win_line[index]: an edge pass per outline and one fill. False where
 // the font has none, and the bitmap character is drawn.
 bool QueueTtfGlyph(ClsMes &mes, int index, int dark, int offset_x, int offset_y, const std::vector<float> &xs,
-                   const std::vector<float>   &squeeze,
-                   std::vector<gfx::Vertex2D> &edges, std::vector<gfx::Vertex2D> &fills) {
+                   const std::vector<float>      &squeeze,
+                   std::vector<render::Vertex2D> &edges, std::vector<render::Vertex2D> &fills) {
     const MES_WIN_LINE &line = mes.win_line[index];
     const char32_t      ch = GameTextChar(line.code);
     if (ch == 0 || mes.char_height <= 0 || mes.char_width <= 0 || static_cast<size_t>(index) >= xs.size()) {
         return false;
     }
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const ttffont::Metrics    metrics = ttffont::GetMetrics();
     const float               em = TtfEm(mes, metrics);
@@ -2727,7 +2728,7 @@ bool QueueTtfGlyph(ClsMes &mes, int index, int dark, int offset_x, int offset_y,
 } // namespace
 
 // The pad buttons among the font's icons (kNamed in gametext.cpp), drawn from the button symbol
-// files (platform/glyphs.hpp) when input.glyphs is "new". The symbol keeps the proportions of its
+// files (text/glyphs.hpp) when input.glyphs is "new". The symbol keeps the proportions of its
 // art, scaled so a round face button fills the icon's height, and sits in the middle of the icon's
 // slot; a wide one (a key) may reach out of it, up to twice the slot's width.
 namespace {
@@ -3079,8 +3080,8 @@ void ClsMes::DrawMesWin() {
         std::vector<PendingLetter> letters;
         g_letters = letters_ready ? &letters : nullptr;
         set2DSprite_Start(Vif1Packet, texture);
-        std::vector<gfx::Vertex2D> ttf_edges;
-        std::vector<gfx::Vertex2D> ttf_fills;
+        std::vector<render::Vertex2D> ttf_edges;
+        std::vector<render::Vertex2D> ttf_fills;
         std::vector<float>         ttf_xs;
         std::vector<float>         ttf_squeeze;
         if (ttf) {
@@ -3175,11 +3176,11 @@ void ClsMes::DrawMesWin() {
         DrawLetters(letters);
 
         if (!ttf_fills.empty()) {
-            const gfx::TextureBinding binding = ttffont::Binding();
+            const render::TextureBinding binding = ttffont::Binding();
             if (!ttf_edges.empty()) {
-                textwipe::Draw2D(gfx::Primitive::Quads, ttf_edges, binding, draw2d::SpriteState());
+                textwipe::Draw2D(render::Primitive::Quads, ttf_edges, binding, draw2d::SpriteState());
             }
-            textwipe::Draw2D(gfx::Primitive::Quads, ttf_fills, binding, draw2d::SpriteState());
+            textwipe::Draw2D(render::Primitive::Quads, ttf_fills, binding, draw2d::SpriteState());
             draw2d::RestoreTestZbuf();
         }
     };

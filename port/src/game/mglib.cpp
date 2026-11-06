@@ -1,5 +1,4 @@
 #include "mglib.hpp"
-#include "render/renderer_calls.hpp"
 #include "types.h"
 
 #include <libdma.h>
@@ -29,7 +28,9 @@
 #include "render/draw3d.hpp"
 #include "render/gs_state.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
+#include "render/types.hpp"
 #include "renderinfo.hpp"
 #include "text/textwipe.hpp"
 #include "texture.hpp"
@@ -118,7 +119,7 @@ bool          g_have_tick_view = false;
 sceVu0FMATRIX g_tick_view;
 
 // The logical frame's rect of a GS sprite whose corners are 12.4 window offsets on the field.
-gfx::LogicalRect FieldRect(int x, int y, int width, int height) {
+render::LogicalRect FieldRect(int x, int y, int width, int height) {
     float left = static_cast<float>(x) / 16.0f;
     float top = static_cast<float>(y) / 8.0f;
     return {left, top, static_cast<float>(width) / 16.0f, static_cast<float>(height) / 8.0f};
@@ -126,7 +127,7 @@ gfx::LogicalRect FieldRect(int x, int y, int width, int height) {
 
 // The bars around the letterboxed frame on the main target, which nothing else draws to.
 void ClearBars() {
-    gfx::LogicalMapping mapping = render::GetLogicalMapping(gfx::kMainTarget);
+    render::LogicalMapping mapping = render::GetLogicalMapping(render::kMainTarget);
     if (mapping.pixel_width == 0 || mapping.pixel_height == 0) {
         return;
     }
@@ -135,13 +136,13 @@ void ClearBars() {
     float            right = (static_cast<float>(mapping.pixel_width) - mapping.offset_x) / mapping.scale_x;
     float            bottom = (static_cast<float>(mapping.pixel_height) - mapping.offset_y) / mapping.scale_y;
     uint8_t          black[4] = {0, 0, 0, 0x80};
-    gfx::LogicalRect bars[4] = {
+    render::LogicalRect bars[4] = {
         {left,         top,           -left,                bottom - top          },
         {kScreenWidth, top,           right - kScreenWidth, bottom - top          },
         {0.0f,         top,           kScreenWidth,         -top                  },
         {0.0f,         kScreenHeight, kScreenWidth,         bottom - kScreenHeight},
     };
-    for (const gfx::LogicalRect &bar : bars) {
+    for (const render::LogicalRect &bar : bars) {
         if (bar.w > 0.0f && bar.h > 0.0f) {
             render::Clear(true, black, true, 0.0f, &bar);
         }
@@ -153,14 +154,14 @@ u_long FrameTex0(unsigned tbp0) {
 }
 
 struct ResolvedRect {
-    gfx::TextureHandle texture;
-    gfx::Rect          rect;
+    render::TextureHandle texture;
+    render::Rect          rect;
 };
 
 // A rect in a TEX0 buffer's own rows, in the logical units gfx takes for that texture.
 std::optional<ResolvedRect> ResolveRect(const sceGsTex0 &tex0, int x, int y, int width, int height) {
     PortTextureRef ref = Draw3DResolveTex0(std::bit_cast<u_long>(tex0));
-    if (!ref.valid || ref.binding.texture == gfx::kNullTexture) {
+    if (!ref.valid || ref.binding.texture == render::kNullTexture) {
         return std::nullopt;
     }
     int rows = MGPortFrameRowScale(ref.binding.texture);
@@ -170,8 +171,8 @@ std::optional<ResolvedRect> ResolveRect(const sceGsTex0 &tex0, int x, int y, int
 }
 
 // gfx refuses a blit within one image; this goes through a scratch texture instead.
-void BlitWithin(gfx::TextureHandle texture, gfx::Rect src, gfx::Rect dst, gfx::Filter filter) {
-    static gfx::TextureHandle scratch = gfx::kNullTexture;
+void BlitWithin(render::TextureHandle texture, render::Rect src, render::Rect dst, render::Filter filter) {
+    static render::TextureHandle scratch = render::kNullTexture;
     static uint32_t           scratch_width = 0;
     static uint32_t           scratch_height = 0;
     static bool               scratch_frame = false;
@@ -179,13 +180,13 @@ void BlitWithin(gfx::TextureHandle texture, gfx::Rect src, gfx::Rect dst, gfx::F
     auto                      height = static_cast<uint32_t>(std::abs(src.h));
     // A move of the frame's whole width carries the sides past the logical frame through a frame
     // target of its own.
-    std::optional<gfx::TextureInfo> info = render::GetTextureInfo(texture);
+    std::optional<render::TextureInfo> info = render::GetTextureInfo(texture);
 
-    bool frame = info && (info->frame_target || info->shares_main_depth || texture == gfx::kMainTarget);
+    bool frame = info && (info->frame_target || info->shares_main_depth || texture == render::kMainTarget);
     frame = frame && width >= info->width;
-    if (scratch == gfx::kNullTexture || scratch_width < width || scratch_height < height ||
+    if (scratch == render::kNullTexture || scratch_width < width || scratch_height < height ||
         scratch_frame != frame) {
-        if (scratch != gfx::kNullTexture) {
+        if (scratch != render::kNullTexture) {
             render::DestroyTexture(scratch);
         }
         scratch_width = std::max(width, scratch_width);
@@ -193,8 +194,8 @@ void BlitWithin(gfx::TextureHandle texture, gfx::Rect src, gfx::Rect dst, gfx::F
         scratch_frame = frame;
         scratch = render::CreateRenderTarget(scratch_width, scratch_height, true, false, frame);
     }
-    gfx::Rect middle = {0, 0, static_cast<int32_t>(width), static_cast<int32_t>(height)};
-    render::BlitTexture(texture, src, scratch, middle, gfx::Filter::Nearest);
+    render::Rect middle = {0, 0, static_cast<int32_t>(width), static_cast<int32_t>(height)};
+    render::BlitTexture(texture, src, scratch, middle, render::Filter::Nearest);
     render::BlitTexture(scratch, middle, texture, dst, filter);
 }
 
@@ -202,14 +203,14 @@ bool IsFrame(const sceGsTex0 &tex0) {
     return tex0.TBP0 == kMGPortFrameTbp0 || tex0.TBP0 == kMGPortPreviousFrameTbp0;
 }
 
-void Blit(const ResolvedRect &src, const ResolvedRect &dst, gfx::Filter filter) {
-    if (src.texture == gfx::kMainTarget && dst.texture != gfx::kMainTarget) {
+void Blit(const ResolvedRect &src, const ResolvedRect &dst, render::Filter filter) {
+    if (src.texture == render::kMainTarget && dst.texture != render::kMainTarget) {
         Draw3DNoteFrameCopy(dst.texture);
     }
     if (src.texture == dst.texture) {
         BlitWithin(src.texture, src.rect, dst.rect, filter);
-    } else if (src.rect.w == dst.rect.w && src.rect.h == dst.rect.h && src.texture != gfx::kMainTarget &&
-               src.texture != gfx::kPreviousFrame && dst.texture != gfx::kMainTarget) {
+    } else if (src.rect.w == dst.rect.w && src.rect.h == dst.rect.h && src.texture != render::kMainTarget &&
+               src.texture != render::kPreviousFrame && dst.texture != render::kMainTarget) {
         render::CopyTexture(src.texture, src.rect, dst.texture, dst.rect.x, dst.rect.y);
     } else {
         render::BlitTexture(src.texture, src.rect, dst.texture, dst.rect, filter);
@@ -392,7 +393,7 @@ void MGInitVSyncCallBack(int (*callback)(int)) {
 void MGInitVif1Packet(u_long128 * /*buffer0*/, u_long128 * /*buffer1*/) {}
 
 // A tick records its drawing as a display list; MGEndFrame renders it. A frame someone opened
-// with gfx::BeginFrame is drawn into as it is.
+// with render::BeginFrame is drawn into as it is.
 void MGBeginFrame() {
     render::PassTraceBeginTick();
     render::MirrorBeginTick();
@@ -402,7 +403,7 @@ void MGBeginFrame() {
             render::CutInterpolation();
         }
     }
-    render::SetRenderTarget(gfx::kMainTarget);
+    render::SetRenderTarget(render::kMainTarget);
     Draw3DSetShadowTargetActive(false);
 
     Vif1Packet = &g_null_packet;
@@ -442,7 +443,7 @@ void MGBeginFrame() {
 // it is pumped first to see whether a tick went by.
 void MGEndFrame() {
     if (render::MirrorHasWindow()) {
-        render::MirrorSetTarget(gfx::kMainTarget);
+        render::MirrorSetTarget(render::kMainTarget);
         app::GameDrawFpsForNoktus();
     }
     static const bool                        trace_phases = std::getenv("DC_PERF_END_FRAME") != nullptr;
@@ -452,7 +453,7 @@ void MGEndFrame() {
         stamps[0] = EndFrameClock::now();
     }
     {
-        gfx::RenderLease lease;
+        render::RenderLease lease;
         if (trace_phases) {
             stamps[1] = EndFrameClock::now();
         }
@@ -478,13 +479,13 @@ void MGEndFrame() {
             ++depth_picks;
         }
 
-        render::SetRenderTarget(gfx::kMainTarget);
+        render::SetRenderTarget(render::kMainTarget);
         const bool recording = render::Recording();
         if (recording) {
             textwipe::DrawDivider();
         }
         render::MirrorEndTick(); // last: the picks and the divider are part of the tick
-        gfx::DisplayListRef list;
+        render::DisplayListRef list;
         if (recording) {
             list = render::EndRecording();
             if (trace_phases) {
@@ -957,10 +958,10 @@ void MGMoveImage(sceGsTex0 *src, const CRect_i_ &rect, sceGsTex0 *dst, int dst_x
     }
     std::optional<ResolvedRect> from = ResolveRect(*src, rect.x, rect.y, rect.width, rect.height);
     std::optional<ResolvedRect> to = ResolveRect(*dst, dst_x, dst_y, rect.width, rect.height);
-    if (!from || !to || to->texture == gfx::kPreviousFrame) {
+    if (!from || !to || to->texture == render::kPreviousFrame) {
         return;
     }
-    Blit(*from, *to, gfx::Filter::Nearest);
+    Blit(*from, *to, render::Filter::Nearest);
 }
 
 // The sprite of a stretch whose source TEX0 says PSMCT24: the source is sampled through a target
@@ -968,38 +969,38 @@ void MGMoveImage(sceGsTex0 *src, const CRect_i_ &rect, sceGsTex0 *dst, int dst_x
 // off (retail's ALPHA there is (0 - 0) * FIX + Cs).
 namespace {
 
-void StretchColour24(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, gfx::Rect dst_rect,
+void StretchColour24(render::TextureHandle src, render::Rect src_rect, render::TextureHandle dst, render::Rect dst_rect,
                      const sceGsTexa &texa) {
     auto width = static_cast<uint32_t>(kScreenWidth);
     auto height = static_cast<uint32_t>(kScreenHeight);
-    if (src != gfx::kMainTarget) {
-        std::optional<gfx::TextureInfo> info = render::GetTextureInfo(src);
+    if (src != render::kMainTarget) {
+        std::optional<render::TextureInfo> info = render::GetTextureInfo(src);
         if (!info) {
             return;
         }
         width = info->width;
         height = info->height;
     }
-    std::optional<gfx::TextureInfo> source = render::GetTextureInfo(src);
-    bool                            frame = src == gfx::kMainTarget;
+    std::optional<render::TextureInfo> source = render::GetTextureInfo(src);
+    bool                               frame = src == render::kMainTarget;
     frame = frame || (source && (source->frame_target || source->shares_main_depth));
-    gfx::TextureHandle colour =
+    render::TextureHandle colour =
         render::NamedRenderTarget("stretch source PSMCT24", width, height, false, false, frame);
-    if (colour == gfx::kNullTexture) {
+    if (colour == render::kNullTexture) {
         return;
     }
-    gfx::Rect whole = {0, 0, static_cast<int32_t>(width), static_cast<int32_t>(height)};
-    if (src == gfx::kMainTarget ? !render::SnapshotFrame(colour)
-                                : !render::BlitTexture(src, whole, colour, whole, gfx::Filter::Nearest)) {
+    render::Rect whole = {0, 0, static_cast<int32_t>(width), static_cast<int32_t>(height)};
+    if (src == render::kMainTarget ? !render::SnapshotFrame(colour)
+                                   : !render::BlitTexture(src, whole, colour, whole, render::Filter::Nearest)) {
         return;
     }
 
-    gfx::DrawState state;
+    render::DrawState state;
     state.texa_aem = texa.AEM != 0;
     state.texa_ta0 = static_cast<uint8_t>(texa.TA0);
-    gfx::TextureBinding binding;
+    render::TextureBinding binding;
     binding.texture = colour;
-    binding.filter = gfx::Filter::Linear;
+    binding.filter = render::Filter::Linear;
 
     auto          left = static_cast<float>(dst_rect.x);
     auto          top = static_cast<float>(dst_rect.y);
@@ -1009,7 +1010,7 @@ void StretchColour24(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHan
     auto          v0 = static_cast<float>(src_rect.y);
     float         u1 = u0 + static_cast<float>(src_rect.w);
     float         v1 = v0 + static_cast<float>(src_rect.h);
-    gfx::Vertex2D corners[4] = {};
+    render::Vertex2D corners[4] = {};
     float         xs[4] = {left, right, right, left};
     float         ys[4] = {top, top, bottom, bottom};
     float         us[4] = {u0, u1, u1, u0};
@@ -1023,9 +1024,9 @@ void StretchColour24(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHan
     }
 
     render::Layer2DScope layer(render::Layer2D::Window);
-    gfx::TextureHandle   previous = render::CurrentRenderTarget();
+    render::TextureHandle previous = render::CurrentRenderTarget();
     render::SetRenderTarget(dst);
-    render::Draw2D(gfx::Primitive::Quads, corners, binding, state);
+    render::Draw2D(render::Primitive::Quads, corners, binding, state);
     render::SetRenderTarget(previous);
 }
 
@@ -1044,17 +1045,17 @@ void MGStretchMoveImage(sceGsTex0 *src, const CRect_i_ &src_rect, sceGsTex0 *dst
     std::optional<ResolvedRect> to =
         ResolveRect(*dst, dst_rect.x / 16, dst_rect.y / 16, dst_rect.width / 16, dst_rect.height / 16);
     if (from && to && from->rect.w != 0 && from->rect.h != 0 && to->rect.w != 0 && to->rect.h != 0 &&
-        to->texture != gfx::kPreviousFrame) {
-        if (src->PSM == SCE_GS_PSMCT24 && to->texture != gfx::kMainTarget && from->texture != to->texture) {
+        to->texture != render::kPreviousFrame) {
+        if (src->PSM == SCE_GS_PSMCT24 && to->texture != render::kMainTarget && from->texture != to->texture) {
             sceGsTexa texa = MGPortCurrent().texa;
             texa.AEM = 1;
             texa.TA0 = 128;
             StretchColour24(from->texture, from->rect, to->texture, to->rect, texa);
-            if (from->texture == gfx::kMainTarget) {
+            if (from->texture == render::kMainTarget) {
                 Draw3DSetLastFrameCopy(to->texture);
             }
         } else {
-            Blit(*from, *to, gfx::Filter::Linear);
+            Blit(*from, *to, render::Filter::Linear);
         }
     }
     MGPortRestoreRegisters();
@@ -1064,7 +1065,7 @@ void MGStretchMoveImage(sceGsTex0 *src, const CRect_i_ &src_rect, sceGsTex0 *dst
 
 // Retail weaves the two fields line by line into a full-height image; one blit of the frame does.
 void MGMoveFrameBuffImage(sceGsTex0 *dst, int /*x*/, int /*y*/, int /*direction*/) {
-    MoveFrameImage(gfx::kMainTarget, dst);
+    MoveFrameImage(render::kMainTarget, dst);
 }
 
 void MGFillBox(const CRect_i_ &rect, unsigned char r, unsigned char g, unsigned char b, unsigned char a) {
@@ -1080,11 +1081,11 @@ void MGFillBox(const CRect_i_ &rect, unsigned char r, unsigned char g, unsigned 
     MGPortRegisters &current = MGPortCurrent();
     current.test = test;
     current.zbuf = zbuf;
-    gfx::DrawState state = MGPortDrawState();
+    render::DrawState state = MGPortDrawState();
     state.blend = true;
 
-    gfx::LogicalRect box = FieldRect(rect.x, rect.y, rect.width, rect.height);
-    gfx::Vertex2D    corners[4] = {};
+    render::LogicalRect box = FieldRect(rect.x, rect.y, rect.width, rect.height);
+    render::Vertex2D    corners[4] = {};
     float            xs[4] = {box.x, box.x + box.w, box.x + box.w, box.x};
     float            ys[4] = {box.y, box.y, box.y + box.h, box.y + box.h};
     for (int i = 0; i < 4; i++) {
@@ -1096,21 +1097,21 @@ void MGFillBox(const CRect_i_ &rect, unsigned char r, unsigned char g, unsigned 
         corners[i].color[3] = a;
         corners[i].fog = 0xFF;
     }
-    render::Draw2D(gfx::Primitive::Quads, corners, {}, state);
+    render::Draw2D(render::Primitive::Quads, corners, {}, state);
 
     current.test = mgPixelTest;
     current.zbuf = mgZBuffer;
 }
 
 void MGClearZBuffer(int mode) {
-    gfx::LogicalRect frame = {0.0f, 0.0f, kScreenWidth, kScreenHeight};
+    render::LogicalRect frame = {0.0f, 0.0f, kScreenWidth, kScreenHeight};
     uint8_t          unused[4] = {};
     render::Clear(false, unused, true, MGPortDepth(static_cast<unsigned>(mode)), &frame);
     MGPortRestoreRegisters();
 }
 
 void MGClearScreen(u_char r, u_char g, u_char b, u_char a) {
-    gfx::LogicalRect frame = {0.0f, 0.0f, kScreenWidth, kScreenHeight};
+    render::LogicalRect frame = {0.0f, 0.0f, kScreenWidth, kScreenHeight};
     uint8_t          color[4] = {r, g, b, a};
     render::Clear(true, color, true, 0.0f, &frame);
     MGPortRestoreRegisters();
@@ -1188,13 +1189,13 @@ void MGEndDrawShadow(u_char alpha) {
     current.texa = texa;
 
     if (active) {
-        gfx::DrawState state;
+        render::DrawState state;
         state.blend = true;
         state.alpha = {2, 1, 0, 1, 64};
-        state.depth_test = gfx::DepthTest::Always;
+        state.depth_test = render::DepthTest::Always;
         state.depth_write = false;
         state.stencil_test = true;
-        state.stencil_front = state.stencil_back = {.compare = gfx::CompareOp::NotEqual,
+        state.stencil_front = state.stencil_back = {.compare = render::CompareOp::NotEqual,
                                                     .reference = 0,
                                                     .compare_mask = 0xFF,
                                                     .write_mask = 0};
@@ -1202,7 +1203,7 @@ void MGEndDrawShadow(u_char alpha) {
         state.scissor_rect = current.window;
         float         xs[4] = {0.0f, kScreenWidth, kScreenWidth, 0.0f};
         float         ys[4] = {0.0f, 0.0f, kScreenHeight, kScreenHeight};
-        gfx::Vertex2D quad[4] = {};
+        render::Vertex2D quad[4] = {};
         for (int i = 0; i < 4; i++) {
             quad[i].x = xs[i];
             quad[i].y = ys[i];
@@ -1210,7 +1211,7 @@ void MGEndDrawShadow(u_char alpha) {
             quad[i].color[3] = alpha;
             quad[i].fog = 0xFF;
         }
-        render::Draw2D(gfx::Primitive::Quads, quad, {}, state);
+        render::Draw2D(render::Primitive::Quads, quad, {}, state);
     }
 
     MGPortRestoreRegisters();

@@ -19,6 +19,7 @@
 #include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
+#include "render/types.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
 
@@ -32,16 +33,16 @@ namespace {
 // TEX1 0x61: LCM 1, linear both ways, as setbilinear(1) leaves the title's sprites.
 constexpr u_long kFogTex1 = 0x61;
 
-gfx::TextureHandle fog_frame = gfx::kNullTexture;
-gfx::LogicalRect   fog_layout = {};
+render::TextureHandle fog_frame = render::kNullTexture;
+render::LogicalRect   fog_layout = {};
 
-gfx::TextureHandle FogFrameForLayout(const gfx::LogicalRect &visible) {
+render::TextureHandle FogFrameForLayout(const render::LogicalRect &visible) {
     if (visible.y >= 0.0f || visible.x != fog_layout.x || visible.y != fog_layout.y ||
         visible.w != fog_layout.w || visible.h != fog_layout.h) {
         // Fall back to the continuously refreshed frame_image until this layout is captured.
-        fog_frame = gfx::kNullTexture;
+        fog_frame = render::kNullTexture;
     }
-    return fog_frame == render::FindNamedRenderTarget("title fog frame") ? fog_frame : gfx::kNullTexture;
+    return fog_frame == render::FindNamedRenderTarget("title fog frame") ? fog_frame : render::kNullTexture;
 }
 
 } // namespace
@@ -58,13 +59,13 @@ void TitlePortFeedback(u_char alpha) {
 }
 
 void TitlePortCaptureFog() {
-    const gfx::LogicalRect visible = render::VisibleLogicalRect(gfx::kMainTarget);
-    fog_frame = gfx::kNullTexture;
+    const render::LogicalRect visible = render::VisibleLogicalRect(render::kMainTarget);
+    fog_frame = render::kNullTexture;
     if (visible.y >= 0.0f) {
         return;
     }
-    gfx::TextureHandle frame = render::NamedRenderTarget("title fog frame", 640, 480, false, false, true);
-    if (frame != gfx::kNullTexture) {
+    render::TextureHandle frame = render::NamedRenderTarget("title fog frame", 640, 480, false, false, true);
+    if (frame != render::kNullTexture) {
         render::SnapshotFrame(frame);
         fog_layout = visible;
         fog_frame = frame;
@@ -99,18 +100,18 @@ void TitlePortFog(std::span<const TitleFogBand> bands) {
         return;
     }
 
-    const gfx::LogicalRect    visible = render::VisibleLogicalRect(gfx::kMainTarget);
-    const gfx::TextureHandle  full_frame = FogFrameForLayout(visible);
-    const bool                full_height = full_frame != gfx::kNullTexture;
+    const render::LogicalRect    visible = render::VisibleLogicalRect(render::kMainTarget);
+    const render::TextureHandle  full_frame = FogFrameForLayout(visible);
+    const bool                   full_height = full_frame != render::kNullTexture;
     const float               last_texel = (full_height ? (visible.y + visible.h) * 0.5f : SCREEN_HALF_HEIGHT_F) - 0.5f;
-    const gfx::TextureBinding binding{.texture = full_frame, .ignore_alpha = true};
+    const render::TextureBinding binding{.texture = full_frame, .ignore_alpha = true};
 
     constexpr int                  taps = 8;
     constexpr std::array<float, 2> across = {-0.5f, 0.5f};
     constexpr std::array<float, 2> field_offset = {1.125f, -1.375f};
     constexpr std::array<float, 2> field_step = {-0.5f, 0.0f};
     constexpr std::array<float, 2> down = {-0.5f, 0.5f};
-    std::vector<gfx::Vertex2D>     quads;
+    std::vector<render::Vertex2D>  quads;
     quads.reserve(taps * bands.size() * 4);
 
     for (int tap = 0; tap < taps; tap++) {
@@ -141,25 +142,25 @@ void TitlePortFog(std::span<const TitleFogBand> bands) {
                 continue;
             }
 
-            std::array<gfx::Vertex2D, 4> quad = {
+            std::array<render::Vertex2D, 4> quad = {
                 draw2d::Vertex(x0, y0, 0.0f, u0, v0, 0x80, 0x80, 0x80, a),
                 draw2d::Vertex(x1, y0, 0.0f, u1, v0, 0x80, 0x80, 0x80, a),
                 draw2d::Vertex(x1, y1, 0.0f, u1, v1, 0x80, 0x80, 0x80, a),
                 draw2d::Vertex(x0, y1, 0.0f, u0, v1, 0x80, 0x80, 0x80, a),
             };
             if (full_height) {
-                for (gfx::Vertex2D &vertex : quad) {
+                for (render::Vertex2D &vertex : quad) {
                     vertex.v *= 2.0f;
                 }
             }
             quads.insert(quads.end(), quad.begin(), quad.end());
         }
     }
-    auto draw = [&](std::span<gfx::Vertex2D> vertices) {
+    auto draw = [&](std::span<render::Vertex2D> vertices) {
         if (full_height) {
-            render::Draw2D(gfx::Primitive::Quads, vertices, binding, draw2d::SpriteState());
+            render::Draw2D(render::Primitive::Quads, vertices, binding, draw2d::SpriteState());
         } else {
-            draw2d::DrawTextured(gfx::Primitive::Quads, vertices, texture->tex0, kFogTex1, draw2d::SpriteState());
+            draw2d::DrawTextured(render::Primitive::Quads, vertices, texture->tex0, kFogTex1, draw2d::SpriteState());
         }
     };
     const char *batch = std::getenv("DC_TITLE_FOG_BATCH");
@@ -178,7 +179,7 @@ float TitlePortBackdropScale() {
 }
 
 float TitlePortBackdropHeightScale() {
-    return std::max(1.0f, render::VisibleLogicalRect(gfx::kMainTarget).h / kScreenHeight);
+    return std::max(1.0f, render::VisibleLogicalRect(render::kMainTarget).h / kScreenHeight);
 }
 
 void TitlePortCard(CTexture *texture, float angle) {

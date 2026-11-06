@@ -15,6 +15,7 @@
 #include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
+#include "render/types.hpp"
 #include "renderinfo.hpp"
 #include "texture.hpp"
 #include "vu0_ops.hpp"
@@ -76,8 +77,8 @@ constexpr float kFieldCentreY = SCREEN_QUARTER_HEIGHT_F;
 // port's registry keeps them apart, so the copy the game made last wins and "work" is the
 // fallback.
 PortTextureRef FrameCopy() {
-    gfx::TextureHandle copy = Draw3DLastFrameCopy();
-    if (std::optional<gfx::TextureInfo> info = render::GetTextureInfo(copy); copy != gfx::kNullTexture && info) {
+    render::TextureHandle copy = Draw3DLastFrameCopy();
+    if (std::optional<render::TextureInfo> info = render::GetTextureInfo(copy); copy != render::kNullTexture && info) {
         PortTextureRef ref;
         ref.binding.texture = copy;
         ref.width = info->width;
@@ -103,29 +104,29 @@ PortTextureRef FrameCopy() {
 //   - the frame takes the surface with the game's colour and blend, sampling "water refracted"
 //     flat.
 // The three share the frame's depth buffer and pixels, so every sample is taken where the vertex
-// lands (gfx::kMeshScreenUv), under a display render's camera too.
+// lands (render::kMeshScreenUv), under a display render's camera too.
 struct Refraction {
-    gfx::TextureHandle frame = gfx::kNullTexture;
-    gfx::TextureHandle visible = gfx::kNullTexture;
-    gfx::TextureHandle refracted = gfx::kNullTexture;
+    render::TextureHandle frame = render::kNullTexture;
+    render::TextureHandle visible = render::kNullTexture;
+    render::TextureHandle refracted = render::kNullTexture;
 };
 
 bool PrepareRefraction(Refraction &refraction) {
-    static gfx::TextureHandle pictured = gfx::kNullTexture;
+    static render::TextureHandle pictured = render::kNullTexture;
     static unsigned           copies = 0;
 
-    if (render::CurrentRenderTarget() != gfx::kMainTarget) {
+    if (render::CurrentRenderTarget() != render::kMainTarget) {
         return false;
     }
     refraction.frame = Draw3DFramePicture();
-    if (refraction.frame == gfx::kNullTexture) {
+    if (refraction.frame == render::kNullTexture) {
         return false;
     }
     auto width = static_cast<uint32_t>(kScreenWidth);
     auto height = static_cast<uint32_t>(kScreenHeight);
     refraction.visible = render::NamedRenderTarget("water visible", width, height, true, true);
     refraction.refracted = render::NamedRenderTarget("water refracted", width, height, false, true);
-    if (refraction.visible == gfx::kNullTexture || refraction.refracted == gfx::kNullTexture) {
+    if (refraction.visible == render::kNullTexture || refraction.refracted == render::kNullTexture) {
         return false;
     }
     if (pictured != refraction.frame || copies != Draw3DFrameCopies()) {
@@ -134,7 +135,7 @@ bool PrepareRefraction(Refraction &refraction) {
         render::Clear(true, clear, false, 0.0f);
         render::SetRenderTarget(refraction.refracted);
         render::Clear(true, clear, false, 0.0f);
-        render::SetRenderTarget(gfx::kMainTarget);
+        render::SetRenderTarget(render::kMainTarget);
         pictured = refraction.frame;
         copies = Draw3DFrameCopies();
     }
@@ -143,18 +144,18 @@ bool PrepareRefraction(Refraction &refraction) {
 
 // The surface's vertices with the ripple's shift as an offset from where each lands, in the
 // frame's normalised units; the shift down is in field rows, two to a row of the frame.
-std::vector<gfx::Vertex3D> RippledVertices(const CWater &water, const std::vector<gfx::Vertex3D> &vertices) {
-    gfx::LogicalMapping        mapping = render::GetLogicalMapping(gfx::kMainTarget);
+std::vector<render::Vertex3D> RippledVertices(const CWater &water, const std::vector<render::Vertex3D> &vertices) {
+    render::LogicalMapping        mapping = render::GetLogicalMapping(render::kMainTarget);
     float                      across = mapping.pixel_width ? mapping.scale_x / static_cast<float>(mapping.pixel_width) : 0.0f;
     float                      down = mapping.pixel_height ? 2.0f * mapping.scale_y / static_cast<float>(mapping.pixel_height) : 0.0f;
-    std::vector<gfx::Vertex3D> rippled = vertices;
+    std::vector<render::Vertex3D> rippled = vertices;
     const float               *heights = water.height;
     for (int row = 0; row < water.rows; row++) {
         int row_start = row * water.columns;
         int above_start = row == 0 ? row_start : row_start - water.columns;
         for (int column = 0; column < water.columns; column++) {
             int            here = row_start + column;
-            gfx::Vertex3D &vertex = rippled[static_cast<size_t>(here)];
+            render::Vertex3D &vertex = rippled[static_cast<size_t>(here)];
             vertex.uv[0] = water.distortion * (heights[above_start + column] - heights[here]) * across;
             vertex.uv[1] = water.distortion * (heights[here] - heights[here + 1]) * down;
         }
@@ -163,30 +164,30 @@ std::vector<gfx::Vertex3D> RippledVertices(const CWater &water, const std::vecto
 }
 
 void DrawRefracted(const CWater &water, const Refraction &refraction, const Draw3DVisual &visual,
-                   gfx::MeshConstants constants, const gfx::MeshTransform &transform, const gfx::DrawState &state) {
-    std::vector<gfx::Vertex3D> rippled = RippledVertices(water, visual.vertices);
-    std::vector<gfx::Vertex3D> flat = rippled;
-    for (gfx::Vertex3D &vertex : flat) {
+                   render::MeshConstants constants, const render::MeshTransform &transform, const render::DrawState &state) {
+    std::vector<render::Vertex3D> rippled = RippledVertices(water, visual.vertices);
+    std::vector<render::Vertex3D> flat = rippled;
+    for (render::Vertex3D &vertex : flat) {
         vertex.uv[0] = 0.0f;
         vertex.uv[1] = 0.0f;
     }
 
-    gfx::MeshConstants plain = constants;
-    plain.flags = gfx::kMeshScreenUv;
-    constants.flags = gfx::kMeshVertexColor | gfx::kMeshScreenUv;
+    render::MeshConstants plain = constants;
+    plain.flags = render::kMeshScreenUv;
+    constants.flags = render::kMeshVertexColor | render::kMeshScreenUv;
 
-    gfx::DrawState copy = state;
+    render::DrawState copy = state;
     copy.blend = false;
     copy.depth_write = false;
     copy.texa_aem = false;
     copy.texa_ta0 = 0x80;
-    gfx::DrawState over = copy;
+    render::DrawState over = copy;
     over.blend = true;
 
-    gfx::TextureBinding binding;
-    binding.filter = gfx::Filter::Linear;
-    binding.wrap_u = gfx::Wrap::Clamp;
-    binding.wrap_v = gfx::Wrap::Clamp;
+    render::TextureBinding binding;
+    binding.filter = render::Filter::Linear;
+    binding.wrap_u = render::Wrap::Clamp;
+    binding.wrap_v = render::Wrap::Clamp;
 
     binding.texture = refraction.frame;
     render::SetRenderTarget(refraction.visible);
@@ -199,8 +200,8 @@ void DrawRefracted(const CWater &water, const Refraction &refraction, const Draw
     over.alpha = {.a = 0, .b = 2, .c = 2, .d = 1, .fix = 0x80};
     render::DrawMeshImmediate(rippled, visual.indices, plain, binding, over, &transform);
 
-    render::SetRenderTarget(gfx::kMainTarget);
-    gfx::DrawState surface = state;
+    render::SetRenderTarget(render::kMainTarget);
+    render::DrawState surface = state;
     surface.texa_aem = false;
     surface.texa_ta0 = 0x80;
     binding.texture = refraction.refracted;
@@ -222,7 +223,7 @@ int CWater::CreateVUData(unsigned int *output, RenderInfo *info) {
     Draw3DMul(local_to_eye, info->view_scaled, local_to_world);
 
     PortTextureRef      copy = FrameCopy();
-    gfx::LogicalMapping texels = {.scale_x = 1.0f, .scale_y = 1.0f, .offset_x = 0.0f, .offset_y = 0.0f, .pixel_width = copy.width, .pixel_height = copy.height};
+    render::LogicalMapping texels = {.scale_x = 1.0f, .scale_y = 1.0f, .offset_x = 0.0f, .offset_y = 0.0f, .pixel_width = copy.width, .pixel_height = copy.height};
     if (copy.valid && render::GetTextureInfo(copy.binding.texture)) {
         texels = render::GetLogicalMapping(copy.binding.texture);
     }
@@ -247,7 +248,7 @@ int CWater::CreateVUData(unsigned int *output, RenderInfo *info) {
         for (int column = 0; column < columns; column++) {
             int           here = row_start + column;
             int           above = above_start + column;
-            gfx::Vertex3D out = {};
+            render::Vertex3D out = {};
             std::memcpy(out.position, position, sizeof(out.position));
             std::memcpy(out.color, rgba, sizeof(rgba));
 
@@ -310,26 +311,26 @@ extern "C" int DrawVu1__6CWaterFP10RenderInfoP13sceVif1PacketP1(CWater *water, R
     const Draw3DVisual *visual = Draw3DFindVisual(block);
     if (visual != nullptr && !visual->indices.empty()) {
         Draw3DIdentityScope identity(water, kDraw3DTeleportDistance);
-        gfx::MeshConstants  constants = {};
-        gfx::MeshTransform  transform{};
+        render::MeshConstants constants = {};
+        render::MeshTransform transform{};
         Draw3DSceneConstants(constants, *info, local_to_world, &transform);
-        constants.flags = gfx::kMeshVertexColor;
+        constants.flags = render::kMeshVertexColor;
         for (float &value : constants.diffuse) {
             value = 1.0f;
         }
-        gfx::DrawState state = Draw3DState(*info, false);
+        render::DrawState state = Draw3DState(*info, false);
         Refraction     refraction;
         if (PrepareRefraction(refraction)) {
             DrawRefracted(*water, refraction, *visual, constants, transform, state);
         } else {
             PortTextureRef      copy = FrameCopy();
-            gfx::TextureBinding binding;
+            render::TextureBinding binding;
             if (copy.valid && copy.binding.texture != render::CurrentRenderTarget() &&
-                copy.binding.texture != gfx::kMainTarget) {
+                copy.binding.texture != render::kMainTarget) {
                 binding = copy.binding;
-                binding.filter = gfx::Filter::Linear;
-                binding.wrap_u = gfx::Wrap::Clamp;
-                binding.wrap_v = gfx::Wrap::Clamp;
+                binding.filter = render::Filter::Linear;
+                binding.wrap_u = render::Wrap::Clamp;
+                binding.wrap_v = render::Wrap::Clamp;
             }
             render::DrawMeshImmediate(visual->vertices, visual->indices, constants, binding, state, &transform);
         }

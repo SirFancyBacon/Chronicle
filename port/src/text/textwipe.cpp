@@ -18,13 +18,13 @@
 #include <string_view>
 #include <vector>
 
-#include "gfx/gfx.hpp"
 #include "platform/config.hpp"
 #include "platform/input.hpp"
 #include "platform/overlay.hpp"
 #include "platform/paths.hpp"
 #include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
+#include "render/types.hpp"
 
 namespace dc::text::textwipe {
 
@@ -60,10 +60,10 @@ bool DevKeyPressed(std::string_view name) {
     return pressed;
 }
 
-std::optional<gfx::LogicalRect>     g_clip;
+std::optional<render::LogicalRect>  g_clip;
 std::optional<std::array<float, 4>> g_tint;
 
-void SetDrawClip(const gfx::LogicalRect *clip) {
+void SetDrawClip(const render::LogicalRect *clip) {
     if (clip != nullptr) {
         g_clip = *clip;
     } else {
@@ -412,12 +412,12 @@ void Both(const std::function<void(bool runtime)> &draw) {
     const float edge = std::clamp(g_divider, 0.0f, render::LogicalWidth());
     // Scissors touching the logical frame boundary extend through widescreen margins.
     if (edge > 0.0f) {
-        const gfx::LogicalRect left = {.x = 0.0f, .y = 0.0f, .w = edge, .h = render::LogicalHeight()};
+        const render::LogicalRect left = {.x = 0.0f, .y = 0.0f, .w = edge, .h = render::LogicalHeight()};
         SetDrawClip(&left);
         draw(false);
     }
     if (edge < render::LogicalWidth()) {
-        const gfx::LogicalRect right = {
+        const render::LogicalRect right = {
             .x = edge, .y = 0.0f, .w = render::LogicalWidth() - edge, .h = render::LogicalHeight()};
         SetDrawClip(&right);
         draw(true);
@@ -425,11 +425,11 @@ void Both(const std::function<void(bool runtime)> &draw) {
     SetDrawClip(nullptr);
 }
 
-void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &binding,
-            const gfx::DrawState &state) {
+void Draw2D(render::Primitive primitive, std::span<const render::Vertex2D> vertices, const render::TextureBinding &binding,
+            const render::DrawState &state) {
     if (g_tint) {
-        std::vector<gfx::Vertex2D> tinted(vertices.begin(), vertices.end());
-        for (gfx::Vertex2D &vertex : tinted) {
+        std::vector<render::Vertex2D> tinted(vertices.begin(), vertices.end());
+        for (render::Vertex2D &vertex : tinted) {
             for (size_t channel = 0; channel < g_tint->size(); channel++) {
                 vertex.color[channel] =
                     static_cast<uint8_t>(std::clamp(vertex.color[channel] * (*g_tint)[channel] + 0.5f, 0.0f, 255.0f));
@@ -439,8 +439,8 @@ void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
         return;
     }
     if (g_clip) {
-        gfx::DrawState         clipped = state;
-        const gfx::LogicalRect own = state.scissor ? state.scissor_rect : render::LogicalFrame();
+        render::DrawState         clipped = state;
+        const render::LogicalRect own = state.scissor ? state.scissor_rect : render::LogicalFrame();
         const float            left = std::max(own.x, g_clip->x);
         const float            top = std::max(own.y, g_clip->y);
         const float            right = std::min(own.x + own.w, g_clip->x + g_clip->w);
@@ -460,18 +460,18 @@ void DrawDivider() {
     if (!g_on || !(render::Recording() || render::InFrame())) {
         return;
     }
-    const gfx::LogicalMapping mapping = render::GetUiMapping(gfx::kMainTarget);
-    const int                 pixel = OverlayPixelSize(render::GetLogicalMapping(gfx::kMainTarget));
+    const render::LogicalMapping mapping = render::GetUiMapping(render::kMainTarget);
+    const int                    pixel = OverlayPixelSize(render::GetLogicalMapping(render::kMainTarget));
     const float               x = std::clamp(g_divider, 0.0f, render::LogicalWidth());
     const float               half = 1.0f / std::max(0.5f, mapping.scale_x) * static_cast<float>(pixel);
-    auto                      vertex = [](float vx, float vy, unsigned char grey) {
-        return gfx::Vertex2D{
+    auto                         vertex = [](float vx, float vy, unsigned char grey) {
+        return render::Vertex2D{
             .x = vx, .y = vy, .z = 0.0f, .u = 0.0f, .v = 0.0f, .color = {grey, grey, grey, 0x80}
         };
     };
-    gfx::DrawState state;
+    render::DrawState state;
     state.blend = true;
-    std::vector<gfx::Vertex2D> line;
+    std::vector<render::Vertex2D> line;
     for (const auto &[width, grey] : {
              std::pair{2.5f, static_cast<unsigned char>(0)   },
              std::pair{1.0f, static_cast<unsigned char>(0x7F)}
@@ -483,7 +483,7 @@ void DrawDivider() {
         line.push_back(vertex(x - half_width, render::LogicalHeight(), grey));
     }
     if (g_mode != Mode::Overlay) {
-        render::Draw2D(gfx::Primitive::Quads, line, {}, state);
+        render::Draw2D(render::Primitive::Quads, line, {}, state);
     }
 
     const bool        overlay = g_mode == Mode::Overlay;

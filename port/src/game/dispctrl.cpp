@@ -10,6 +10,7 @@
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/passes.hpp"
+#include "render/types.hpp"
 #include "texture.hpp"
 
 namespace dc::game {
@@ -107,7 +108,7 @@ void CDebugFont::Draw() {
     const int height = this->height;
     this->length = 0;
 
-    gfx::DrawState  state = draw2d::SpriteState();
+    render::DrawState state = draw2d::SpriteState();
     draw2d::Texture glyphs;
     if (font == nullptr || target == nullptr || width <= 0 || height <= 0 ||
         !draw2d::Resolve(font->tex0, 0x41, state, glyphs)) {
@@ -128,7 +129,7 @@ void CDebugFont::Draw() {
     const bool             menu = IsDeveloperMenu(this->texture_name);
     // The panel, its border, the divider under the version line and the bar behind the cursor row,
     // all as untextured quads drawn before the glyphs.
-    std::vector<gfx::Vertex2D> skin;
+    std::vector<render::Vertex2D> skin;
     auto                       skin_rect = [&](int left, int top, int right, int bottom, std::uint8_t r, std::uint8_t g, std::uint8_t b,
                                                std::uint8_t a) {
         const float x0 = screen_x(left);
@@ -162,7 +163,7 @@ void CDebugFont::Draw() {
     const int         lines = (height + kCellHeight - 1) / kCellHeight;
     std::vector<bool> covered(static_cast<size_t>(columns) * lines, false);
 
-    std::vector<gfx::Vertex2D> glyph_quads;
+    std::vector<render::Vertex2D> glyph_quads;
     int                        pen_x = 0;
     int                        pen_y = 0;
     for (const char ch : text) {
@@ -207,7 +208,7 @@ void CDebugFont::Draw() {
 
     // MODULATE of the backdrop's TA0 by the sprite's 0x40. The menu's dark panel replaces it.
     const auto                 alpha = static_cast<u_char>((state.texa_ta0 * 0x40) >> 7);
-    std::vector<gfx::Vertex2D> backdrop;
+    std::vector<render::Vertex2D> backdrop;
     for (int line = 0; !menu && line < lines; line++) {
         const float top = screen_y(line * kCellHeight);
         const float bottom = screen_y(std::min((line + 1) * kCellHeight, height));
@@ -233,13 +234,13 @@ void CDebugFont::Draw() {
     }
 
     if (!skin.empty()) {
-        render::Draw2D(gfx::Primitive::Quads, skin, {}, state);
+        render::Draw2D(render::Primitive::Quads, skin, {}, state);
     }
     if (!backdrop.empty()) {
-        render::Draw2D(gfx::Primitive::Quads, backdrop, {}, state);
+        render::Draw2D(render::Primitive::Quads, backdrop, {}, state);
     }
     if (!glyph_quads.empty()) {
-        render::Draw2D(gfx::Primitive::Quads, glyph_quads, glyphs.binding, state);
+        render::Draw2D(render::Primitive::Quads, glyph_quads, glyphs.binding, state);
     }
     draw2d::RestoreTestZbuf();
 }

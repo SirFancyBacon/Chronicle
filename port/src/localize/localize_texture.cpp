@@ -13,6 +13,7 @@
 #include "platform/config.hpp"
 #include "platform/png_image.hpp"
 #include "render/texture_registry.hpp"
+#include "render/types.hpp"
 
 namespace fs = std::filesystem;
 
@@ -261,7 +262,7 @@ bool LocalizeTexture(const char *name, PortDecodedTexture &texture) {
         }
     }
     texture.levels = std::move(levels);
-    texture.format = gfx::TextureFormat::Rgba8;
+    texture.format = render::TextureFormat::Rgba8;
     texture.has_alpha = translucent || texture.has_alpha;
     texture.four_bit = false;
     return true;

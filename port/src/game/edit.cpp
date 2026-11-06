@@ -52,6 +52,7 @@
 #include "render/draw3d.hpp"
 #include "render/gs_state.hpp"
 #include "render/passes.hpp"
+#include "render/types.hpp"
 #include "savedata.hpp"
 #include "shop.hpp"
 #include "snd.hpp"
@@ -1149,19 +1150,19 @@ void DrawLine(const int *from, const int *to, u_char r, u_char g, u_char b, u_ch
     test.bits.zte = 1;
     test.bits.ztst = SCE_GS_ALWAYS;
 
-    gfx::DrawState state = MGPortDrawState();
+    render::DrawState state = MGPortDrawState();
     MGPortApplyTest(state, test);
     MGPortApplyZbuf(state, mgZBuffer);
     state.blend = true;
     state.fog = false;
 
-    std::array<gfx::Vertex2D, 2> line = {
+    std::array<render::Vertex2D, 2> line = {
         draw2d::Vertex(MGPortLogicalX(from[0] & 0xFFFF), MGPortLogicalY(from[1] & 0xFFFF),
                        MGPortDepth(static_cast<unsigned>(from[2]) & 0xFFFFFF), 0.0f, 0.0f, r, g, b, a),
         draw2d::Vertex(MGPortLogicalX(to[0] & 0xFFFF), MGPortLogicalY(to[1] & 0xFFFF),
                        MGPortDepth(static_cast<unsigned>(to[2]) & 0xFFFFFF), 0.0f, 0.0f, r, g, b, a),
     };
-    draw2d::DrawUntextured(gfx::Primitive::Lines, line, state);
+    draw2d::DrawUntextured(render::Primitive::Lines, line, state);
 
     MGPortCurrent().test = mgPixelTest;
     MGPortCurrent().zbuf = mgZBuffer;

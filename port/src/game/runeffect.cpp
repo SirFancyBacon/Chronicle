@@ -1,7 +1,4 @@
 #include "mathconst.h"
-#include "render/passes.hpp"
-#include "render/renderer_calls.hpp"
-#include "runeffect.hpp"
 
 #include <libgraph.h>
 
@@ -17,6 +14,10 @@
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
+#include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
+#include "render/types.hpp"
+#include "runeffect.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
 
@@ -40,11 +41,11 @@ public:
         u_long         tex0 = SCE_GS_SET_TEX0(static_cast<u_long>(destination), static_cast<u_long>(width),
                                               static_cast<u_long>(format), 10, 10, 1, 0, 0, 0, 0, 0, 0);
         PortTextureRef ref = draw2d::Get().texture(tex0, 0);
-        if (!ref.valid || ref.binding.texture == gfx::kNullTexture || ref.binding.texture == gfx::kPreviousFrame) {
+        if (!ref.valid || ref.binding.texture == render::kNullTexture || ref.binding.texture == render::kPreviousFrame) {
             return;
         }
-        if (ref.binding.texture != gfx::kMainTarget) {
-            std::optional<gfx::TextureInfo> info = render::GetTextureInfo(ref.binding.texture);
+        if (ref.binding.texture != render::kMainTarget) {
+            std::optional<render::TextureInfo> info = render::GetTextureInfo(ref.binding.texture);
             if (!info || !info->render_target) {
                 return;
             }
@@ -66,17 +67,17 @@ public:
     [[nodiscard]] bool Bound() const { return bound; }
 
 private:
-    gfx::TextureHandle previous = gfx::kMainTarget;
+    render::TextureHandle previous = render::kMainTarget;
     bool               bound = false;
 };
 
 // The current registers as a draw on the bound target: the window scissor follows the target's
 // rows, as the GS clips with SCISSOR_1 in the bound frame's own rows.
-gfx::DrawState TargetState(bool blend) {
-    gfx::DrawState state = draw2d::Get().draw_state();
+render::DrawState TargetState(bool blend) {
+    render::DrawState state = draw2d::Get().draw_state();
     state.blend = blend;
     state.fog = false;
-    state.cull = gfx::CullMode::None;
+    state.cull = render::CullMode::None;
     const float rows = draw2d::RowScale();
     state.scissor_rect.y *= rows;
     state.scissor_rect.h *= rows;
@@ -84,8 +85,8 @@ gfx::DrawState TargetState(bool blend) {
 }
 
 // A GS sprite from 12.4 window coordinates to 12.4 texel coordinates, as a quad on the bound target.
-std::array<gfx::Vertex2D, 4> GsSprite(int x0, int y0, int x1, int y1, int u0, int v0, int u1, int v1,
-                                      float v_scale) {
+std::array<render::Vertex2D, 4> GsSprite(int x0, int y0, int x1, int y1, int u0, int v0, int u1, int v1,
+                                         float v_scale) {
     const float rows = draw2d::RowScale();
     const float left = MGPortLogicalX(x0);
     const float right = MGPortLogicalX(x1);
@@ -104,17 +105,17 @@ std::array<gfx::Vertex2D, 4> GsSprite(int x0, int y0, int x1, int y1, int u0, in
 }
 
 void TexturedSprite(u_long tex0, const CRect_i_ &destination, const CRect_i_ &source, bool blend) {
-    gfx::DrawState  state = TargetState(blend);
+    render::DrawState state = TargetState(blend);
     draw2d::Texture texture;
     if (!draw2d::Resolve(tex0, kTex1Linear, state, texture)) {
         return;
     }
-    std::array<gfx::Vertex2D, 4> quad =
+    std::array<render::Vertex2D, 4> quad =
         GsSprite((destination.x << 4) + 0x6C00, (destination.y << 4) + GS_Y_OFFSET,
                  ((destination.x + destination.width) << 4) + 0x6C00,
                  ((destination.y + destination.height) << 4) + GS_Y_OFFSET, source.x << 4, source.y << 4,
                  (source.x + source.width) << 4, (source.y + source.height) << 4, texture.v_scale);
-    render::Draw2D(gfx::Primitive::Quads, quad, texture.binding, state);
+    render::Draw2D(render::Primitive::Quads, quad, texture.binding, state);
 }
 
 void RestoreRegisters() {
@@ -147,11 +148,11 @@ void blendTextuer(sceVif1Packet * /*packet*/, int destination, int width, int fo
         services.set_zbuf(&zbuffer);
 
         if (target.Bound()) {
-            std::array<gfx::Vertex2D, 4> flat =
+            std::array<render::Vertex2D, 4> flat =
                 GsSprite((first_destination.x << 4) + 0x6C00, (first_destination.y << 4) + GS_Y_OFFSET,
                          ((first_destination.x + first_destination.width) << 4) + 0x6C00,
                          ((first_destination.y + first_destination.height) << 4) + GS_Y_OFFSET, 0, 0, 0, 0, 1.0f);
-            render::Draw2D(gfx::Primitive::Quads, flat, {}, TargetState(false));
+            render::Draw2D(render::Primitive::Quads, flat, {}, TargetState(false));
             TexturedSprite(first_texture->tex0, first_destination, first_source, true);
         }
 
@@ -201,16 +202,16 @@ void blendTextuerTest(sceVif1Packet * /*packet*/, int destination, int width, in
         services.set_zbuf(&zbuffer);
 
         // One snapshot of the frame serves every strip; it is taken before the target is bound.
-        gfx::DrawState  resolved = TargetState(false);
+        render::DrawState resolved = TargetState(false);
         draw2d::Texture frame_texture;
         bool            have_frame = draw2d::Resolve(frame_tex0, kTex1Linear, resolved, frame_texture);
 
         TargetScope    target(destination, width, format);
-        gfx::DrawState strip_state = TargetState(false);
+        render::DrawState strip_state = TargetState(false);
         strip_state.texa_aem = resolved.texa_aem;
         strip_state.texa_ta0 = resolved.texa_ta0;
 
-        std::vector<gfx::Vertex2D> strips;
+        std::vector<render::Vertex2D> strips;
         int                        top = 0;
         int                        bottom = 0;
         int                        count = 0;
@@ -228,7 +229,7 @@ void blendTextuerTest(sceVif1Packet * /*packet*/, int destination, int width, in
             const int left = std::max((source.x << 4) + offset, 0);
             const int right = std::min(offset + ((source.x + source.width) << 4), 0x27F0);
 
-            std::array<gfx::Vertex2D, 4> quad =
+            std::array<render::Vertex2D, 4> quad =
                 GsSprite(0x6C00, (y << 4) + GS_Y_OFFSET, (source.width << 4) + 0x6C00, ((y + 2) << 4) + GS_Y_OFFSET,
                          left, (source.y + top) << 4, right, (source.y + bottom) << 4, frame_texture.v_scale);
             strips.insert(strips.end(), quad.begin(), quad.end());
@@ -245,7 +246,7 @@ void blendTextuerTest(sceVif1Packet * /*packet*/, int destination, int width, in
         }
 
         if (target.Bound() && have_frame && !strips.empty()) {
-            render::Draw2D(gfx::Primitive::Quads, strips, frame_texture.binding, strip_state);
+            render::Draw2D(render::Primitive::Quads, strips, frame_texture.binding, strip_state);
         }
 
         sceGsAlpha alpha = mgAlpha;

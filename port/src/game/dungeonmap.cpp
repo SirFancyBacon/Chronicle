@@ -20,12 +20,12 @@
 #include "frame.hpp"
 #include "frameattr.hpp"
 #include "framevu1.hpp"
-#include "gfx/gfx.hpp"
 #include "mathutil.hpp"
 #include "mglib.hpp"
 #include "rect.hpp"
 #include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
+#include "render/types.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
 #include "textureanime.hpp"
@@ -420,9 +420,9 @@ void CDungeonMap::DrawMap(CCameraFollow *camera, CFrameVu1 * /*player*/) {
                     // cell counts as in front up to the angle of the visible viewport edge rather
                     // than the 4:3 centre-plane cutoff.
                     float            horizontal_margin = 0.0f;
-                    gfx::FrameLayout layout = render::CurrentFrameLayout();
-                    if (layout.aspect == gfx::AspectMode::Fill) {
-                        gfx::LogicalRect visible = render::VisibleLogicalRect(gfx::kMainTarget);
+                    render::FrameLayout layout = render::CurrentFrameLayout();
+                    if (layout.aspect == render::AspectMode::Fill) {
+                        render::LogicalRect visible = render::VisibleLogicalRect(render::kMainTarget);
                         horizontal_margin = std::max(0.0f, visible.w - kScreenWidth) / kScreenWidth;
                     }
                     float facing_limit = -horizontal_margin / std::hypot(1.0f, horizontal_margin);

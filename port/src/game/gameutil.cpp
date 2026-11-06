@@ -35,6 +35,7 @@
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/texture_registry.hpp"
+#include "render/types.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
 #include "visualvu1.hpp"
@@ -1919,7 +1920,7 @@ constexpr u_long kBatchTex1 = 0x41;
 
 bool                       g_batch_open = false;
 u_long                     g_batch_tex0 = 0;
-std::vector<gfx::Vertex2D> g_batch;
+std::vector<render::Vertex2D> g_batch;
 
 } // namespace
 
@@ -1969,7 +1970,7 @@ void set2DSprite_End(sceVif1Packet * /*packet*/, CTexture * /*texture*/) {
     }
 
     g_batch_open = false;
-    draw2d::DrawTextured(gfx::Primitive::Quads, g_batch, g_batch_tex0, kBatchTex1, draw2d::SpriteState());
+    draw2d::DrawTextured(render::Primitive::Quads, g_batch, g_batch_tex0, kBatchTex1, draw2d::SpriteState());
     draw2d::RestoreTestZbuf();
     g_batch.clear();
 }

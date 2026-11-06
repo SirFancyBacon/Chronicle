@@ -28,6 +28,7 @@
 #include "localize/localize_texture.hpp"
 #include "mglib.hpp"
 #include "render/texture_registry.hpp"
+#include "render/types.hpp"
 #include "text/caption_text.hpp"
 #include "texture.hpp"
 #include "tim2.hpp"
@@ -306,7 +307,7 @@ void DumpTexture(const char *name, const PortDecodedTexture &texture) {
     const unsigned       height = texture.height;
     std::vector<uint8_t> rgba(static_cast<size_t>(width) * height * 4);
     for (size_t pixel = 0; pixel < static_cast<size_t>(width) * height; pixel++) {
-        if (texture.format == gfx::TextureFormat::Index8) {
+        if (texture.format == render::TextureFormat::Index8) {
             const uint32_t color = texture.palette[texture.levels[0][pixel]];
             std::memcpy(&rgba[pixel * 4], &color, 4);
         } else {
@@ -380,7 +381,7 @@ void DumpTexture(const char *name, const PortDecodedTexture &texture) {
 // blend a narrow indexed border into a periodic image before uploading it.
 void MakeGroundPeriodic(std::string_view name, PortDecodedTexture &texture) {
     if ((name != "d02b05" && name != "d02b06" && name != "e04b01") ||
-        (texture.format != gfx::TextureFormat::Index8 && texture.format != gfx::TextureFormat::Rgba8) ||
+        (texture.format != render::TextureFormat::Index8 && texture.format != render::TextureFormat::Rgba8) ||
         texture.width < 64 || texture.height < 64 ||
         texture.levels.empty()) {
         return;
@@ -392,7 +393,7 @@ void MakeGroundPeriodic(std::string_view name, PortDecodedTexture &texture) {
     const unsigned        width = texture.width;
     const unsigned        height = texture.height;
     const auto            color_at = [&](unsigned pixel) {
-        if (texture.format == gfx::TextureFormat::Index8) {
+        if (texture.format == render::TextureFormat::Index8) {
             return texture.palette[pixels[pixel]];
         }
         uint32_t color = 0;
@@ -400,7 +401,7 @@ void MakeGroundPeriodic(std::string_view name, PortDecodedTexture &texture) {
         return color;
     };
     const auto set_color = [&](unsigned pixel, uint32_t color) {
-        if (texture.format == gfx::TextureFormat::Index8) {
+        if (texture.format == render::TextureFormat::Index8) {
             pixels[pixel] = NearestPaletteColor(texture.palette, color);
         } else {
             std::memcpy(pixels.data() + static_cast<std::size_t>(pixel) * 4, &color, sizeof(color));

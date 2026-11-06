@@ -17,7 +17,7 @@ namespace dc::test {
 using namespace dc::platform;
 using namespace dc::text;
 
-// The button symbols (platform/glyphs.hpp): their two settings, the key names the keyboard style looks
+// The button symbols (text/glyphs.hpp): their two settings, the key names the keyboard style looks
 // glyphs up by, and the shipped glyphs.json the names must be found in.
 
 namespace {

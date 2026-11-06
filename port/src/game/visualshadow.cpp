@@ -24,6 +24,7 @@
 #include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
 #include "render/shadowclip.hpp"
+#include "render/types.hpp"
 #include "renderinfo.hpp"
 
 namespace dc::game {
@@ -99,7 +100,7 @@ enum class Count {
 
 // Triangles wound outwards (counter-clockwise on the target when turned towards the eye).
 struct Volume {
-    std::vector<gfx::Vertex3D> vertices;
+    std::vector<render::Vertex3D> vertices;
     // Index lists retain face order while sharing each prism's six corners.
     std::vector<uint32_t> both;
     std::vector<uint32_t> away;
@@ -242,7 +243,7 @@ void NoteFastShadowHash(const Volume &volume, bool away_only) {
     HashShadowWord(hash, away_only ? 1u : 0u);
     HashShadowWord(hash, static_cast<uint32_t>(ShadowHashSection::Vertices));
     HashShadowSize(hash, volume.vertices.size());
-    for (const gfx::Vertex3D &vertex : volume.vertices) {
+    for (const render::Vertex3D &vertex : volume.vertices) {
         for (float coordinate : vertex.position) {
             HashShadowWord(hash, std::bit_cast<uint32_t>(coordinate));
         }
@@ -267,7 +268,7 @@ void NoteFastShadowHash(const Volume &volume, bool away_only) {
 }
 
 uint32_t AddVertex(Volume &volume, Vec3 corner) {
-    gfx::Vertex3D vertex = {};
+    render::Vertex3D vertex = {};
     vertex.position[0] = corner.x;
     vertex.position[1] = corner.y;
     vertex.position[2] = corner.z;
@@ -412,7 +413,7 @@ struct Projection {
     Vec3  local_light;
     // The volumes are built in this tick's eye space; for the display list they ride on the model
     // and the camera as if fixed to the model: eye_to_clip * view * model * (view * model)^-1.
-    gfx::MeshTransform transform;
+    render::MeshTransform transform;
     bool               has_transform;
     bool               valid;
 };
@@ -434,7 +435,7 @@ Projection Project(const RenderInfo &info, float (*matrix)[4]) {
     Draw3DMul(projection.drop_to_eye, info.view_scaled, drop);
     Draw3DEyeToClip(info, projection.eye_to_clip);
     projection.transform = render::IdentityMeshTransform();
-    gfx::MeshTransform &transform = projection.transform;
+    render::MeshTransform &transform = projection.transform;
     std::memcpy(transform.projection, projection.eye_to_clip, sizeof(transform.projection));
     std::memcpy(transform.view, info.view_scaled, sizeof(transform.view));
     std::memcpy(transform.model, matrix, sizeof(transform.model));
@@ -482,7 +483,7 @@ uint32_t PositionBits(float value) {
 
 // For each triangle of a position list and each of its edges, the one other triangle that has the
 // same two corner positions, as triangle * 4 + its edge, or -1 when none or several do.
-void FindEdgeNeighbours(const std::vector<gfx::Vertex3D> &vertices, std::vector<std::array<int32_t, 3>> &out) {
+void FindEdgeNeighbours(const std::vector<render::Vertex3D> &vertices, std::vector<std::array<int32_t, 3>> &out) {
     using Key = std::array<uint32_t, 3>;
     const size_t                          corners = vertices.size() / 3 * 3;
     std::vector<std::pair<Key, uint32_t>> positions;
@@ -594,15 +595,15 @@ void DrawCount(const Volume &volume, const Projection &projection, const RenderI
     if (indices.empty()) {
         return;
     }
-    gfx::MeshConstants constants = {};
+    render::MeshConstants constants = {};
     std::memcpy(constants.mvp, projection.eye_to_clip, sizeof(constants.mvp));
-    constants.flags = gfx::kMeshShadow;
+    constants.flags = render::kMeshShadow;
     // Flat colour 1 in every channel, retail's FTOI0 of 1.0: a modulation of 1 / 0x80.
     constants.diffuse[0] = constants.diffuse[1] = constants.diffuse[2] = 1.0f / 128.0f;
     constants.diffuse[3] = 0.5f;
 
-    gfx::DrawState state = Draw3DState(info, false);
-    state.cull = add ? gfx::CullMode::Back : gfx::CullMode::Front;
+    render::DrawState state = Draw3DState(info, false);
+    state.cull = add ? render::CullMode::Back : render::CullMode::Front;
     Draw3DShadowCount(state, !add);
     render::DrawMeshImmediate(volume.vertices, indices, constants, {}, state,
                            projection.has_transform ? &projection.transform : nullptr);
@@ -844,7 +845,7 @@ int CVisualShadow::CreateVUdataShadow(u_int *block, u_int *model_data) {
                 continue;
             }
             for (const Vec3 &position : positions) {
-                gfx::Vertex3D vertex = {};
+                render::Vertex3D vertex = {};
                 vertex.position[0] = position.x;
                 vertex.position[1] = position.y;
                 vertex.position[2] = position.z;

@@ -24,6 +24,7 @@
 #include "mglib.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
+#include "render/types.hpp"
 #include "runscript.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
@@ -858,7 +859,7 @@ namespace {
 
 // What one XYZF2/XYZF3 write leaves in the GS vertex queue: retail packs the screen ints into a
 // 64-bit word unmasked, and the GS takes 16 bits of x and y and 24 of z from it.
-gfx::Vertex2D LineVertex(const int *screen) {
+render::Vertex2D LineVertex(const int *screen) {
     const u_long word = static_cast<u_long>(static_cast<long>(screen[0])) |
                         (static_cast<u_long>(static_cast<long>(screen[1])) << 16) |
                         (static_cast<u_long>(static_cast<long>(screen[2])) << 32);
@@ -889,8 +890,8 @@ void FishLineDraw(int above_water) {
     test.bits.aref = 0;
     services.set_test(&test);
 
-    std::vector<gfx::Vertex2D> segments;
-    gfx::Vertex2D              pen = {};
+    std::vector<render::Vertex2D> segments;
+    render::Vertex2D              pen = {};
 
     for (sceVu0FVECTOR &line_point : point) {
         const int  visible = MGRotTransPers(screen, line_point, 0);
@@ -909,7 +910,7 @@ void FishLineDraw(int above_water) {
             kick = false;
         }
 
-        gfx::Vertex2D vertex = LineVertex(screen);
+        render::Vertex2D vertex = LineVertex(screen);
         if (kick) {
             segments.push_back(pen);
             segments.push_back(vertex);
@@ -919,11 +920,11 @@ void FishLineDraw(int above_water) {
     }
 
     if (!segments.empty()) {
-        gfx::DrawState state = services.draw_state();
+        render::DrawState state = services.draw_state();
         state.blend = true;
         state.fog = false;
-        state.cull = gfx::CullMode::None;
-        draw2d::DrawUntextured(gfx::Primitive::Lines, segments, state);
+        state.cull = render::CullMode::None;
+        draw2d::DrawUntextured(render::Primitive::Lines, segments, state);
     }
 
     services.set_test(nullptr);

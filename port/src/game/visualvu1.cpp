@@ -17,6 +17,7 @@
 #include "platform/load_work_profile.hpp"
 #include "render/draw3d.hpp"
 #include "render/renderer_calls.hpp"
+#include "render/types.hpp"
 #include "renderinfo.hpp"
 #include "texture.hpp"
 #include "tim2.hpp"
@@ -387,7 +388,7 @@ struct GroundFace {
     bool                    grassy;
 };
 
-bool SamePosition(const gfx::Vertex3D &a, const gfx::Vertex3D &b) {
+bool SamePosition(const render::Vertex3D &a, const render::Vertex3D &b) {
     float distance = 0.0f;
     for (int axis = 0; axis < 3; axis++) {
         float difference = a.position[axis] - b.position[axis];
@@ -396,7 +397,7 @@ bool SamePosition(const gfx::Vertex3D &a, const gfx::Vertex3D &b) {
     return distance < 0.0004f;
 }
 
-float GroundAltitude(const gfx::Vertex3D &a, const gfx::Vertex3D &b, const gfx::Vertex3D &c) {
+float GroundAltitude(const render::Vertex3D &a, const render::Vertex3D &b, const render::Vertex3D &c) {
     float dx = b.position[0] - a.position[0];
     float dz = b.position[2] - a.position[2];
     float length = std::sqrt(dx * dx + dz * dz);
@@ -406,7 +407,7 @@ float GroundAltitude(const gfx::Vertex3D &a, const gfx::Vertex3D &b, const gfx::
     return std::fabs(dx * (c.position[2] - a.position[2]) - dz * (c.position[0] - a.position[0])) / length;
 }
 
-void GroundUvAt(const std::array<gfx::Vertex3D, 3> &source, const float position[3], float uv[2]) {
+void GroundUvAt(const std::array<render::Vertex3D, 3> &source, const float position[3], float uv[2]) {
     float ax = source[1].position[0] - source[0].position[0];
     float az = source[1].position[2] - source[0].position[2];
     float bx = source[2].position[0] - source[0].position[0];
@@ -431,8 +432,8 @@ void GroundUvAt(const std::array<gfx::Vertex3D, 3> &source, const float position
 // half-opacity edges meet without a hard material boundary while the original art stays intact.
 void AddGroundTransition(Draw3DVisual &visual, const GroundFace &target_face, const GroundFace &source_face,
                          int edge_a, int edge_b) {
-    std::array<gfx::Vertex3D, 3> target = {};
-    std::array<gfx::Vertex3D, 3> source = {};
+    std::array<render::Vertex3D, 3> target = {};
+    std::array<render::Vertex3D, 3> source = {};
     for (int i = 0; i < 3; i++) {
         target[i] = visual.vertices[target_face.vertices[i]];
         source[i] = visual.vertices[source_face.vertices[i]];
@@ -452,13 +453,13 @@ void AddGroundTransition(Draw3DVisual &visual, const GroundFace &target_face, co
         return;
     }
     float                        fraction = std::min(4.0f / altitude, 0.25f);
-    std::array<gfx::Vertex3D, 4> band = {target[edge_a], target[edge_b], target[edge_b], target[edge_a]};
+    std::array<render::Vertex3D, 4> band = {target[edge_a], target[edge_b], target[edge_b], target[edge_a]};
     for (int axis = 0; axis < 3; axis++) {
         band[2].position[axis] += fraction * (target[third].position[axis] - band[2].position[axis]);
         band[3].position[axis] += fraction * (target[third].position[axis] - band[3].position[axis]);
     }
     for (size_t i = 0; i < band.size(); i++) {
-        gfx::Vertex3D &vertex = band[i];
+        render::Vertex3D &vertex = band[i];
         GroundUvAt(source, vertex.position, vertex.uv);
         vertex.position[1] += 0.02f;
         vertex.color[0] = 0x80;
@@ -525,7 +526,7 @@ void AddForestGroundTransitions(Draw3DVisual &visual) {
             if (shared == 2) {
                 bool ground_edge = true;
                 for (const int corner : first) {
-                    const gfx::Vertex3D &vertex = visual.vertices[faces[a].vertices[corner]];
+                    const render::Vertex3D &vertex = visual.vertices[faces[a].vertices[corner]];
                     ground_edge = ground_edge && std::fabs(vertex.position[1]) < 1.5f &&
                                   vertex.normal[1] > 0.75f;
                 }
@@ -539,7 +540,7 @@ void AddForestGroundTransitions(Draw3DVisual &visual) {
     }
 }
 
-void AddGroundBorderBand(Draw3DVisual &visual, const std::array<gfx::Vertex3D, 3> &face,
+void AddGroundBorderBand(Draw3DVisual &visual, const std::array<render::Vertex3D, 3> &face,
                          const Draw3DStrip &material, int edge_a, int edge_b, int soil_texture) {
     int   third = 3 - edge_a - edge_b;
     float altitude = GroundAltitude(face[edge_a], face[edge_b], face[third]);
@@ -547,7 +548,7 @@ void AddGroundBorderBand(Draw3DVisual &visual, const std::array<gfx::Vertex3D, 3
         return;
     }
     float                        fraction = std::min(1.0f / altitude, 0.25f);
-    std::array<gfx::Vertex3D, 4> band = {face[edge_a], face[edge_b], face[edge_b], face[edge_a]};
+    std::array<render::Vertex3D, 4> band = {face[edge_a], face[edge_b], face[edge_b], face[edge_a]};
     for (int axis = 0; axis < 3; axis++) {
         band[2].position[axis] += fraction * (face[third].position[axis] - band[2].position[axis]);
         band[3].position[axis] += fraction * (face[third].position[axis] - band[3].position[axis]);
@@ -596,13 +597,13 @@ void AddForestGroundBorders(Draw3DVisual &visual) {
             continue;
         }
         for (uint32_t i = strip.first_index; i + 2 < strip.first_index + strip.index_count; i += 3) {
-            std::array<gfx::Vertex3D, 3> face = {visual.vertices[visual.indices[i]],
-                                                 visual.vertices[visual.indices[i + 1]],
-                                                 visual.vertices[visual.indices[i + 2]]};
+            std::array<render::Vertex3D, 3> face = {visual.vertices[visual.indices[i]],
+                                                    visual.vertices[visual.indices[i + 1]],
+                                                    visual.vertices[visual.indices[i + 2]]};
             for (int edge = 0; edge < 3; edge++) {
                 int                  next = (edge + 1) % 3;
-                const gfx::Vertex3D &a = face[edge];
-                const gfx::Vertex3D &b = face[next];
+                const render::Vertex3D &a = face[edge];
+                const render::Vertex3D &b = face[next];
                 bool                 x_border = std::fabs(std::fabs(a.position[0]) - 80.0f) < 0.5f &&
                                                 std::fabs(a.position[0] - b.position[0]) < 0.5f;
                 bool                 z_border = std::fabs(std::fabs(a.position[2]) - 80.0f) < 0.5f &&
@@ -716,7 +717,7 @@ int CVisualVu1::CreateVUdataFromMDT(u_int *block, u_int *data, int /*unknown0*/,
         UvScale(current, su, sv);
         const auto first_vertex = static_cast<uint32_t>(visual.vertices.size());
         for (uint32_t i = 0; i < count; i++, index += view.stride) {
-            gfx::Vertex3D vertex = {};
+            render::Vertex3D vertex = {};
             std::memcpy(vertex.position, view.vertex[index[0]], sizeof(vertex.position));
             std::memcpy(vertex.normal, view.normal[index[1]], sizeof(vertex.normal));
             vertex.uv[0] = view.uv[index[2]][0] * su;
@@ -786,7 +787,7 @@ int CVisualVu1::CreateVUdataFromMDTRemake(u_int *block, u_int *data, int /*unkno
         }
         strip_number++;
         for (uint32_t i = 0; i < count && vertex < visual->vertices.size(); i++, index += view.stride, vertex++) {
-            gfx::Vertex3D &out = visual->vertices[vertex];
+            render::Vertex3D &out = visual->vertices[vertex];
             std::memcpy(out.position, view.vertex[index[0]], sizeof(out.position));
             if (view.colour) {
                 for (int c = 0; c < 4; c++) {
@@ -797,7 +798,7 @@ int CVisualVu1::CreateVUdataFromMDTRemake(u_int *block, u_int *data, int /*unkno
     }
     // Record stationary poses too: a display frame needs both ends when animation starts or stops.
     Draw3DInvalidateStripRuns(*visual);
-    if (visual->mesh != gfx::kNullMesh) {
+    if (visual->mesh != render::kNullMesh) {
         render::UpdateMeshVertices(visual->mesh, 0, visual->vertices);
     }
     return vu_size;

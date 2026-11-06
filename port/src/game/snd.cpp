@@ -26,6 +26,7 @@
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
+#include "render/types.hpp"
 #include "scriptinterpreter.hpp"
 #include "snd.hpp"
 #include "sound.hpp"
@@ -2913,7 +2914,7 @@ Colour ToColour(const spRGBA *colour) { return {.r = colour->r, .g = colour->g, 
 
 // A logical rect over a texel rect. The GS draws a sprite up to x + w - 1/16 so that it stops one
 // pixel short of x + w; a quad to x + w covers the same pixels here.
-std::array<gfx::Vertex2D, 4> RectQuad(const CRect_i_ &screen, const CRect_i_ &texel, Colour colour) {
+std::array<render::Vertex2D, 4> RectQuad(const CRect_i_ &screen, const CRect_i_ &texel, Colour colour) {
     const auto x0 = static_cast<float>(screen.x);
     const auto y0 = static_cast<float>(screen.y);
     const auto x1 = static_cast<float>(screen.x + screen.width);
@@ -2948,14 +2949,14 @@ void RectSprite(CTexture *texture, const CRect_i_ &screen, const CRect_i_ &texel
         ui::DrawPaintedPlate(texture->name, screen, texel, colour.r, colour.a)) {
         return;
     }
-    std::array<gfx::Vertex2D, 4> quad = RectQuad(screen, texel, colour);
-    draw2d::DrawTextured(gfx::Primitive::Quads, quad, texture->tex0, SpriteTex1(), draw2d::SpriteState());
+    std::array<render::Vertex2D, 4> quad = RectQuad(screen, texel, colour);
+    draw2d::DrawTextured(render::Primitive::Quads, quad, texture->tex0, SpriteTex1(), draw2d::SpriteState());
     draw2d::RestoreTestZbuf();
     GlyphOverlaySprite(texture->name, screen, texel, colour.a);
 }
 
 // XYZF2 keeps 16 bits of x and y, 24 of z and 8 of the fog coefficient.
-gfx::Vertex2D GsVertex(const int *position, float u, float v, Colour colour, bool fog, bool xyz2 = false) {
+render::Vertex2D GsVertex(const int *position, float u, float v, Colour colour, bool fog, bool xyz2 = false) {
     const unsigned z = xyz2 ? std::min(static_cast<unsigned>(position[2]), 0xFFFFFFu)
                             : static_cast<unsigned>(position[2]) & 0xFFFFFF;
     return draw2d::Vertex(MGPortLogicalX(position[0] & 0xFFFF), MGPortLogicalY(position[1] & 0xFFFF),
@@ -2963,11 +2964,11 @@ gfx::Vertex2D GsVertex(const int *position, float u, float v, Colour colour, boo
                           fog ? static_cast<u_char>(position[3]) : 0xFF);
 }
 
-gfx::DrawState CurrentState(bool fog) {
-    gfx::DrawState state = draw2d::Get().draw_state();
+render::DrawState CurrentState(bool fog) {
+    render::DrawState state = draw2d::Get().draw_state();
     state.blend = true;
     state.fog = fog;
-    state.cull = gfx::CullMode::None;
+    state.cull = render::CullMode::None;
     return state;
 }
 
@@ -2978,13 +2979,13 @@ void Sprite3D(CTexture *texture, const CRect_i_ &source, int *top_left, int *top
     const auto u1 = static_cast<float>(source.x + source.width);
     const auto v1 = static_cast<float>(source.y + source.height);
 
-    std::array<gfx::Vertex2D, 4> strip = {
+    std::array<render::Vertex2D, 4> strip = {
         GsVertex(top_left, u0, v0, colour, fog),
         GsVertex(top_right, u1, v0, colour, fog),
         GsVertex(bottom_left, u0, v1, colour, fog),
         GsVertex(bottom_right, u1, v1, colour, fog),
     };
-    draw2d::DrawTextured(gfx::Primitive::TriangleStrip, strip, texture->tex0, kTex1Linear, CurrentState(fog));
+    draw2d::DrawTextured(render::Primitive::TriangleStrip, strip, texture->tex0, kTex1Linear, CurrentState(fog));
     draw2d::Get().set_test(nullptr);
 }
 
@@ -3000,13 +3001,13 @@ void Sprite3D(CTexture *texture, const CRect_i_ &source, int *top_left, int *bot
     const auto u1 = static_cast<float>(source.x + source.width);
     const auto v1 = static_cast<float>(source.y + source.height);
 
-    std::array<gfx::Vertex2D, 4> quad = {
+    std::array<render::Vertex2D, 4> quad = {
         GsVertex(top_left_at_depth.data(), u0, v0, colour, fog),
         GsVertex(top_right.data(), u1, v0, colour, fog),
         GsVertex(bottom_right, u1, v1, colour, fog),
         GsVertex(bottom_left.data(), u0, v1, colour, fog),
     };
-    draw2d::DrawTextured(gfx::Primitive::Quads, quad, texture->tex0, kTex1Linear, CurrentState(fog));
+    draw2d::DrawTextured(render::Primitive::Quads, quad, texture->tex0, kTex1Linear, CurrentState(fog));
     draw2d::Get().set_test(nullptr);
 }
 
@@ -3044,7 +3045,7 @@ void set2DSprite(sceVif1Packet * /*packet*/, CTexture *texture, const CRect_i_ &
         return;
     }
 
-    std::array<gfx::Vertex2D, 4> quad = RectQuad(screen, texel, {});
+    std::array<render::Vertex2D, 4> quad = RectQuad(screen, texel, {});
     const std::array<Colour, 4>  colours = {ToColour(top_left), ToColour(top_right), ToColour(bottom_right),
                                             ToColour(bottom_left)};
     for (std::size_t corner = 0; corner < quad.size(); corner++) {
@@ -3054,13 +3055,13 @@ void set2DSprite(sceVif1Packet * /*packet*/, CTexture *texture, const CRect_i_ &
         quad[corner].color[3] = colours[corner].a;
     }
 
-    std::array<gfx::Vertex2D, 4> strip;
+    std::array<render::Vertex2D, 4> strip;
     if (mode != 0) {
         strip = {quad[0], quad[1], quad[3], quad[2]};
     } else {
         strip = {quad[1], quad[0], quad[2], quad[3]};
     }
-    draw2d::DrawTextured(gfx::Primitive::TriangleStrip, strip, texture->tex0, SpriteTex1(),
+    draw2d::DrawTextured(render::Primitive::TriangleStrip, strip, texture->tex0, SpriteTex1(),
                          draw2d::SpriteState());
     draw2d::RestoreTestZbuf();
 }
@@ -3068,13 +3069,13 @@ void set2DSprite(sceVif1Packet * /*packet*/, CTexture *texture, const CRect_i_ &
 void set3DColSprite(sceVif1Packet * /*packet*/, int *top_left, int *top_right, int *bottom_left, int *bottom_right,
                     spRGBA *top_left_colour, spRGBA *top_right_colour, spRGBA *bottom_left_colour,
                     spRGBA *bottom_right_colour) {
-    std::array<gfx::Vertex2D, 4> strip = {
+    std::array<render::Vertex2D, 4> strip = {
         GsVertex(top_left, 0.0f, 0.0f, ToColour(top_left_colour), false),
         GsVertex(top_right, 0.0f, 0.0f, ToColour(top_right_colour), false),
         GsVertex(bottom_left, 0.0f, 0.0f, ToColour(bottom_left_colour), false),
         GsVertex(bottom_right, 0.0f, 0.0f, ToColour(bottom_right_colour), false),
     };
-    draw2d::DrawUntextured(gfx::Primitive::TriangleStrip, strip, CurrentState(false));
+    draw2d::DrawUntextured(render::Primitive::TriangleStrip, strip, CurrentState(false));
 }
 
 void set3DSprite(sceVif1Packet *packet, CTexture *texture, const CRect_i_ &source, int *top_left,
@@ -3123,13 +3124,13 @@ void set3DSpriteFog(sceVif1Packet * /*packet*/, CTexture *texture, const CRect_i
 void setColSprite(sceVif1Packet * /*packet*/, int *top_left, int *top_right, int *bottom_left, int *bottom_right,
                   unsigned char red, unsigned char green, unsigned char blue, unsigned char alpha) {
     const Colour                 colour = {.r = red, .g = green, .b = blue, .a = alpha};
-    std::array<gfx::Vertex2D, 4> strip = {
+    std::array<render::Vertex2D, 4> strip = {
         GsVertex(top_left, 0.0f, 0.0f, colour, false, true),
         GsVertex(top_right, 0.0f, 0.0f, colour, false, true),
         GsVertex(bottom_left, 0.0f, 0.0f, colour, false, true),
         GsVertex(bottom_right, 0.0f, 0.0f, colour, false, true),
     };
-    draw2d::DrawUntextured(gfx::Primitive::TriangleStrip, strip, CurrentState(false));
+    draw2d::DrawUntextured(render::Primitive::TriangleStrip, strip, CurrentState(false));
 }
 
 void set2DSpriteC4(sceVif1Packet * /*packet*/, const CRect_i_ &screen, spRGBA *top_left, spRGBA *top_right,
@@ -3139,7 +3140,7 @@ void set2DSpriteC4(sceVif1Packet * /*packet*/, const CRect_i_ &screen, spRGBA *t
     const auto x1 = static_cast<float>(screen.x + screen.width);
     const auto y1 = static_cast<float>(screen.y + screen.height);
 
-    std::array<gfx::Vertex2D, 4> strip = {
+    std::array<render::Vertex2D, 4> strip = {
         draw2d::Vertex(x0, y0, 0.0f, 0.0f, 0.0f, top_left->r, top_left->g, top_left->b, top_left->a),
         draw2d::Vertex(x1, y0, 0.0f, 0.0f, 0.0f, top_right->r, top_right->g, top_right->b, top_right->a),
         draw2d::Vertex(x0, y1, 0.0f, 0.0f, 0.0f, bottom_left->r, bottom_left->g, bottom_left->b,
@@ -3147,7 +3148,7 @@ void set2DSpriteC4(sceVif1Packet * /*packet*/, const CRect_i_ &screen, spRGBA *t
         draw2d::Vertex(x1, y1, 0.0f, 0.0f, 0.0f, bottom_right->r, bottom_right->g, bottom_right->b,
                        bottom_right->a),
     };
-    draw2d::DrawUntextured(gfx::Primitive::TriangleStrip, strip, draw2d::SpriteState());
+    draw2d::DrawUntextured(render::Primitive::TriangleStrip, strip, draw2d::SpriteState());
     draw2d::RestoreTestZbuf();
 }
 
@@ -3189,7 +3190,7 @@ void set2DSpriteRot(sceVif1Packet * /*packet*/, CTexture *texture, const CRect_i
     const auto v0 = static_cast<float>(texel.y);
     const auto v1 = static_cast<float>(texel.y + texel.height);
 
-    std::array<gfx::Vertex2D, 4> strip = {
+    std::array<render::Vertex2D, 4> strip = {
         draw2d::Vertex(x[0], y[0], 0.0f, u0, v0, red, green, blue, alpha),
         draw2d::Vertex(x[1], y[1], 0.0f, static_cast<float>(texel.x + screen.width), v0, red, green, blue,
                        alpha),
@@ -3197,7 +3198,7 @@ void set2DSpriteRot(sceVif1Packet * /*packet*/, CTexture *texture, const CRect_i
         draw2d::Vertex(x[3], y[3], 0.0f, static_cast<float>(texel.x + texel.width), v1, red, green, blue,
                        alpha),
     };
-    draw2d::DrawTextured(gfx::Primitive::TriangleStrip, strip, texture->tex0, SpriteTex1(),
+    draw2d::DrawTextured(render::Primitive::TriangleStrip, strip, texture->tex0, SpriteTex1(),
                          draw2d::SpriteState());
     draw2d::RestoreTestZbuf();
 }

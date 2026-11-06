@@ -11,6 +11,7 @@
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/renderer_calls.hpp"
+#include "render/types.hpp"
 #include "text/caption_text.hpp"
 #include "text/captionfont.hpp"
 #include "text/textwipe.hpp"
@@ -352,10 +353,10 @@ Laid Lay(const std::u32string &text, int em_px, float stretch) {
 }
 
 struct Layers {
-    std::vector<gfx::Vertex2D> shadow, ink;
+    std::vector<render::Vertex2D> shadow, ink;
 };
 
-void Quad(std::vector<gfx::Vertex2D> &out, const capfont::Glyph &glyph, float x, float y, float w, float h,
+void Quad(std::vector<render::Vertex2D> &out, const capfont::Glyph &glyph, float x, float y, float w, float h,
           const std::array<unsigned char, 3> &rgb, int alpha) {
     const auto r = static_cast<u_char>(rgb[0] / 2);
     const auto g = static_cast<u_char>(rgb[1] / 2);
@@ -369,7 +370,7 @@ void Quad(std::vector<gfx::Vertex2D> &out, const capfont::Glyph &glyph, float x,
 
 // One line, its ink's top left at origin_x, origin_y (logical), where the painted line's lands on the screen.
 void LayLine(const CreditLine &line, float origin_x, float origin_y, int alpha, Layers &layers) {
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const std::u32string      text = Decode(line.text);
     const float               want_w = static_cast<float>(line.right - line.left) * mapping.scale_x;
@@ -461,7 +462,7 @@ void LayLine(const CreditLine &line, float origin_x, float origin_y, int alpha, 
 }
 
 // An untextured rectangle in a colour, for an underline and its halo.
-void Rect(std::vector<gfx::Vertex2D> &out, float x0, float y0, float x1, float y1, const std::array<unsigned char, 3> &rgb, int alpha) {
+void Rect(std::vector<render::Vertex2D> &out, float x0, float y0, float x1, float y1, const std::array<unsigned char, 3> &rgb, int alpha) {
     const u_char r = rgb[0];
     const u_char g = rgb[1];
     const u_char b = rgb[2];
@@ -500,9 +501,9 @@ bool DrawBand(const char *texture, const CRect_i_ &screen, const CRect_i_ &texel
 
     capfont::UseFontSlot(kSlot);
     Layers                     layers;
-    std::vector<gfx::Vertex2D> bars;
+    std::vector<render::Vertex2D> bars;
     // The underlines: a bar with round ends, a dot of its height at each, over the same soft shadow as the words'.
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     capfont::Paint            shade = {0.0f, 0.0f, 0.0f, 0, 0.0f, {}, {}, {}};
     shade.shadow_only = true;
@@ -554,17 +555,17 @@ bool DrawBand(const char *texture, const CRect_i_ &screen, const CRect_i_ &texel
     }
     capfont::UseFontSlot(0);
 
-    const gfx::DrawState      state = draw2d::SpriteState();
-    const gfx::TextureBinding binding = capfont::Binding();
+    const render::DrawState      state = draw2d::SpriteState();
+    const render::TextureBinding binding = capfont::Binding();
     if (!layers.shadow.empty()) {
-        textwipe::Draw2D(gfx::Primitive::Quads, layers.shadow, binding, state);
+        textwipe::Draw2D(render::Primitive::Quads, layers.shadow, binding, state);
     }
     if (!bars.empty()) {
         // Already in the target's rows.
-        textwipe::Draw2D(gfx::Primitive::Quads, bars, {}, state);
+        textwipe::Draw2D(render::Primitive::Quads, bars, {}, state);
     }
     if (!layers.ink.empty()) {
-        textwipe::Draw2D(gfx::Primitive::Quads, layers.ink, binding, state);
+        textwipe::Draw2D(render::Primitive::Quads, layers.ink, binding, state);
     }
     draw2d::RestoreTestZbuf();
     return true;

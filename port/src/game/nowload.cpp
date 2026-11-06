@@ -16,7 +16,6 @@
 #include "app/presentation.hpp"
 #include "data/data_read.hpp"
 #include "dataread.hpp"
-#include "gfx/gfx.hpp"
 #include "localize/localize_texture.hpp"
 #include "mainselect.hpp"
 #include "mglib.hpp"
@@ -26,6 +25,7 @@
 #include "render/gs_state.hpp"
 #include "render/renderer_calls.hpp"
 #include "render/texture_registry.hpp"
+#include "render/types.hpp"
 #include "text/textwipe.hpp"
 #include "texture.hpp"
 #include "tim2.hpp"
@@ -178,7 +178,7 @@ void Upload(CTexture *texture) {
 // in alpha, blended (Cs - Cd) * As + Cd over the cleared frame.
 void DrawCardSprite(PortTextureRef ref, bool with_lettering) {
     // TEX1 MMAG is setbilinear's switch, which is on unless a mode turns it off.
-    ref.binding.filter = gfx::Filter::Linear;
+    ref.binding.filter = render::Filter::Linear;
     const CRect_i_ &screen = sprite.screen;
     const CRect_i_ &texel = sprite.texel;
     float           x0 = MGPortLogicalX((screen.x << 4) + 27648);
@@ -190,16 +190,16 @@ void DrawCardSprite(PortTextureRef ref, bool with_lettering) {
     const auto      v0 = static_cast<float>(texel.y);
     const auto      v1 = static_cast<float>(texel.y + texel.height);
     const auto      corner = [](float x, float y, float u, float v) {
-        return gfx::Vertex2D{
+        return render::Vertex2D{
             .x = x, .y = y, .z = 0.0f, .u = u, .v = v, .color = {0x80, 0x80, 0x80, sprite.alpha}
         };
     };
-    gfx::Vertex2D  quad[4] = {corner(x0, y0, u0, v0), corner(x1, y0, u1, v0), corner(x1, y1, u1, v1),
-                              corner(x0, y1, u0, v1)};
-    gfx::DrawState state;
+    render::Vertex2D  quad[4] = {corner(x0, y0, u0, v0), corner(x1, y0, u1, v0), corner(x1, y1, u1, v1),
+                                 corner(x0, y1, u0, v1)};
+    render::DrawState state;
     state.blend = true;
-    state.alpha = gfx::GsBlend{.a = 0, .b = 1, .c = 0, .d = 1, .fix = 0};
-    textwipe::Draw2D(gfx::Primitive::Quads, quad, ref.binding, state);
+    state.alpha = render::GsBlend{.a = 0, .b = 1, .c = 0, .d = 1, .fix = 0};
+    textwipe::Draw2D(render::Primitive::Quads, quad, ref.binding, state);
     if (with_lettering && sprite.texture == &nl_tex && texel.x == 0 && texel.y == 0 &&
         texel.width == static_cast<int>(sprite.texture->width) && texel.height == static_cast<int>(sprite.texture->height)) {
         area_card::Draw(x0, y0, x1, y1, static_cast<float>(sprite.alpha) / 128.0f);

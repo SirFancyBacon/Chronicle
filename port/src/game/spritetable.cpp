@@ -9,6 +9,7 @@
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
+#include "render/types.hpp"
 
 namespace dc::game {
 
@@ -18,7 +19,7 @@ using namespace dc::render;
 // ALPHA shadow whatever the register held, and leaves ALPHA, TEST and ZBUF at the shadows.
 void CSpriteTable::DrawTable() {
     const draw2d::Services &services = draw2d::Get();
-    gfx::DrawState          state = draw2d::SpriteState();
+    render::DrawState       state = draw2d::SpriteState();
     MGPortApplyAlpha(state, mgAlpha);
 
     for (int layer = list_count - 1; layer >= 0; layer--) {
@@ -36,13 +37,13 @@ void CSpriteTable::DrawTable() {
             const float u1 = node->u + node->u_width;
             const float v1 = node->v + node->v_height;
 
-            std::array<gfx::Vertex2D, 4> quad = {
+            std::array<render::Vertex2D, 4> quad = {
                 draw2d::Vertex(x0, y0, 0.0f, u0, v0, r, g, b, a),
                 draw2d::Vertex(x1, y0, 0.0f, u1, v0, r, g, b, a),
                 draw2d::Vertex(x1, y1, 0.0f, u1, v1, r, g, b, a),
                 draw2d::Vertex(x0, y1, 0.0f, u0, v1, r, g, b, a),
             };
-            draw2d::DrawTextured(gfx::Primitive::Quads, quad, node->tex0, 1, state);
+            draw2d::DrawTextured(render::Primitive::Quads, quad, node->tex0, 1, state);
         }
     }
 

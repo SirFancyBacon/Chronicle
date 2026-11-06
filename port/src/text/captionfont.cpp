@@ -15,6 +15,8 @@
 #include <utility>
 #include <vector>
 
+#include "render/types.hpp"
+
 #define STB_TRUETYPE_IMPLEMENTATION
 #define STBTT_STATIC
 #include "render/renderer_calls.hpp"
@@ -37,7 +39,7 @@ struct Font {
 };
 
 struct Atlas {
-    gfx::TextureHandle                        texture = gfx::kNullTexture;
+    render::TextureHandle                     texture = render::kNullTexture;
     int                                       x = 0;
     int                                       y = 0;
     int                                       row_height = 0;
@@ -55,7 +57,7 @@ Atlas                        g_atlas;
 unsigned                     g_generation = 0;
 
 void ResetAtlas() {
-    if (g_atlas.texture != gfx::kNullTexture) {
+    if (g_atlas.texture != render::kNullTexture) {
         render::DestroyTexture(g_atlas.texture);
     }
     g_atlas = {};
@@ -72,7 +74,7 @@ void MakeRoom(int width, int height) {
     }
     if (g_atlas.y + height + 2 * kPad > kAtlasSize) {
         std::println(stderr, "font: atlas full, starting again");
-        const gfx::TextureHandle keep = g_atlas.texture;
+        const render::TextureHandle keep = g_atlas.texture;
         g_atlas = {};
         g_generation++;
         g_atlas.texture = keep;
@@ -82,14 +84,14 @@ void MakeRoom(int width, int height) {
 }
 
 bool EnsureAtlas() {
-    if (g_atlas.texture == gfx::kNullTexture) {
-        gfx::TextureDesc desc;
+    if (g_atlas.texture == render::kNullTexture) {
+        render::TextureDesc desc;
         desc.width = kAtlasSize;
         desc.height = kAtlasSize;
-        desc.format = gfx::TextureFormat::Rgba8;
+        desc.format = render::TextureFormat::Rgba8;
         g_atlas.texture = render::CreateTexture(desc);
     }
-    return g_atlas.texture != gfx::kNullTexture;
+    return g_atlas.texture != render::kNullTexture;
 }
 
 struct Bitmap {
@@ -1181,10 +1183,10 @@ bool RenderGlyphScaled(char32_t ch, int slot, float scale, std::vector<unsigned 
     return true;
 }
 
-gfx::TextureBinding Binding() {
-    gfx::TextureBinding binding;
+render::TextureBinding Binding() {
+    render::TextureBinding binding;
     binding.texture = g_atlas.texture;
-    binding.filter = gfx::Filter::Linear;
+    binding.filter = render::Filter::Linear;
     return binding;
 }
 

@@ -23,6 +23,7 @@
 #include "mglib.hpp"
 #include "platform/config.hpp"
 #include "render/draw3d.hpp"
+#include "render/types.hpp"
 #include "renderinfo.hpp"
 #include "texture.hpp"
 #include "visualvu1.hpp"
@@ -933,7 +934,7 @@ int CCloth::CreateVUData(u_int *packet) {
     }
 
     auto add = [&](int i, int j) {
-        gfx::Vertex3D vertex = {};
+        render::Vertex3D vertex = {};
         sceVu0FVECTOR world_point = {point[i][j][0], point[i][j][1], point[i][j][2], 1.0f};
         sceVu0FVECTOR local_point;
         sceVu0FVECTOR local_normal;

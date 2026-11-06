@@ -37,9 +37,9 @@
 #include "dngmessageman.hpp"
 #include "dngstatusdata.hpp"
 #include "dranmapfield.hpp"
-#include "dungeonparts.hpp"
 #include "dungeoneventman.hpp"
 #include "dungeonmap.hpp"
+#include "dungeonparts.hpp"
 #include "edit.hpp"
 #include "editloop3.hpp"
 #include "frame.hpp"
@@ -48,7 +48,6 @@
 #include "gamemode.hpp"
 #include "gamepad.hpp"
 #include "gameutil.hpp"
-#include "gfx/gfx.hpp"
 #include "healeffect.hpp"
 #include "hit_machingun_effect.hpp"
 #include "hitmark.hpp"
@@ -78,6 +77,7 @@
 #include "rect.hpp"
 #include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
+#include "render/types.hpp"
 #include "runeffect.hpp"
 #include "runscript_opcodes.hpp"
 #include "savedata.hpp"
@@ -2167,9 +2167,9 @@ void DrawMonstorDetail() {
 // water (left of the quick items at 0x124) to the left edge, the floor plate (from 0x1FC) to the
 // right edge, the quick items between them stay centred; the panel to the top edge, the weapon's
 // portrait and gauge to the bottom edge.
-constexpr gfx::UiAnchor kStatusAnchor = {.left_until = 0x124, .right_from = 0x1FC, .top_until = 240.0f, .bottom_from = 240.0f};
+constexpr render::UiAnchor kStatusAnchor = {.left_until = 0x124, .right_from = 0x1FC, .top_until = 240.0f, .bottom_from = 240.0f};
 // The mini map hangs under the floor plate.
-constexpr gfx::UiAnchor kMiniMapAnchor = gfx::UiAnchor::Side(1, -1);
+constexpr render::UiAnchor kMiniMapAnchor = render::UiAnchor::Side(1, -1);
 
 CTexture *NamedTexture(const char *name) {
     return TexManager.GetTexture(const_cast<char *>(name), -1);
@@ -2597,7 +2597,7 @@ void DunMainDraw() {
             sceVu0FVECTOR map_pos;
             sceVu0FVECTOR map_rot;
 
-            gfx::UiAnchorScope map_anchor(kMiniMapAnchor);
+            render::UiAnchorScope map_anchor(kMiniMapAnchor);
 
             TexManager.ReloadTexture(Vif1Packet, 0x1F);
             sceVu0CopyVector(map_pos, CharaFrame->position);

@@ -13,10 +13,10 @@
 
 #include "data/data_read.hpp"
 #include "dataread.hpp"
-#include "gfx/gfx.hpp"
 #include "localize/localize.hpp"
 #include "platform/png_image.hpp"
 #include "render/texture_registry.hpp"
+#include "render/types.hpp"
 #include "ui/framework/internal.hpp"
 
 namespace dc::ui {
@@ -395,7 +395,7 @@ CTexture *GetProceduralWindowTex(int width_px, int height_px, WindowPreset prese
     PortDecodedTexture decoded{};
     decoded.width = static_cast<unsigned>(width_px);
     decoded.height = static_cast<unsigned>(height_px);
-    decoded.format = gfx::TextureFormat::Rgba8;
+    decoded.format = render::TextureFormat::Rgba8;
     decoded.has_alpha = true;
 
     std::vector<uint8_t> rgba(static_cast<size_t>(width_px) * height_px * 4, 0);

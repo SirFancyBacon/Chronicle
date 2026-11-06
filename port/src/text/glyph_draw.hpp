@@ -1,12 +1,12 @@
 #pragma once
 
-#include "platform/glyphs.hpp"
 #include "rect.hpp"
+#include "text/glyphs.hpp"
 
 namespace dc::text {
 
 /**
- * Draws a pad button's symbol (platform/glyphs.hpp) centred in a slot of 2D screen space, keeping
+ * Draws a pad button's symbol (text/glyphs.hpp) centred in a slot of 2D screen space, keeping
  * the art's proportions; grow adds pixels on every side. False when the game's own art is used.
  */
 bool GlyphDrawSlot(glyphs::Button button, const game::CRect_i_ &slot, int alpha, float grow = 0.0f);

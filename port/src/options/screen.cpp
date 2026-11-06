@@ -12,7 +12,7 @@
 #include "dialog/framework.hpp"
 #include "gamepad.hpp"
 #include "gameutil.hpp"
-#include "gfx/gfx.hpp"
+#include "render/types.hpp"
 #include "fishing/host.hpp"
 #include "item/host.hpp"
 #include "localize/localize.hpp"

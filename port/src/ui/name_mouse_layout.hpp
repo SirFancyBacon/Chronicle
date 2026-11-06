@@ -1,4 +1,5 @@
 #pragma once
+#include "render/types.hpp"
 
 /*
  * Where the controls of the Register Name screen lie on the game's 640x480 2D screen, and which one a
@@ -112,7 +113,7 @@ Hit HitTest(const Screen &screen, float x, float y);
 
 /**
  * How many 640x480 units one count of pointer motion (a window unit) moves along an axis, given how
- * many main-target pixels the screen gives a unit (gfx::GetUiMapping's scale), how wide the target is in
+ * many main-target pixels the screen gives a unit (render::GetUiMapping's scale), how wide the target is in
  * pixels and how wide the window is in the pointer's units. 0 when any is not positive.
  */
 float PointerUnitsPerCount(float target_pixels_per_unit, float target_width, float window_width);

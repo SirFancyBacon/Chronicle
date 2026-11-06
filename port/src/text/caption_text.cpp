@@ -14,7 +14,6 @@
 #include <utility>
 
 #include "editmenu.hpp"
-#include "gfx/gfx.hpp"
 #include "localize/localize.hpp"
 #include "mainselect.hpp"
 #include "menu_draw.hpp"
@@ -23,6 +22,7 @@
 #include "render/draw2d.hpp"
 #include "render/renderer_calls.hpp"
 #include "render/texture_registry.hpp"
+#include "render/types.hpp"
 #include "text/captionfont.hpp"
 #include "text/gametext.hpp"
 #include "text/textwipe.hpp"
@@ -288,7 +288,7 @@ float Snap(float value, float scale, float offset) {
     return (std::round(value * scale + offset) - offset) / scale;
 }
 
-void Quad(std::vector<gfx::Vertex2D> &out, const capfont::Glyph &glyph, float x, float y, float width, float height,
+void Quad(std::vector<render::Vertex2D> &out, const capfont::Glyph &glyph, float x, float y, float width, float height,
           const unsigned char (&rgb)[3], int alpha) {
     // GS modulation doubles vertex RGB; halve font colors before drawing.
     const auto red = static_cast<u_char>(rgb[0] / 2);
@@ -333,7 +333,7 @@ void DrawLabel(const std::string &utf8, int x, int y, float box_width, const Cap
     }
     const textwipe::Tuning &tune = textwipe::Get(textwipe::Kind::Caption);
     alpha = static_cast<int>(static_cast<float>(alpha) * tune.opacity);
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const capfont::Metrics    metrics = capfont::GetMetrics();
     const float               em = cap / std::max(metrics.cap, 0.1f);
@@ -362,10 +362,10 @@ void DrawLabel(const std::string &utf8, int x, int y, float box_width, const Cap
     const float left = static_cast<float>(x) + bounds.left + kLabelOutline - kLabelLightAt.dx + tune.dx;
     const float base = static_cast<float>(y) + bounds.top + kLabelOutline + cap - kLabelRaise + tune.dy;
 
-    std::vector<gfx::Vertex2D> edges;
-    std::vector<gfx::Vertex2D> lights;
-    std::vector<gfx::Vertex2D> darks;
-    std::vector<gfx::Vertex2D> fills;
+    std::vector<render::Vertex2D> edges;
+    std::vector<render::Vertex2D> lights;
+    std::vector<render::Vertex2D> darks;
+    std::vector<render::Vertex2D> fills;
     float                      pen = left;
     letter = 0;
     for (char32_t ch : text) {
@@ -383,7 +383,7 @@ void DrawLabel(const std::string &utf8, int x, int y, float box_width, const Cap
         // A glyph at the letter's place on whole screen pixels, moved a whole number of screen pixels more: the letter
         // is put on the pixel grid once and every copy of it moved the same pixels, so no letter's shadow lands a pixel
         // nearer or further than another's.
-        auto place = [&](const capfont::Glyph &glyph, std::vector<gfx::Vertex2D> &out, const unsigned char (&rgb)[3], int px_x,
+        auto place = [&](const capfont::Glyph &glyph, std::vector<render::Vertex2D> &out, const unsigned char (&rgb)[3], int px_x,
                          int px_y) {
             if (glyph.width <= 0 || glyph.height <= 0) {
                 return;
@@ -400,7 +400,7 @@ void DrawLabel(const std::string &utf8, int x, int y, float box_width, const Cap
         };
         // Each shadow is the letter swept from its own place to the shadow's, stamped on every pixel of the way, so it is
         // one solid shape joined to the letter; the outline goes round the whole of it.
-        auto sweep = [&](const capfont::Glyph &glyph, std::vector<gfx::Vertex2D> &out, const unsigned char (&rgb)[3], LabelCopy to) {
+        auto sweep = [&](const capfont::Glyph &glyph, std::vector<render::Vertex2D> &out, const unsigned char (&rgb)[3], LabelCopy to) {
             const int px_x = static_cast<int>(std::lround(to.dx * mapping.scale_x));
             const int px_y = static_cast<int>(std::lround(to.dy * rows * mapping.scale_y));
             const int steps = std::max({1, std::abs(px_x), std::abs(px_y)});
@@ -423,15 +423,15 @@ void DrawLabel(const std::string &utf8, int x, int y, float box_width, const Cap
     if (fills.empty()) {
         return;
     }
-    const gfx::TextureBinding binding = capfont::Binding();
+    const render::TextureBinding binding = capfont::Binding();
     for (auto *layer : {&edges, &darks, &lights, &fills}) {
-        for (gfx::Vertex2D &vertex : *layer) {
+        for (render::Vertex2D &vertex : *layer) {
             for (int channel = 0; channel < 3; channel++) {
                 vertex.color[channel] = static_cast<uint8_t>(std::clamp(vertex.color[channel] * bright / 0x80, 0, 255));
             }
         }
         if (!layer->empty()) {
-            textwipe::Draw2D(gfx::Primitive::Quads, *layer, binding, draw2d::SpriteState());
+            textwipe::Draw2D(render::Primitive::Quads, *layer, binding, draw2d::SpriteState());
         }
     }
     draw2d::RestoreTestZbuf();
@@ -681,7 +681,7 @@ bool DrawButtonWord(std::string_view word, float x, float y, int bright, int alp
     if (first == std::end(kButtonLetters)) {
         return false;
     }
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const float               kx = mapping.scale_x;
     const float               ky = mapping.scale_y * rows;
@@ -715,7 +715,7 @@ bool DrawButtonWord(std::string_view word, float x, float y, int bright, int alp
     const float                middle = (first->left + first->right + last->left + last->right) / 4;
     const auto                 tint = static_cast<u_char>(std::clamp(bright, 0, 255));
     const auto                 opacity = static_cast<u_char>(std::clamp(alpha, 0, 0x80));
-    std::vector<gfx::Vertex2D> quads;
+    std::vector<render::Vertex2D> quads;
     auto                       quad = [&](const capfont::Glyph &glyph, float left, float top) {
         const float right = left + glyph.width / mapping.scale_x;
         const float bottom = top + glyph.height / mapping.scale_y;
@@ -781,7 +781,7 @@ bool DrawButtonWord(std::string_view word, float x, float y, int bright, int alp
             break;
         }
     }
-    textwipe::Draw2D(gfx::Primitive::Quads, quads, capfont::Binding(), draw2d::SpriteState());
+    textwipe::Draw2D(render::Primitive::Quads, quads, capfont::Binding(), draw2d::SpriteState());
     draw2d::RestoreTestZbuf();
     return true;
 }
@@ -836,7 +836,7 @@ bool DrawFloorLabel(std::string_view utf8, float left, float top, float right, f
         sx = sy * squeeze;
     }
 
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const float               kx = mapping.scale_x;
     const float               ky = mapping.scale_y * rows;
@@ -857,7 +857,7 @@ bool DrawFloorLabel(std::string_view utf8, float left, float top, float right, f
         std::copy_n(kFloorLabelFill, 3, *colour);
     }
     const auto                 opacity = static_cast<u_char>(std::clamp(alpha, 0, 0x80));
-    std::vector<gfx::Vertex2D> quads;
+    std::vector<render::Vertex2D> quads;
     // Every letter outlined, then every face over all the outlines, so the word is outlined as one.
     // Made again, once, if the atlas started over while they were fetched (that would leave the first ones stale).
     for (int attempt = 0; attempt < 2; attempt++) {
@@ -916,7 +916,7 @@ bool DrawFloorLabel(std::string_view utf8, float left, float top, float right, f
         }
     }
     if (!quads.empty()) {
-        textwipe::Draw2D(gfx::Primitive::Quads, quads, capfont::Binding(), draw2d::SpriteState());
+        textwipe::Draw2D(render::Primitive::Quads, quads, capfont::Binding(), draw2d::SpriteState());
         draw2d::RestoreTestZbuf();
     }
     return true;
@@ -934,7 +934,7 @@ bool DrawAlphabetCell(int u, int v, int texel_width, int texel_height, float x, 
     if (cell == std::end(kAlphabet)) {
         return false;
     }
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     // Screen pixels to a cell pixel, across and down.
     const float    kx = mapping.scale_x * width / static_cast<float>(texel_width);
@@ -955,7 +955,7 @@ bool DrawAlphabetCell(int u, int v, int texel_width, int texel_height, float x, 
     const auto                 green = static_cast<u_char>(std::clamp(g, 0, 255));
     const auto                 blue = static_cast<u_char>(std::clamp(b, 0, 255));
     const auto                 opacity = static_cast<u_char>(std::clamp(alpha, 0, 0x80));
-    std::vector<gfx::Vertex2D> quads;
+    std::vector<render::Vertex2D> quads;
     // Made again, once, if the atlas started over while they were fetched (that would leave the first ones stale).
     for (int attempt = 0; attempt < 2; attempt++) {
         const unsigned generation = capfont::Generation();
@@ -980,7 +980,7 @@ bool DrawAlphabetCell(int u, int v, int texel_width, int texel_height, float x, 
             break;
         }
     }
-    textwipe::Draw2D(gfx::Primitive::Quads, quads, capfont::Binding(), draw2d::SpriteState());
+    textwipe::Draw2D(render::Primitive::Quads, quads, capfont::Binding(), draw2d::SpriteState());
     draw2d::RestoreTestZbuf();
     return true;
 }
@@ -1105,7 +1105,7 @@ bool DrawBoardName(std::string_view utf8, float left_x, float cap_top, float squ
     } variant;
 
     const std::u32string      text = Decode(utf8);
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const capfont::Metrics    metrics = capfont::GetMetrics();
     const float               em = kBoardCap / std::max(metrics.cap, 0.1f);
@@ -1159,8 +1159,8 @@ bool DrawBoardName(std::string_view utf8, float left_x, float cap_top, float squ
         return text[i + 1] == U'\'' ? kBoardLead : kBoardGap;
     };
 
-    std::vector<gfx::Vertex2D> rings;
-    std::vector<gfx::Vertex2D> fills;
+    std::vector<render::Vertex2D> rings;
+    std::vector<render::Vertex2D> fills;
     // Made again, once, if the atlas started over while they were fetched (that would leave the first ones stale).
     for (int attempt = 0; attempt < 2; attempt++) {
         const unsigned generation = capfont::Generation();
@@ -1203,7 +1203,7 @@ bool DrawBoardName(std::string_view utf8, float left_x, float cap_top, float squ
                         lift = (fill.y_offset - next.y_offset + 1.0f) / mapping.scale_y;
                     }
                 }
-                auto place = [&](const capfont::Glyph &glyph, std::vector<gfx::Vertex2D> &out, const unsigned char (&rgb)[3]) {
+                auto place = [&](const capfont::Glyph &glyph, std::vector<render::Vertex2D> &out, const unsigned char (&rgb)[3]) {
                     if (glyph.width <= 0 || glyph.height <= 0) {
                         return;
                     }
@@ -1227,9 +1227,9 @@ bool DrawBoardName(std::string_view utf8, float left_x, float cap_top, float squ
     const float top = clip_top * rows;
     const float bottom = clip_bottom * rows;
     for (auto *layer : {&rings, &fills}) {
-        std::vector<gfx::Vertex2D> kept;
+        std::vector<render::Vertex2D> kept;
         for (std::size_t q = 0; q + 3 < layer->size(); q += 4) {
-            std::array<gfx::Vertex2D, 4> quad = {(*layer)[q], (*layer)[q + 1], (*layer)[q + 2], (*layer)[q + 3]};
+            std::array<render::Vertex2D, 4> quad = {(*layer)[q], (*layer)[q + 1], (*layer)[q + 2], (*layer)[q + 3]};
             const float                  y0 = quad[0].y;
             const float                  y1 = quad[2].y;
             const float                  v0 = quad[0].v;
@@ -1249,10 +1249,10 @@ bool DrawBoardName(std::string_view utf8, float left_x, float cap_top, float squ
         }
         layer->swap(kept);
     }
-    const gfx::TextureBinding binding = capfont::Binding();
+    const render::TextureBinding binding = capfont::Binding();
     for (auto *layer : {&rings, &fills}) {
         if (!layer->empty()) {
-            textwipe::Draw2D(gfx::Primitive::Quads, *layer, binding, draw2d::SpriteState());
+            textwipe::Draw2D(render::Primitive::Quads, *layer, binding, draw2d::SpriteState());
         }
     }
     draw2d::RestoreTestZbuf();
@@ -1307,10 +1307,10 @@ void PreparePainted(const char *name, const PortDecodedTexture &texture) {
     }
     g_bounds.fill(std::nullopt);
     if (texture.width == 0 || texture.height == 0 || texture.levels.empty() ||
-        (texture.format != gfx::TextureFormat::Index8 && texture.format != gfx::TextureFormat::Rgba8)) {
+        (texture.format != render::TextureFormat::Index8 && texture.format != render::TextureFormat::Rgba8)) {
         return;
     }
-    const size_t bytes = texture.format == gfx::TextureFormat::Index8 ? 1 : 4;
+    const size_t bytes = texture.format == render::TextureFormat::Index8 ? 1 : 4;
     if (texture.levels[0].size() < static_cast<size_t>(texture.width) * texture.height * bytes) {
         return;
     }
@@ -1467,7 +1467,7 @@ bool Draw(int icon, int x, int y, int box_width, int alpha, int bright) {
     const textwipe::Tuning &tune = textwipe::Get(textwipe::Kind::Caption);
     alpha = static_cast<int>(static_cast<float>(alpha) * tune.opacity);
 
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const float               rows = draw2d::RowScale();
     const capfont::Metrics    metrics = capfont::GetMetrics();
     const int                 em_px = std::max(4, static_cast<int>(layout.em * mapping.scale_x + 0.5f));
@@ -1477,8 +1477,8 @@ bool Draw(int icon, int x, int y, int box_width, int alpha, int bright) {
     const float     base = static_cast<float>(y) + (cell - layout.em * (metrics.ascent + metrics.descent)) / 2 +
                            layout.em * metrics.ascent + tune.dy;
 
-    std::vector<gfx::Vertex2D> edges;
-    std::vector<gfx::Vertex2D> fills;
+    std::vector<render::Vertex2D> edges;
+    std::vector<render::Vertex2D> fills;
     float                      pen = static_cast<float>(x) + tune.dx;
     for (char32_t ch : layout.text) {
         capfont::Glyph fill;
@@ -1492,7 +1492,7 @@ bool Draw(int icon, int x, int y, int box_width, int alpha, int bright) {
         }
         capfont::Glyph edge;
         const bool     has_edge = capfont::GetOutlinedGlyph(ch, em_px, outline_px, edge);
-        auto           place = [&](const capfont::Glyph &glyph, std::vector<gfx::Vertex2D> &out, const unsigned char (&rgb)[3], float shift_x = 0.0f, float shift_y = 0.0f) {
+        auto           place = [&](const capfont::Glyph &glyph, std::vector<render::Vertex2D> &out, const unsigned char (&rgb)[3], float shift_x = 0.0f, float shift_y = 0.0f) {
             if (glyph.width <= 0 || glyph.height <= 0) {
                 return;
             }
@@ -1524,7 +1524,7 @@ bool Draw(int icon, int x, int y, int box_width, int alpha, int bright) {
                 float right = left;
                 float top = edges.front().y;
                 float bottom = top;
-                for (const gfx::Vertex2D &vertex : edges) {
+                for (const render::Vertex2D &vertex : edges) {
                     left = std::min(left, vertex.x);
                     right = std::max(right, vertex.x);
                     top = std::min(top, vertex.y);
@@ -1535,7 +1535,7 @@ bool Draw(int icon, int x, int y, int box_width, int alpha, int bright) {
                 const float sx = width / (right - left);
                 const float sy = height * rows / (bottom - top);
                 for (auto *layer : {&edges, &fills}) {
-                    for (gfx::Vertex2D &vertex : *layer) {
+                    for (render::Vertex2D &vertex : *layer) {
                         vertex.x = x + bounds->left + (bounds->width - width) / 2 + tune.dx + (vertex.x - left) * sx;
                         vertex.y = (y + bounds->top + tune.dy) * rows + (vertex.y - top) * sy;
                     }
@@ -1543,17 +1543,17 @@ bool Draw(int icon, int x, int y, int box_width, int alpha, int bright) {
             }
         }
         for (auto *layer : {&edges, &fills}) {
-            for (gfx::Vertex2D &vertex : *layer) {
+            for (render::Vertex2D &vertex : *layer) {
                 for (int channel = 0; channel < 3; channel++) {
                     vertex.color[channel] = static_cast<uint8_t>(std::clamp(vertex.color[channel] * bright / 0x80, 0, 255));
                 }
             }
         }
-        const gfx::TextureBinding binding = capfont::Binding();
+        const render::TextureBinding binding = capfont::Binding();
         if (!edges.empty()) {
-            textwipe::Draw2D(gfx::Primitive::Quads, edges, binding, draw2d::SpriteState());
+            textwipe::Draw2D(render::Primitive::Quads, edges, binding, draw2d::SpriteState());
         }
-        textwipe::Draw2D(gfx::Primitive::Quads, fills, binding, draw2d::SpriteState());
+        textwipe::Draw2D(render::Primitive::Quads, fills, binding, draw2d::SpriteState());
         draw2d::RestoreTestZbuf();
     }
     return true;
@@ -1598,7 +1598,7 @@ bool DrawLine(std::string_view utf8, float center_x, float cap_top, float cap_he
         ~Variant() { capfont::UseFontSlot(0); }
     } variant(font_slot);
 
-    const gfx::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
     const capfont::Metrics    metrics = capfont::GetMetrics();
     const std::u32string      text = Decode(utf8);
     float                     em = cap_height / std::max(0.2f, metrics.cap);
@@ -1763,7 +1763,7 @@ bool DrawLine(std::string_view utf8, float center_x, float cap_top, float cap_he
         out = image;
         return true;
     };
-    auto quad = [&](std::vector<gfx::Vertex2D> &out, const capfont::Glyph &glyph, const capfont::Glyph &fill, float pen,
+    auto quad = [&](std::vector<render::Vertex2D> &out, const capfont::Glyph &glyph, const capfont::Glyph &fill, float pen,
                     const unsigned char (&rgb)[3], int alpha, float shift_x = 0.0f, float shift_y = 0.0f) {
         if (glyph.width <= 0 || glyph.height <= 0) {
             return;
@@ -1793,9 +1793,9 @@ bool DrawLine(std::string_view utf8, float center_x, float cap_top, float cap_he
     }
     const bool                 use_slots = style.slots.size() == drawn;
     size_t                     slot = 0;
-    std::vector<gfx::Vertex2D> glows;
-    std::vector<gfx::Vertex2D> edges;
-    std::vector<gfx::Vertex2D> fills;
+    std::vector<render::Vertex2D> glows;
+    std::vector<render::Vertex2D> edges;
+    std::vector<render::Vertex2D> fills;
     float                      pen = left;
     size_t                     letter_index = 0;
     for (const Letter &letter : letters) {
@@ -1840,10 +1840,10 @@ bool DrawLine(std::string_view utf8, float center_x, float cap_top, float cap_he
         letter_index++;
         pen += (letter.width + gap) * squeeze;
     }
-    const gfx::TextureBinding binding = capfont::Binding();
-    for (std::vector<gfx::Vertex2D> *layer : {&glows, &edges, &fills}) {
+    const render::TextureBinding binding = capfont::Binding();
+    for (std::vector<render::Vertex2D> *layer : {&glows, &edges, &fills}) {
         if (!layer->empty()) {
-            textwipe::Draw2D(gfx::Primitive::Quads, *layer, binding, draw2d::SpriteState());
+            textwipe::Draw2D(render::Primitive::Quads, *layer, binding, draw2d::SpriteState());
         }
     }
     draw2d::RestoreTestZbuf();

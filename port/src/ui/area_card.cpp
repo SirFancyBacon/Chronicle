@@ -16,11 +16,11 @@
 #include <utility>
 #include <vector>
 
-#include "gfx/gfx.hpp"
 #include "localize/localize.hpp"
 #include "localize/localize_texture.hpp"
 #include "platform/png_image.hpp"
 #include "render/texture_registry.hpp"
+#include "render/types.hpp"
 #include "text/caption_text.hpp"
 #include "text/textwipe.hpp"
 
@@ -98,7 +98,7 @@ unsigned g_next_field = 0;
 std::optional<Layout> g_card;
 
 std::array<int, 3> TexelColour(const PortDecodedTexture &card, size_t index) {
-    if (card.format == gfx::TextureFormat::Index8) {
+    if (card.format == render::TextureFormat::Index8) {
         const uint32_t colour = card.palette[card.levels[0][index]];
         return {static_cast<int>(colour & 0xFF), static_cast<int>((colour >> 8) & 0xFF), static_cast<int>((colour >> 16) & 0xFF)};
     }
@@ -110,7 +110,7 @@ std::optional<Layout::Ink> MeasureInk(const PortDecodedTexture                &c
     const int width = static_cast<int>(card.width);
     const int height = static_cast<int>(card.height);
     if (card.levels.empty() || width < 8 || height < 8 ||
-        card.levels[0].size() < static_cast<size_t>(width) * height * (card.format == gfx::TextureFormat::Index8 ? 1 : 4)) {
+        card.levels[0].size() < static_cast<size_t>(width) * height * (card.format == render::TextureFormat::Index8 ? 1 : 4)) {
         return std::nullopt;
     }
     std::vector<uint8_t> mask(static_cast<size_t>(width) * height, 0);
@@ -407,7 +407,7 @@ struct Frame {
 };
 
 // A tapered sine-wave ribbon preserves the painted underline's curved silhouette.
-void Ribbon(std::vector<gfx::Vertex2D> &out, const Frame &frame, const Layout &layout, float left, float right, float grow,
+void Ribbon(std::vector<render::Vertex2D> &out, const Frame &frame, const Layout &layout, float left, float right, float grow,
             float feather, const unsigned char (&top_rgb)[3], const unsigned char (&mid_rgb)[3], const unsigned char (&low_rgb)[3],
             float fade) {
     constexpr int   steps = 96;
@@ -428,7 +428,7 @@ void Ribbon(std::vector<gfx::Vertex2D> &out, const Frame &frame, const Layout &l
         const float cy = layout.underline_y - amplitude * std::sin(2 * pi * t - 0.35f);
         const float y = cy + at * (half + (grow + extra) * aspect);
         const auto  c = shade(rgb, alpha);
-        return gfx::Vertex2D{
+        return render::Vertex2D{
             .x = frame.X(x), .y = frame.Y(y), .z = 0.0f, .u = 0.0f, .v = 0.0f, .color = {c[0], c[1], c[2], c[3]}
         };
     };
@@ -544,7 +544,7 @@ bool Prepare(const std::string &name, PortDecodedTexture &texture) {
         levels.push_back(LocalizeResample(rgba.data(), width, height, w, h));
     }
     texture.levels = std::move(levels);
-    texture.format = gfx::TextureFormat::Rgba8;
+    texture.format = render::TextureFormat::Rgba8;
     texture.has_alpha = false;
     texture.four_bit = false;
     layout.text = text;
@@ -632,8 +632,8 @@ void Draw(float x0, float y0, float x1, float y1, float fade) {
         right = layout.ink->rule_right;
     }
     const float                grow = layout.edge_width;
-    std::vector<gfx::Vertex2D> outline;
-    std::vector<gfx::Vertex2D> body;
+    std::vector<render::Vertex2D> outline;
+    std::vector<render::Vertex2D> body;
     if (layout.underline) {
         const float         feather = std::max(frame.w * 0.0022f, 0.9f) / frame.w;
         unsigned char       light[3];
@@ -653,14 +653,14 @@ void Draw(float x0, float y0, float x1, float y1, float fade) {
             const auto                  r = static_cast<unsigned char>(rgb[0] * k);
             const auto                  g = static_cast<unsigned char>(rgb[1] * k);
             const auto                  b = static_cast<unsigned char>(rgb[2] * k);
-            std::vector<gfx::Vertex2D> &out = pass == 0 ? outline : body;
+            std::vector<render::Vertex2D> &out = pass == 0 ? outline : body;
             for (int drop = 0; drop < 7; drop++) {
                 const float x = (span.left - frame.x0) / frame.w + (static_cast<float>(drop) + 0.5f) * (span.right - span.left) / frame.w / 7;
                 const float y = layout.underline_y + 0.0195f;
                 const float length = 0.0898f * (0.7f + 0.3f * static_cast<float>((drop * 7) % 3) / 2);
                 const float half = 0.0059f + fat;
                 auto        vertex = [&](float px, float py) {
-                    return gfx::Vertex2D{
+                    return render::Vertex2D{
                         .x = frame.X(px), .y = frame.Y(py), .z = 0.0f, .u = 0.0f, .v = 0.0f, .color = {r, g, b, 0x80}
                     };
                 };
@@ -671,10 +671,10 @@ void Draw(float x0, float y0, float x1, float y1, float fade) {
             }
         }
     }
-    gfx::DrawState blended;
+    render::DrawState blended;
     blended.blend = true;
-    textwipe::Draw2D(gfx::Primitive::Quads, outline, {}, blended);
-    textwipe::Draw2D(gfx::Primitive::Quads, body, {}, blended);
+    textwipe::Draw2D(render::Primitive::Quads, outline, {}, blended);
+    textwipe::Draw2D(render::Primitive::Quads, body, {}, blended);
 }
 
 } // namespace dc::ui::area_card

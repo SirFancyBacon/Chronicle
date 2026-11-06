@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -19,7 +18,6 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include <SDL3/SDL.h>
@@ -34,18 +32,9 @@ namespace dc::render {
 
 namespace {
 
-// A texture Chronicle doesn't tell the mirror about. Reading one back costs the game's thread time, so it isn't done every tick: a new letter shows itself by coordinates not seen before.
-struct Foreign {
-    std::array<std::uint32_t, 2>    size = {};
-    std::unordered_set<std::uint64_t> seen;
-};
-
 // How many of Noktus's depth answers to look through for one of today's: the two answer a tick or so apart.
 constexpr std::size_t kDepthAnswersKept = 4;
 constexpr float       kDepthAgrees = 0.0005f;
-
-// An atlas that starts again reuses its coordinates, so now and then what's being drawn is read regardless.
-constexpr int kForeignRefreshTicks = 120;
 
 struct Mirror {
     std::string                                              path;
@@ -57,10 +46,6 @@ struct Mirror {
     std::unordered_map<gfx::TextureHandle, noktus::SurfaceId> surfaces;
     bool                                                     target_known = true; // false: drawing to a target the mirror lacks
     std::uint64_t                                            meshes_drawn = 0;
-    std::set<gfx::TextureHandle>                             wanted; // drawn with, and not made here: read across between ticks
-    std::unordered_map<gfx::TextureHandle, Foreign>          foreign; // read across before: the message font's atlas, which grows as text needs it
-    std::set<gfx::TextureHandle>                             foreign_drawn; // since the last look
-    int                                                      ticks_to_refresh = kForeignRefreshTicks;
     std::uint64_t                                            frames_at_rate = 0;
     std::chrono::steady_clock::time_point                    rate_since;
     double                                                   frames_per_second = 0.0;
@@ -234,6 +219,8 @@ void Start(Mirror &mirror) {
     if (const char *target = std::getenv("DC_NOKTUS_TARGET_TIMES")) {
         host.target_present_times = std::string_view(target) != "0";
     }
+    host.frame_width = gfx::LogicalWidth();
+    host.frame_height = gfx::LogicalHeight();
     host.interpolate = g_settings.interpolate && !InterpolationForcedOff();
     host.present_mode = ToPresentMode(g_settings.present_mode);
     host.frame_limit = g_settings.max_fps;
@@ -254,34 +241,6 @@ void Start(Mirror &mirror) {
     std::atexit(WriteLastPicture);
 }
 
-void ReadAcross(Mirror &mirror, gfx::TextureHandle handle) {
-    std::vector<std::uint8_t> pixels;
-    std::uint32_t             width = 0;
-    std::uint32_t             height = 0;
-    const auto                info = gfx::GetTextureInfo(handle);
-    // A render target holds today's renderer's own drawing, which would make the mirror show that and prove nothing.
-    if (!info || info->format != gfx::TextureFormat::Rgba8 || info->render_target || !gfx::ReadbackTexture(handle, pixels, width, height)) {
-        return;
-    }
-    auto found = mirror.textures.find(handle);
-    const std::array<std::uint32_t, 2> size = {width, height};
-    Foreign                           &foreign = mirror.foreign[handle];
-    if (foreign.size != size && found != mirror.textures.end()) {
-        mirror.renderer->DestroyTexture(found->second); // a handle used again, or an atlas grown
-        mirror.textures.erase(found);
-        found = mirror.textures.end();
-    }
-    foreign.size = size;
-    if (found == mirror.textures.end()) {
-        noktus::TextureDesc desc;
-        desc.width = width;
-        desc.height = height;
-        desc.has_alpha = info->has_alpha;
-        found = mirror.textures.emplace(handle, mirror.renderer->CreateTexture(desc)).first;
-    }
-    mirror.renderer->UpdateTexture(found->second, 0, {0, 0, width, height}, pixels);
-}
-
 std::vector<noktus::Vertex3D> Converted(std::span<const gfx::Vertex3D> vertices) {
     std::vector<noktus::Vertex3D> out;
     out.reserve(vertices.size());
@@ -298,19 +257,6 @@ std::vector<noktus::Vertex3D> Converted(std::span<const gfx::Vertex3D> vertices)
     return out;
 }
 
-void NoteForeignDrawn(Mirror &mirror, gfx::TextureHandle texture, std::span<const gfx::Vertex2D> vertices) {
-    const auto foreign = mirror.foreign.find(texture);
-    if (foreign == mirror.foreign.end()) {
-        return;
-    }
-    mirror.foreign_drawn.insert(texture);
-    for (const gfx::Vertex2D &vertex : vertices) {
-        if (foreign->second.seen.insert((static_cast<std::uint64_t>(std::bit_cast<std::uint32_t>(vertex.u)) << 32) | std::bit_cast<std::uint32_t>(vertex.v)).second) {
-            mirror.wanted.insert(texture);
-        }
-    }
-}
-
 // A mesh draw as Noktus takes it, or false for one it can't take yet.
 bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::TextureBinding &texture, const gfx::DrawState &state,
              const gfx::MeshTransform *transform, noktus::MeshDraw &draw) {
@@ -325,7 +271,6 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
     if (texture.texture != gfx::kNullTexture) {
         const auto found = mirror.textures.find(texture.texture);
         if (found == mirror.textures.end()) {
-            mirror.wanted.insert(texture.texture);
             mirror.skipped++;
             return false;
         }
@@ -504,21 +449,6 @@ void MirrorBeginTick() {
         mirror.renderer->Resize(static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height));
         const gfx::FrameLayout layout = gfx::CurrentFrameLayout();
         mirror.renderer->SetLayout({.fit = layout.aspect == gfx::AspectMode::Fill ? noktus::FrameFit::Fill : noktus::FrameFit::Letterbox, .interface_scale = layout.ui_scale});
-        // Today's renderer can't read a texture back inside a frame, as a loading frame is by now: what's wanted waits for the next tick that isn't.
-        if (!gfx::InFrame()) {
-            for (gfx::TextureHandle handle : mirror.wanted) {
-                ReadAcross(mirror, handle);
-            }
-            // With a window, only what's asked for above. A picture being compared needs them all fresh, every tick.
-            if (mirror.window != nullptr) {
-                mirror.wanted.clear();
-                if (--mirror.ticks_to_refresh <= 0) {
-                    mirror.ticks_to_refresh = kForeignRefreshTicks;
-                    mirror.wanted = mirror.foreign_drawn;
-                    mirror.foreign_drawn.clear();
-                }
-            }
-        }
         mirror.renderer->BeginTick();
         mirror.open = true;
         mirror.target_known = true;
@@ -621,9 +551,6 @@ void MirrorDestroyTexture(gfx::TextureHandle texture) {
     }
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
-    mirror.wanted.erase(texture);
-    mirror.foreign.erase(texture);
-    mirror.foreign_drawn.erase(texture);
     mirror.surfaces.erase(texture);
     mirror.frame_images.erase(texture);
     const auto found = mirror.textures.find(texture);
@@ -723,12 +650,14 @@ void MirrorSnapshotFrame(gfx::TextureHandle target) {
     }
 }
 
-void MirrorCopyDepth(const gfx::LogicalRect &source) {
+bool MirrorCopyDepth(const gfx::LogicalRect &source) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
+    bool             copied = false;
     if (mirror.open && mirror.target_known) {
-        Guarded([&] { mirror.renderer->CopySceneDepth({source.x, source.y, source.w, source.h}); });
+        Guarded([&] { copied = mirror.renderer->CopySceneDepth({source.x, source.y, source.w, source.h}); });
     }
+    return copied;
 }
 
 void MirrorClear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect) {
@@ -833,12 +762,10 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     if (textured) {
         const auto found = mirror.textures.find(texture.texture);
         if (found == mirror.textures.end()) {
-            mirror.wanted.insert(texture.texture);
             mirror.skipped++;
             return;
         }
         draw.material.albedo = found->second;
-        NoteForeignDrawn(mirror, texture.texture, vertices);
     } else {
         draw.material.albedo = noktus::TextureId::None;
     }
