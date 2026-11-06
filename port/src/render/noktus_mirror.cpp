@@ -139,9 +139,9 @@ void DropWindow(Mirror &mirror) {
 
 void ReportPace(Mirror &mirror) {
     const noktus::PaceReport pace = noktus::TakePace(*mirror.renderer);
-    std::fprintf(stderr, "noktus pacing: %llu frames, %llu ticks, mean %.2f ms, slowest 1%% %.2f ms, worst %.2f ms, held %llu, missed %llu, %d ahead, display timing %s, %s, work: frame %.3f ms, tick %.3f ms, link %.3f ms, %d workers\n",
+    std::fprintf(stderr, "noktus pacing: %llu frames, %llu ticks, mean %.2f ms, slowest 1%% %.2f ms, worst %.2f ms, held %llu, missed %llu, %d ahead, display timing %s, %s, target lead %.1f ms, work: frame %.3f ms, tick %.3f ms, link %.3f ms, %d workers\n",
                  static_cast<unsigned long long>(pace.frames), static_cast<unsigned long long>(pace.ticks), pace.mean_interval, pace.slowest_1_percent, pace.worst_interval,
-                 static_cast<unsigned long long>(pace.held), static_cast<unsigned long long>(pace.missed), pace.frames_ahead, pace.display_timing ? "yes" : "no", pace.variable ? "variable" : "fixed",
+                 static_cast<unsigned long long>(pace.held), static_cast<unsigned long long>(pace.missed), pace.frames_ahead, pace.display_timing ? "yes" : "no", pace.variable ? "variable" : "fixed", pace.lead,
                  pace.mean_frame_work, pace.mean_tick_work, pace.mean_link_work, pace.workers);
 }
 
@@ -230,6 +230,9 @@ void Start(Mirror &mirror) {
         if (const char *cushion = std::getenv("DC_NOKTUS_CUSHION")) {
             host.cushion = std::strtod(cushion, nullptr);
         }
+    }
+    if (const char *target = std::getenv("DC_NOKTUS_TARGET_TIMES")) {
+        host.target_present_times = std::string_view(target) != "0";
     }
     host.interpolate = g_settings.interpolate && !InterpolationForcedOff();
     host.present_mode = ToPresentMode(g_settings.present_mode);
