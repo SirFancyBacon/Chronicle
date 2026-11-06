@@ -809,6 +809,9 @@ void MirrorDrawImmediate(std::span<const gfx::Vertex3D> vertices, std::span<cons
         return;
     }
     draw.index_count = static_cast<std::uint32_t>(indices.size());
+    // A shadow volume is put together for this tick's camera, pose and light, with whatever triangles that takes. Other flat shadows reach here too, if any are ever immediate: moving with
+    // their object is right for those as well.
+    draw.rebuilt = (constants.flags & gfx::kMeshShadow) != 0;
     Guarded([&] { mirror.renderer->Draw(Converted(vertices), indices, draw); });
     mirror.meshes_drawn++;
 }
