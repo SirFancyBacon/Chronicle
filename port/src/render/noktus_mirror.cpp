@@ -216,6 +216,9 @@ void Start(Mirror &mirror) {
             host.cushion = std::strtod(cushion, nullptr);
         }
     }
+    if (const char *paint = std::getenv("DC_NOKTUS_PAINT_WINDOW")) {
+        host.paint_window = std::string_view(paint) == "1";
+    }
     if (const char *target = std::getenv("DC_NOKTUS_TARGET_TIMES")) {
         host.target_present_times = std::string_view(target) != "0";
     }
@@ -237,6 +240,7 @@ void Start(Mirror &mirror) {
         DropWindow(mirror);
         throw;
     }
+    std::fprintf(stderr, "noktus: drawing on %s, window: %s\n", noktus::RendererDeviceName(*mirror.renderer).c_str(), noktus::DescribeWindow(*mirror.renderer).c_str());
     mirror.textures[gfx::kPreviousFrame] = mirror.renderer->LastFrame();
     std::atexit(WriteLastPicture);
 }
