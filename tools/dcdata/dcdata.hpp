@@ -277,7 +277,8 @@ inline Archive OpenArchive(const fs::path &source) {
             if (!entry.is_regular_file()) {
                 continue;
             }
-            std::string name = entry.path().filename().string();
+            const std::u8string text = entry.path().filename().u8string();
+            std::string         name(text.begin(), text.end());
             if (EqualsFolded(name, "DATA.DAT")) {
                 archive.dat = {entry.path(), 0, entry.file_size()};
             } else if (EqualsFolded(name, "DATA.HD2")) {

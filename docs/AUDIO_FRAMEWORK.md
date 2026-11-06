@@ -13,8 +13,8 @@ The game plays the published sound in place of the packs' own: as it loads a pac
 finds the pack's document beside it, builds each bank from its `bank.json` and WAV samples and each
 sequence from its JSON through Kazarov's loaders, and takes the list's `.cfg` settings and the two
 volume tables from their documents (`port/src/sound/published.cpp`). A pack without a document, a
-list or member the document lacks, or a file that cannot be read plays the pack's own, as data the
-first-run window extracted does, since it publishes nothing.
+list or member the document lacks, or a file that cannot be read plays the pack's own, as data
+extracted without `dcdata` does, since nothing was published in it.
 
 Every published file is looked for in the active datapacks first, the highest priority's first, then
 in the data (docs/ITEM_FRAMEWORK.md, "Datapacks"), so a pack can replace a pack's document, a bank,

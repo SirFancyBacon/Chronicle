@@ -7,9 +7,11 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <limits>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -17,6 +19,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -36,6 +39,27 @@ namespace {
 constexpr std::size_t kDepthAnswersKept = 4;
 constexpr float       kDepthAgrees = 0.0005f;
 
+// A paletted texture, kept as the game gave it. Noktus has no palettes: what it draws is one of these through a palette, made as it's first drawn that way, and made again when either
+// changes. The game draws one image through another's palette, for text colours, so it's the pair that counts.
+struct Indexed {
+    std::uint32_t                          width = 0;
+    std::uint32_t                          height = 0;
+    bool                                   has_alpha = true;
+    std::vector<std::vector<std::uint8_t>> levels;
+    std::uint64_t                          version = 1;
+};
+
+struct Palette {
+    std::array<std::uint32_t, 256> colors = {};
+    std::uint64_t                  version = 1;
+};
+
+struct Expanded {
+    noktus::TextureId id = noktus::TextureId::None;
+    std::uint64_t     indexed_version = 0;
+    std::uint64_t     palette_version = 0;
+};
+
 struct Mirror {
     std::string                                              path;
     SDL_Window                                              *window = nullptr;
@@ -49,6 +73,9 @@ struct Mirror {
     std::uint64_t                                            frames_at_rate = 0;
     std::chrono::steady_clock::time_point                    rate_since;
     double                                                   frames_per_second = 0.0;
+    std::unordered_map<gfx::TextureHandle, Indexed>          indexed;
+    std::unordered_map<gfx::TextureHandle, Palette>          palettes;
+    std::map<std::pair<gfx::TextureHandle, gfx::TextureHandle>, Expanded> expanded;
     std::set<gfx::TextureHandle>                             frame_images; // hold a picture of the frame, so they lie where it does
     std::mutex                                               lock;
     bool                                                     open = false;
@@ -150,9 +177,9 @@ void WriteLastPicture() {
                 }
             }
         });
-        std::fprintf(stderr, "noktus mirror: %llu drawn, %llu skipped for a texture it lacks, %llu to other targets, %llu dropped\n",
+        std::fprintf(stderr, "noktus mirror: %llu drawn, %llu skipped for a texture it lacks, %llu to other targets, %llu dropped, %zu paletted pictures\n",
                      static_cast<unsigned long long>(mirror.drawn + mirror.meshes_drawn), static_cast<unsigned long long>(mirror.skipped),
-                     static_cast<unsigned long long>(mirror.elsewhere), static_cast<unsigned long long>(mirror.renderer->DroppedDraws()));
+                     static_cast<unsigned long long>(mirror.elsewhere), static_cast<unsigned long long>(mirror.renderer->DroppedDraws()), mirror.expanded.size());
         if (mirror.depth_compared != 0) {
             std::fprintf(stderr, "noktus depth: %llu reads compared, %llu on something, %llu differing, largest difference %.6f\n", static_cast<unsigned long long>(mirror.depth_compared),
                          static_cast<unsigned long long>(mirror.depth_on_something), static_cast<unsigned long long>(mirror.depth_differing), static_cast<double>(mirror.depth_difference));
@@ -261,6 +288,52 @@ std::vector<noktus::Vertex3D> Converted(std::span<const gfx::Vertex3D> vertices)
     return out;
 }
 
+std::optional<noktus::TextureId> Expand(Mirror &mirror, gfx::TextureHandle texture, gfx::TextureHandle palette) {
+    const auto image = mirror.indexed.find(texture);
+    const auto colors = mirror.palettes.find(palette);
+    if (image == mirror.indexed.end() || colors == mirror.palettes.end()) {
+        return std::nullopt;
+    }
+    Expanded &made = mirror.expanded[{texture, palette}];
+    Guarded([&] {
+        if (made.id == noktus::TextureId::None) {
+            noktus::TextureDesc desc;
+            desc.width = image->second.width;
+            desc.height = image->second.height;
+            desc.levels = static_cast<std::uint32_t>(image->second.levels.size());
+            desc.has_alpha = image->second.has_alpha;
+            made.id = mirror.renderer->CreateTexture(desc);
+        }
+        if (made.indexed_version == image->second.version && made.palette_version == colors->second.version) {
+            return;
+        }
+        std::vector<std::uint32_t> pixels;
+        for (std::size_t level = 0; level < image->second.levels.size(); level++) {
+            const std::vector<std::uint8_t> &indices = image->second.levels[level];
+            pixels.resize(indices.size());
+            std::ranges::transform(indices, pixels.begin(), [&](std::uint8_t index) { return colors->second.colors[index]; });
+            const std::uint32_t width = std::max(image->second.width >> level, 1u);
+            const std::uint32_t height = std::max(image->second.height >> level, 1u);
+            mirror.renderer->UpdateTexture(made.id, static_cast<std::uint32_t>(level), {0, 0, width, height}, std::span(reinterpret_cast<const std::uint8_t *>(pixels.data()), pixels.size() * 4));
+        }
+        made.indexed_version = image->second.version;
+        made.palette_version = colors->second.version;
+    });
+    if (made.id == noktus::TextureId::None) {
+        return std::nullopt;
+    }
+    return made.id;
+}
+
+// What Noktus knows a texture as, in the way this draw uses it.
+std::optional<noktus::TextureId> Sampled(Mirror &mirror, const gfx::TextureBinding &binding) {
+    const auto found = mirror.textures.find(binding.texture);
+    if (found != mirror.textures.end()) {
+        return found->second;
+    }
+    return Expand(mirror, binding.texture, binding.palette);
+}
+
 // A mesh draw as Noktus takes it, or false for one it can't take yet.
 bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::TextureBinding &texture, const gfx::DrawState &state,
              const gfx::MeshTransform *transform, noktus::MeshDraw &draw) {
@@ -273,12 +346,12 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
     }
     MeshScene scene = ToMeshScene(constants, *transform, texture, state);
     if (texture.texture != gfx::kNullTexture) {
-        const auto found = mirror.textures.find(texture.texture);
-        if (found == mirror.textures.end()) {
+        const std::optional<noktus::TextureId> sampled = Sampled(mirror, texture);
+        if (!sampled) {
             mirror.skipped++;
             return false;
         }
-        scene.draw.material.albedo = found->second;
+        scene.draw.material.albedo = *sampled;
     } else {
         scene.draw.material.albedo = noktus::TextureId::None;
     }
@@ -517,11 +590,20 @@ void MirrorCutCameraMotion() {
 }
 
 void MirrorTexture(gfx::TextureHandle texture, const gfx::TextureDesc &desc) {
-    if (!MirrorOn() || desc.format != gfx::TextureFormat::Rgba8) {
+    if (!MirrorOn() || texture == gfx::kNullTexture || (desc.format != gfx::TextureFormat::Rgba8 && desc.format != gfx::TextureFormat::Index8)) {
         return;
     }
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
+    if (desc.format == gfx::TextureFormat::Index8) {
+        Indexed &image = mirror.indexed[texture];
+        image = {.width = desc.width, .height = desc.height, .has_alpha = desc.has_alpha};
+        image.levels.resize(std::max(desc.mip_levels, 1u));
+        for (std::size_t level = 0; level < image.levels.size(); level++) {
+            image.levels[level].resize(static_cast<std::size_t>(std::max(desc.width >> level, 1u)) * std::max(desc.height >> level, 1u));
+        }
+        return;
+    }
     Guarded([&] {
         Start(mirror);
         noktus::TextureDesc made;
@@ -540,12 +622,42 @@ void MirrorTexturePixels(gfx::TextureHandle texture, std::uint32_t level, std::u
     }
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
+    if (const auto image = mirror.indexed.find(texture); image != mirror.indexed.end() && level < image->second.levels.size()) {
+        const auto         *indices = static_cast<const std::uint8_t *>(pixels);
+        const std::uint32_t row = std::max(image->second.width >> level, 1u);
+        const std::uint32_t rows = std::max(image->second.height >> level, 1u);
+        if (x > row || width > row - x || y > rows || height > rows - y) {
+            return;
+        }
+        for (std::uint32_t line = 0; line < height; line++) {
+            std::memcpy(image->second.levels[level].data() + static_cast<std::size_t>(y + line) * row + x, indices + static_cast<std::size_t>(line) * width, width);
+        }
+        image->second.version++;
+        return;
+    }
     const auto       found = mirror.textures.find(texture);
     if (found != mirror.textures.end()) {
         const auto *bytes = static_cast<const std::uint8_t *>(pixels);
         Guarded([&] {
             mirror.renderer->UpdateTexture(found->second, level, {x, y, width, height}, std::span(bytes, static_cast<std::size_t>(width) * height * 4));
         });
+    }
+}
+
+void MirrorPalette(gfx::TextureHandle palette, const std::uint32_t *colors, std::uint32_t first, std::uint32_t count) {
+    if (!MirrorOn()) {
+        return;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (first > std::tuple_size_v<decltype(Palette::colors)> || count > std::tuple_size_v<decltype(Palette::colors)> - first) {
+        return;
+    }
+    Palette &kept = mirror.palettes[palette];
+    // Text sets its palette on every pass, and a colour rarely changes: making every picture drawn through it again would cost far more than looking.
+    if (!std::equal(colors, colors + count, kept.colors.begin() + first)) {
+        std::copy_n(colors, count, kept.colors.begin() + first);
+        kept.version++;
     }
 }
 
@@ -557,6 +669,18 @@ void MirrorDestroyTexture(gfx::TextureHandle texture) {
     std::scoped_lock guard(mirror.lock);
     mirror.surfaces.erase(texture);
     mirror.frame_images.erase(texture);
+    if (mirror.indexed.erase(texture) + mirror.palettes.erase(texture) != 0) {
+        for (auto made = mirror.expanded.begin(); made != mirror.expanded.end();) {
+            if (made->first.first != texture && made->first.second != texture) {
+                ++made;
+                continue;
+            }
+            if (mirror.renderer && made->second.id != noktus::TextureId::None) {
+                Guarded([&] { mirror.renderer->DestroyTexture(made->second.id); });
+            }
+            made = mirror.expanded.erase(made);
+        }
+    }
     const auto found = mirror.textures.find(texture);
     if (found != mirror.textures.end()) {
         mirror.renderer->DestroyTexture(found->second);
@@ -587,9 +711,58 @@ noktus::TexelRect Texels(gfx::Rect rect) {
 
 } // namespace
 
+namespace {
+
+// A copy between paletted textures, on what's kept of them. Texture animations move frames along a sheet this way, so a copy within one texture reads what it held before.
+bool CopyIndexed(Mirror &mirror, gfx::TextureHandle from, const gfx::Rect &from_rect, gfx::TextureHandle to, const gfx::Rect &to_rect) {
+    const auto source = mirror.indexed.find(from);
+    const auto target = mirror.indexed.find(to);
+    if (source == mirror.indexed.end() || target == mirror.indexed.end() || from_rect.w <= 0 || from_rect.h <= 0 || to_rect.w <= 0 || to_rect.h <= 0) {
+        return false;
+    }
+    std::vector<std::uint8_t>       held;
+    if (from == to) {
+        held = source->second.levels[0];
+    }
+    const std::vector<std::uint8_t> &before = from == to ? held : source->second.levels[0];
+    const auto                      source_width = static_cast<std::int64_t>(source->second.width);
+    const auto                      source_height = static_cast<std::int64_t>(source->second.height);
+    const auto                      target_width = static_cast<std::int64_t>(target->second.width);
+    const auto                      target_height = static_cast<std::int64_t>(target->second.height);
+    std::vector<std::uint8_t>      &after = target->second.levels[0];
+    bool                            changed = false;
+    for (std::int64_t y = 0; y < to_rect.h; y++) {
+        const std::int64_t to_y = to_rect.y + y;
+        const std::int64_t from_y = from_rect.y + y * from_rect.h / to_rect.h;
+        if (to_y < 0 || to_y >= target_height || from_y < 0 || from_y >= source_height) {
+            continue;
+        }
+        for (std::int64_t x = 0; x < to_rect.w; x++) {
+            const std::int64_t to_x = to_rect.x + x;
+            const std::int64_t from_x = from_rect.x + x * from_rect.w / to_rect.w;
+            if (to_x >= 0 && to_x < target_width && from_x >= 0 && from_x < source_width) {
+                std::uint8_t      &texel = after[static_cast<std::size_t>(to_y * target_width + to_x)];
+                const std::uint8_t wanted = before[static_cast<std::size_t>(from_y * source_width + from_x)];
+                changed = changed || texel != wanted;
+                texel = wanted;
+            }
+        }
+    }
+    // As with palettes: a copy that changes nothing shouldn't make every picture of this texture again.
+    if (changed) {
+        target->second.version++;
+    }
+    return true;
+}
+
+} // namespace
+
 void MirrorCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHandle to, std::int32_t x, std::int32_t y) {
     Mirror           &mirror = State();
     std::scoped_lock  guard(mirror.lock);
+    if (CopyIndexed(mirror, from, rect, to, {x, y, rect.w, rect.h})) {
+        return;
+    }
     noktus::TextureId source = noktus::TextureId::None;
     noktus::TextureId target = noktus::TextureId::None;
     if (!mirror.renderer || !Known(mirror, from, &source) || !Known(mirror, to, &target)) {
@@ -602,6 +775,9 @@ void MirrorCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHand
 void MirrorBlit(gfx::TextureHandle from, gfx::Rect from_rect, gfx::TextureHandle to, gfx::Rect to_rect, gfx::Filter filter) {
     Mirror           &mirror = State();
     std::scoped_lock  guard(mirror.lock);
+    if (CopyIndexed(mirror, from, from_rect, to, to_rect)) {
+        return;
+    }
     noktus::TextureId source = noktus::TextureId::None;
     noktus::TextureId target = noktus::TextureId::None;
     if (mirror.renderer && Known(mirror, from, &source) && Known(mirror, to, &target)) {
@@ -764,12 +940,12 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     noktus::Draw2D draw;
     draw.material = ToMaterial(state, texture);
     if (textured) {
-        const auto found = mirror.textures.find(texture.texture);
-        if (found == mirror.textures.end()) {
+        const std::optional<noktus::TextureId> sampled = Sampled(mirror, texture);
+        if (!sampled) {
             mirror.skipped++;
             return;
         }
-        draw.material.albedo = found->second;
+        draw.material.albedo = *sampled;
     } else {
         draw.material.albedo = noktus::TextureId::None;
     }

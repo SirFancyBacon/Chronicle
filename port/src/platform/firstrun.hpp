@@ -29,9 +29,12 @@ struct FirstRunOutcome {
 
 /**
  * Extracts source, a disc image or a directory holding DATA.DAT and DATA.HD2, into root on a worker
- * thread and checks every file. It writes to "<root>.partial" and renames that over root only once
+ * thread, checks every file, and has the dcdata beside the game, where there is one, make the baked
+ * textures, models, sound and gameplay documents, as `dcdata extract` does. It writes to "<root>.partial" and renames that over root only once
  * all of it checks out, so a run cut short never leaves a directory the game would take for
- * complete; a later run resumes from what is there. tick runs on the calling thread with the latest
+ * complete; a later run resumes the extraction from what is there, and does dcdata's step again.
+ * A symlinked data directory is the exception: it's filled in place, so whatever a stopped or failed
+ * run leaves counts as data, and dcdata's step isn't tried again. tick runs on the calling thread with the latest
  * progress while the worker runs; returning false cancels.
  */
 FirstRunOutcome FirstRunExtract(const std::filesystem::path &source, const std::filesystem::path &root,
@@ -55,6 +58,11 @@ using FirstRunChooser = std::function<std::optional<std::filesystem::path>(First
  * Replaces the system file selector with chooser for later first runs.
  */
 void FirstRunSetChooser(FirstRunChooser chooser);
+
+/**
+ * Replaces the dcdata beside the game for later first runs.
+ */
+void FirstRunSetDataTool(std::filesystem::path tool);
 
 /**
  * Does nothing when the data directory has files, or for a headless run without a chooser.

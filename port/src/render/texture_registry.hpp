@@ -79,8 +79,9 @@ struct PortDecodedTexture {
 };
 
 /**
- * True when the data has no baked texture documents at all (a fresh extraction), so every texture
- * decodes from its raw source bytes instead. Decided once, from the data root, at the first load.
+ * True when the data has no baked texture documents at all (it was extracted without baking), so
+ * every texture decodes from its raw source bytes instead. Decided once, from the data root, at the
+ * first load. DC_TEXTURES_RAW=1 makes it true on baked data too, for testing that path.
  */
 bool PortLegacyTexturePath();
 

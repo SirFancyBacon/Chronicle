@@ -26,17 +26,20 @@ disc. The window's **Disc image** button (Enter) opens it again; **Folder with
 DATA.DAT and DATA.HD2** (F) takes a folder copied from the disc instead. Inside the Flatpak the selector is the desktop's
 file-chooser portal, so the game reads the chosen file without any
 permission to your files. The game then extracts every file the disc's index
-lists, showing the file count and megabytes, checks each one and continues
-into the game. Extraction takes a few minutes and needs as much free space
-as the disc's `DATA.DAT`.
+lists, showing the file count and megabytes, and checks each one. `dcdata`
+then converts the textures, models and sound, the same step as `dcdata extract`
+from a shell, and the game continues. All of it took about nine minutes on a
+fast desktop and runs once. The finished data is about 6 GB, and it needs more
+than that while it converts.
 
 Cancelling the file selector returns to the prompt, to try again or pick a
-folder. Closing the window or pressing Escape during extraction stops it; the next
-start picks up where it stopped. Quitting the prompt instead exits with
+folder. Closing the window during extraction stops it; the next
+start picks up where it stopped, though the conversion starts over. A symlinked
+data folder is filled in place, so there the game carries on with what's there. Quitting the prompt instead exits with
 status 3 and prints the `dcdata` command below. A failed extraction (an image
 of another disc, a truncated image, a full disk) shows the extractor's
 message and exits with status 1, leaving nothing the game would mistake for
-complete data.
+complete data, except in a symlinked data folder, which is filled in place.
 
 Where no file selector is available (no portal, and no zenity outside a
 sandbox), the prompt says so on stderr and exits with status 3.

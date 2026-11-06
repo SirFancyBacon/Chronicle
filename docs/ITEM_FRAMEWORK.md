@@ -128,7 +128,7 @@ others still apply. Packs are read at start-up, so changing them takes a restart
 A document is tried from the highest-priority pack down, then the data's own. The first whose
 `schema_version` is 2, whose `kind` matches and whose values fit retail's fields is used; one that
 fails prints `config: <path>: <reason>` and the next is tried, down to the compiled table, which
-data extracted without the documents (by the first-run window, which converts nothing, or before
+data extracted without the documents (where the first-run window has no `dcdata` to run, or before
 them) uses. The items load once the game has indexed its data. A field the port does
 not read is reported and ignored. A bad `datapacks.json` disables every pack; a listed pack that is
 missing, or is a ZIP, is skipped.

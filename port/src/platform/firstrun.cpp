@@ -59,9 +59,11 @@ constexpr Color kTrack = {0x2c, 0x38, 0x56, 0x80};
 // Neither a dialog answer nor progress has a frame rate of its own; this bounds how long the screen
 // goes without pumping events when nothing arrives.
 constexpr int                       kIdleMilliseconds = 50;
+constexpr std::size_t               kMostToolMessage = 1024;
 constexpr std::chrono::milliseconds kIdle{kIdleMilliseconds};
 
 FirstRunChooser chooser;
+fs::path        data_tool;
 
 #ifdef __ANDROID__
 std::mutex              android_picker_mutex;
@@ -408,23 +410,37 @@ void DrawChooser(const fs::path &root, bool waiting) {
     canvas.Present();
 }
 
+// Every file is out, so what's left is dcdata's work on them, which reports no progress here.
+bool Finishing(const dcdata::Progress &progress) {
+    return progress.total_files != 0 && progress.files == progress.total_files;
+}
+
 void DrawProgress(const fs::path &source, const dcdata::Progress &progress) {
     constexpr float bar_x = 60.0f;
     constexpr float bar_y = 228.0f;
     constexpr float bar_w = 520.0f;
     constexpr float bar_h = 28.0f;
     Canvas          canvas;
-    canvas.Centered(96.0f, 4.0f, "EXTRACTING GAME DATA", kAccent);
+    const bool      finishing = Finishing(progress);
+    canvas.Centered(96.0f, 4.0f, finishing ? "PREPARING GAME DATA" : "EXTRACTING GAME DATA", kAccent);
     canvas.Centered(160.0f, 1.0f, Fit(PathsDisplay(source), 1.0f, 600.0f), kDim);
     float done = progress.total_bytes == 0
                      ? 0.0f
                      : static_cast<float>(static_cast<double>(progress.bytes) / static_cast<double>(progress.total_bytes));
     canvas.Rect(bar_x - 4.0f, bar_y - 4.0f, bar_w + 8.0f, bar_h + 8.0f, kTrack);
     canvas.Rect(bar_x, bar_y, bar_w * std::clamp(done, 0.0f, 1.0f), bar_h, kAccent);
-    canvas.Centered(284.0f, 2.0f, std::format("{} / {} FILES", progress.files, progress.total_files), kText);
-    canvas.Centered(310.0f, 2.0f,
-                    std::format("{} / {} MB", MegaBytes(progress.bytes), MegaBytes(progress.total_bytes)), kText);
-    canvas.Centered(424.0f, 1.0f, "CLOSE THE WINDOW TO STOP; THE NEXT START PICKS UP WHERE THIS ONE LEFT OFF", kDim);
+    if (finishing) {
+        canvas.Centered(284.0f, 2.0f, "CONVERTING TEXTURES, MODELS AND SOUND", kText);
+        canvas.Centered(310.0f, 2.0f, "THIS TAKES A WHILE, AND ONLY HAPPENS ONCE", kText);
+    } else {
+        canvas.Centered(284.0f, 2.0f, std::format("{} / {} FILES", progress.files, progress.total_files), kText);
+        canvas.Centered(310.0f, 2.0f,
+                        std::format("{} / {} MB", MegaBytes(progress.bytes), MegaBytes(progress.total_bytes)), kText);
+    }
+    canvas.Centered(424.0f, 1.0f,
+                    finishing ? "CLOSE THE WINDOW TO STOP; THE NEXT START DOES THIS STEP AGAIN"
+                              : "CLOSE THE WINDOW TO STOP; THE NEXT START PICKS UP WHERE THIS ONE LEFT OFF",
+                    kDim);
     canvas.Present();
 }
 
@@ -432,8 +448,10 @@ void SetTitle(const dcdata::Progress &progress) {
     static std::size_t shown = std::numeric_limits<std::size_t>::max();
     if (progress.files != shown) {
         shown = progress.files;
-        std::string title = std::format("Extracting game data: {}/{} files, {}/{} MB", progress.files,
-                                        progress.total_files, MegaBytes(progress.bytes), MegaBytes(progress.total_bytes));
+        std::string title = Finishing(progress)
+                                ? std::string("Preparing game data")
+                                : std::format("Extracting game data: {}/{} files, {}/{} MB", progress.files, progress.total_files,
+                                              MegaBytes(progress.bytes), MegaBytes(progress.total_bytes));
         SDL_SetWindowTitle(WindowHandle(), title.c_str());
     }
 }
@@ -489,6 +507,117 @@ fs::path Partial(const fs::path &root) {
     fs::path partial = clean;
     partial += ".partial";
     return partial;
+}
+
+std::string Utf8(const fs::path &path) {
+    const std::u8string text = path.u8string();
+    return {reinterpret_cast<const char *>(text.data()), text.size()};
+}
+
+// dcdata, which ships beside the game wherever it can run.
+fs::path DataTool() {
+    if (!data_tool.empty()) {
+        return data_tool;
+    }
+    const char *base = SDL_GetBasePath();
+    if (base == nullptr) {
+        return {};
+    }
+#ifdef _WIN32
+    constexpr std::string_view name = "dcdata.exe";
+#else
+    constexpr std::string_view name = "dcdata";
+#endif
+    return fs::path(reinterpret_cast<const char8_t *>(base)) / fs::path(name);
+}
+
+// The converters are Rust and FFmpeg, which the game doesn't link, so the data is finished by the same command a shell would run:
+// it keeps the files already there and adds what extraction makes from them. Without this the data has no baked textures or models.
+// Its scratch files go in a folder of ours beside the data, since stopping it leaves them behind. Its textures are only good whole:
+// it stops on a part-written one from an earlier try, and the game would trust a few of them over the raw files, so they go if it fails or is stopped,
+// along with the index of the models that use them. A symlinked data folder then still holds the raw files, which the game can run from.
+void FinishData(const fs::path &source, const fs::path &target, const fs::path &root, const std::atomic<bool> &cancel) {
+    const fs::path  tool = DataTool();
+    std::error_code error;
+    if (tool.empty() || !fs::exists(tool, error)) {
+        std::println(stderr, "no dcdata beside the game: the data stays as it came off the disc");
+        return;
+    }
+    struct Stage {
+        fs::path path;
+        fs::path target;
+        bool     finished = false;
+        ~Stage() {
+            std::error_code ignored;
+            fs::remove_all(path, ignored);
+            if (!finished) {
+                fs::remove_all(target / "textures", ignored);
+                fs::remove(target / "models.json", ignored);
+            }
+        }
+    } stage{.path = Partial(root) += ".stage", .target = target};
+    fs::remove_all(stage.path, error);
+    fs::remove_all(target / "textures", error);
+    fs::create_directories(stage.path);
+
+    const std::string tool_path = Utf8(tool);
+    const std::string source_path = Utf8(source);
+    const std::string target_path = Utf8(target);
+    const std::string stage_path = Utf8(stage.path);
+    const char       *args[] = {tool_path.c_str(), "extract", source_path.c_str(), target_path.c_str(), nullptr};
+
+    SDL_Environment *environment = SDL_CreateEnvironment(true);
+    if (environment != nullptr) {
+        for (const char *name : {"TMPDIR", "TMP", "TEMP"}) {
+            SDL_SetEnvironmentVariable(environment, name, stage_path.c_str(), true);
+        }
+    }
+    const SDL_PropertiesID properties = SDL_CreateProperties();
+    SDL_SetPointerProperty(properties, SDL_PROP_PROCESS_CREATE_ARGS_POINTER, args);
+    SDL_SetPointerProperty(properties, SDL_PROP_PROCESS_CREATE_ENVIRONMENT_POINTER, environment);
+    SDL_SetNumberProperty(properties, SDL_PROP_PROCESS_CREATE_STDERR_NUMBER, SDL_PROCESS_STDIO_APP);
+    SDL_Process *process = SDL_CreateProcessWithProperties(properties);
+    SDL_DestroyProperties(properties);
+    SDL_DestroyEnvironment(environment);
+    if (process == nullptr) {
+        dcdata::Fail("could not start {}: {}", tool_path, SDL_GetError());
+    }
+
+    // A game started from a launcher has no console, so why dcdata stopped has to come back here to be shown.
+    auto *errors = static_cast<SDL_IOStream *>(SDL_GetPointerProperty(SDL_GetProcessProperties(process), SDL_PROP_PROCESS_STDERR_POINTER, nullptr));
+    std::string said;
+    const auto  listen = [&] {
+        std::array<char, 1024> bytes;
+        while (errors != nullptr) {
+            const std::size_t got = SDL_ReadIO(errors, bytes.data(), bytes.size());
+            if (got == 0) {
+                break;
+            }
+            std::fwrite(bytes.data(), 1, got, stderr);
+            said.append(bytes.data(), got);
+        }
+        if (said.size() > kMostToolMessage) {
+            said.erase(0, said.size() - kMostToolMessage);
+        }
+    };
+
+    int status = 0;
+    while (!SDL_WaitProcess(process, false, &status)) {
+        listen();
+        if (cancel) {
+            SDL_KillProcess(process, true);
+            SDL_WaitProcess(process, true, nullptr);
+            SDL_DestroyProcess(process);
+            dcdata::Fail("stopped while preparing the data");
+        }
+        SDL_Delay(kIdleMilliseconds);
+    }
+    listen();
+    SDL_DestroyProcess(process);
+    if (status != 0) {
+        dcdata::Fail("{} stopped with status {} while preparing the data:\n\n{}", tool_path, status, said);
+    }
+    stage.finished = true;
 }
 
 void PrintFlatpakHint(const fs::path &root) {
@@ -585,6 +714,7 @@ FirstRunOutcome FirstRunExtract(const fs::path &source, const fs::path &root,
                 dcdata::Fail("{} files are missing or the wrong size after extraction, {} among them",
                              bad.size(), bad.front()->path);
             }
+            FinishData(source, target, root, cancel);
             if (!in_place) {
                 // The data check found root missing or without a file, so anything there is empty
                 // directories.
@@ -627,6 +757,10 @@ FirstRunOutcome FirstRunExtract(const fs::path &source, const fs::path &root,
 
 void FirstRunSetChooser(FirstRunChooser replacement) {
     chooser = std::move(replacement);
+}
+
+void FirstRunSetDataTool(std::filesystem::path tool) {
+    data_tool = std::move(tool);
 }
 
 void FirstRunIfNoData(bool headless) {

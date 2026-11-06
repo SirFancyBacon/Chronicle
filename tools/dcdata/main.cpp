@@ -25,8 +25,36 @@
 #include "dcdata.hpp"
 #include "sound_data.hpp"
 
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#include <shellapi.h>
+#endif
+
 namespace {
 namespace fs = std::filesystem;
+
+// Windows gives main its arguments in the system's code page, which can't hold every path, and the game passes dcdata the paths it chose.
+std::vector<fs::path> PathArguments(int argc, char **argv) {
+#ifdef _WIN32
+    int      count = 0;
+    wchar_t **wide = CommandLineToArgvW(GetCommandLineW(), &count);
+    if (wide != nullptr) {
+        // The C runtime may have expanded wildcards that this reading doesn't, and main goes by its own count.
+        std::vector<fs::path> paths;
+        if (count == argc) {
+            paths.assign(wide, wide + count);
+        }
+        LocalFree(wide);
+        if (!paths.empty()) {
+            return paths;
+        }
+    }
+#endif
+    return {argv, argv + argc};
+}
 
 std::string Utf8Path(const fs::path &path) {
     const auto bytes = path.u8string();
@@ -50,7 +78,7 @@ void RunOnKazarov(std::vector<dcdata::ClassJob> jobs) {
 void Pack(const fs::path &source, const fs::path &output) {
     const kazarov::PackReport report =
         kazarov::pack_directory_stored(Utf8Path(source), Utf8Path(output), WorkerCount());
-    dcdata::Log(stdout, "packed {} files ({} bytes) into {}\n", report.files, report.bytes, output.string());
+    dcdata::Log(stdout, "packed {} files ({} bytes) into {}\n", report.files, report.bytes, Utf8Path(output));
 }
 
 class TextureStage {
@@ -464,7 +492,7 @@ void WriteTextureMap(const fs::path &raw, const fs::path &mapping) {
 }
 
 void Describe(const dcdata::Archive &archive) {
-    dcdata::Log(stdout, "source: {} ({})\n", archive.source.string(),
+    dcdata::Log(stdout, "source: {} ({})\n", Utf8Path(archive.source),
                 archive.image ? "ISO 9660 image" : "directory");
     dcdata::Log(stdout, "DATA.DAT: {} bytes, DATA.HD2: {} bytes\n", archive.dat.size, archive.hd2.size);
 }
@@ -499,11 +527,11 @@ int ExtractRaw(const std::filesystem::path &source, const std::filesystem::path 
         for (const dcdata::Record *record : bad) {
             dcdata::Log(stderr, "missing or wrong size: {}\n", record->path);
         }
-        dcdata::Log(stderr, "verified {}/{} files in {}\n", reachable - bad.size(), reachable, out.string());
+        dcdata::Log(stderr, "verified {}/{} files in {}\n", reachable - bad.size(), reachable, Utf8Path(out));
         return 1;
     }
 
-    dcdata::Log(stdout, "verified {}/{} files in {}{}\n", reachable, reachable, out.string(),
+    dcdata::Log(stdout, "verified {}/{} files in {}{}\n", reachable, reachable, Utf8Path(out),
                 summary.warnings ? std::format(" ({} warnings)", summary.warnings) : "");
     return 0;
 }
@@ -524,48 +552,49 @@ int Extract(const std::filesystem::path &source, const std::filesystem::path &ou
 
 int main(int argc, char **argv) {
     try {
+        const std::vector<std::filesystem::path> paths = PathArguments(argc, argv);
         if (argc == 4 && std::strcmp(argv[1], "extract") == 0) {
-            return Extract(argv[2], argv[3]);
+            return Extract(paths[2], paths[3]);
         }
         if (argc == 4 && std::strcmp(argv[1], "extract-raw") == 0) {
-            return ExtractRaw(argv[2], argv[3]);
+            return ExtractRaw(paths[2], paths[3]);
         }
         if (argc == 3 && std::strcmp(argv[1], "list") == 0) {
-            return List(argv[2]);
+            return List(paths[2]);
         }
         if (argc == 3 && std::strcmp(argv[1], "publish-gameplay") == 0) {
-            PublishGameplay(argv[2]);
+            PublishGameplay(paths[2]);
             return 0;
         }
         if (argc == 3 && std::strcmp(argv[1], "publish-sound") == 0) {
-            PublishSound(argv[2]);
+            PublishSound(paths[2]);
             return 0;
         }
         if (argc == 4 && std::strcmp(argv[1], "bake-textures") == 0) {
-            BakeTextures(argv[2], argv[3]);
+            BakeTextures(paths[2], paths[3]);
             return 0;
         }
         if (argc == 3 && std::strcmp(argv[1], "strip-models") == 0) {
             // The game rebuilds what this empties from the published models as it reads it.
-            const std::uint64_t stripped = kazarov::models_strip_dc1(Utf8Path(argv[2]));
+            const std::uint64_t stripped = kazarov::models_strip_dc1(Utf8Path(paths[2]));
             dcdata::Log(stdout, "emptied {} converted sources; the game rebuilds them from their glTF\n", stripped);
             return 0;
         }
         if (argc == 4 && std::strcmp(argv[1], "bake-assets") == 0) {
-            BakeAssets(argv[2], argv[3]);
+            BakeAssets(paths[2], paths[3]);
             return 0;
         }
         if (argc == 4 && std::strcmp(argv[1], "convert-models") == 0) {
-            ConvertModels(argv[2], argv[3]);
+            ConvertModels(paths[2], paths[3]);
             return 0;
         }
         if (argc == 4 && std::strcmp(argv[1], "texture-map") == 0) {
-            WriteTextureMap(argv[2], argv[3]);
+            WriteTextureMap(paths[2], paths[3]);
             return 0;
         }
         if ((argc == 3 || argc == 4) && std::strcmp(argv[1], "pack") == 0) {
-            const std::filesystem::path source = argv[2];
-            const std::filesystem::path output = argc == 4 ? std::filesystem::path(argv[3])
+            const std::filesystem::path source = paths[2];
+            const std::filesystem::path output = argc == 4 ? paths[3]
                                                             : source.parent_path() / "data.zip";
             Pack(source, output);
             return 0;

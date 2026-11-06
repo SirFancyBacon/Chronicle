@@ -1,10 +1,14 @@
 #include <gtest/gtest.h>
 
+#include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <numeric>
+#include <string>
 #include <tuple>
 
 #include "data_fixture.hpp"
+#include "platform/firstrun.hpp"
 
 namespace dc::test {
 
@@ -107,6 +111,128 @@ TEST(DataExtract, IndexRejectsBadRecords) {
     Put32(negative, 32 + 20, 0xFFFFFFF0);
     ASSERT_TRUE(Throws([&] { dcdata::ParseIndex(negative); }, "negative"));
 }
+
+#ifndef _WIN32
+namespace {
+
+// A dcdata that does only what's written here, for what first run does around it.
+fs::path WriteTool(const fs::path &dir, const std::string &body) {
+    const fs::path tool = dir / "tool.sh";
+    std::ofstream(tool) << "#!/bin/sh\n" << body << "\n";
+    fs::permissions(tool, fs::perms::owner_exec, fs::perm_options::add);
+    return tool;
+}
+
+struct ToolScope {
+    explicit ToolScope(const fs::path &tool) { platform::FirstRunSetDataTool(tool); }
+    ~ToolScope() { platform::FirstRunSetDataTool({}); }
+};
+
+bool Keep(const dcdata::Progress &) {
+    return true;
+}
+
+} // namespace
+
+TEST(FirstRun, FinishesTheDataBeforeItMovesIntoPlace) {
+    fs::path  dir = TempDir("first_run_finish");
+    fs::path  iso = WriteStandardIso(dir, StandardDisc());
+    fs::path  root = dir / "data";
+    ToolScope tool(WriteTool(dir, R"(echo "$1" > "$3/finished"; echo "$TMPDIR" >> "$3/finished")"));
+
+    const platform::FirstRunOutcome outcome = platform::FirstRunExtract(iso, root, Keep);
+    ASSERT_TRUE(outcome.ok);
+    ASSERT_TRUE(!fs::exists(dir / "data.partial") && !fs::exists(dir / "data.partial.stage"));
+    std::ifstream finished(root / "finished");
+    std::string   command;
+    std::string   stage;
+    std::getline(finished, command);
+    std::getline(finished, stage);
+    ASSERT_TRUE(command == "extract");
+    ASSERT_TRUE(stage == (dir / "data.partial.stage").string());
+}
+
+TEST(FirstRun, ToolFailureLeavesNoData) {
+    fs::path  dir = TempDir("first_run_failure");
+    fs::path  iso = WriteStandardIso(dir, StandardDisc());
+    fs::path  root = dir / "data";
+    ToolScope tool(WriteTool(dir, R"(mkdir "$3/textures"; echo "no space left" >&2; exit 3)"));
+
+    const platform::FirstRunOutcome outcome = platform::FirstRunExtract(iso, root, Keep);
+    ASSERT_TRUE(!outcome.ok && !outcome.cancelled);
+    ASSERT_TRUE(outcome.error.find("status 3") != std::string::npos);
+    ASSERT_TRUE(outcome.error.find("no space left") != std::string::npos);
+    ASSERT_TRUE(!fs::exists(root) && !fs::exists(dir / "data.partial.stage"));
+    ASSERT_TRUE(!fs::exists(dir / "data.partial" / "textures"));
+}
+
+TEST(FirstRun, TryingAgainStartsTheTexturesAfresh) {
+    fs::path  dir = TempDir("first_run_again");
+    fs::path  iso = WriteStandardIso(dir, StandardDisc());
+    fs::path  root = dir / "data";
+    fs::create_directories(dir / "data.partial" / "textures");
+    std::ofstream(dir / "data.partial" / "textures" / "short.png") << "cut";
+    ToolScope tool(WriteTool(dir, R"(test ! -e "$3/textures/short.png")"));
+
+    ASSERT_TRUE(platform::FirstRunExtract(iso, root, Keep).ok);
+}
+
+TEST(FirstRun, StoppingTheToolKeepsWhatWasExtracted) {
+    fs::path  dir = TempDir("first_run_stop");
+    fs::path  iso = WriteStandardIso(dir, StandardDisc());
+    fs::path  root = dir / "data";
+    ToolScope tool(WriteTool(dir, R"(mkdir "$3/textures"; touch "$3/started"; exec sleep 30)"));
+
+    const platform::FirstRunOutcome outcome = platform::FirstRunExtract(iso, root, [&](const dcdata::Progress &) {
+        return !fs::exists(dir / "data.partial" / "started");
+    });
+    ASSERT_TRUE(outcome.cancelled);
+    ASSERT_TRUE(!fs::exists(root) && fs::exists(dir / "data.partial") && !fs::exists(dir / "data.partial.stage"));
+    ASSERT_TRUE(!fs::exists(dir / "data.partial" / "textures"));
+}
+
+TEST(FirstRun, WithoutTheToolTheDataStaysRaw) {
+    fs::path  dir = TempDir("first_run_no_tool");
+    fs::path  iso = WriteStandardIso(dir, StandardDisc());
+    fs::path  root = dir / "data";
+    ToolScope tool(dir / "missing");
+
+    ASSERT_TRUE(platform::FirstRunExtract(iso, root, Keep).ok);
+    ASSERT_TRUE(fs::exists(root));
+}
+
+TEST(FirstRun, SymlinkedDataKeepsItsRawFilesWhenTheToolFails) {
+    fs::path dir = TempDir("first_run_symlink");
+    fs::path iso = WriteStandardIso(dir, StandardDisc());
+    fs::path root = dir / "data";
+    fs::create_directories(dir / "elsewhere");
+    fs::create_directory_symlink(dir / "elsewhere", root);
+    ToolScope tool(WriteTool(dir, R"(mkdir "$3/textures"; touch "$3/models.json"; exit 3)"));
+
+    ASSERT_TRUE(!platform::FirstRunExtract(iso, root, Keep).ok);
+    ASSERT_TRUE(!fs::exists(root / "textures") && !fs::exists(root / "models.json"));
+    ASSERT_TRUE(dcdata::Mismatched(dcdata::ParseIndex(StandardDisc().hd2), root).empty());
+}
+
+// Takes minutes and needs a disc: DC_TEST_DISC names the image, DC_TEST_DCDATA the tool, DC_TEST_OUT an empty folder's parent.
+TEST(FirstRun, RealDiscGetsBakedTextures) {
+    const char *disc = std::getenv("DC_TEST_DISC");
+    const char *dcdata_path = std::getenv("DC_TEST_DCDATA");
+    const char *out = std::getenv("DC_TEST_OUT");
+    if (disc == nullptr || dcdata_path == nullptr || out == nullptr) {
+        GTEST_SKIP();
+    }
+    ToolScope tool(dcdata_path);
+    fs::path  root = fs::path(out) / "data";
+    ASSERT_TRUE(platform::FirstRunExtract(disc, root, Keep).ok);
+    ASSERT_TRUE(fs::exists(root / "models.json"));
+    std::size_t documents = 0;
+    for (const fs::directory_entry &entry : fs::recursive_directory_iterator(root / "textures")) {
+        documents += entry.path().extension() == ".json";
+    }
+    ASSERT_TRUE(documents > 1000);
+}
+#endif
 
 TEST(DataExtract, FromIso) {
     fs::path dir = TempDir("extract_iso");

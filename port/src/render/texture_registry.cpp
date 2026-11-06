@@ -234,7 +234,7 @@ unsigned RegisterPalette(const std::array<uint32_t, 256> &rgba, bool four_bit, P
         entry.texture = gfx::CreatePalette();
         entry.owns_texture = true;
         if (entry.texture != gfx::kNullTexture) {
-            gfx::UpdatePalette(entry.texture, rgba.data());
+            render::UpdatePalette(entry.texture, rgba.data());
         }
     }
     return key;
@@ -407,6 +407,10 @@ bool PortLegacyTexturePath() {
     // An image the game read from its data was read through DataRead, which indexed it first. Before that there are
     // only the program's own images (the texture tests' synthetic ones), which have no baked document, and listing the
     // files would stop the program when there is no data.
+    // Baked data can still be read the other way, which is how that path gets tested: only data extracted without baking reaches it otherwise.
+    if (const char *raw = std::getenv("DC_TEXTURES_RAW"); raw != nullptr && std::string_view(raw) == "1") {
+        return true;
+    }
     if (!DataReadIndexed()) {
         return true;
     }
@@ -670,9 +674,7 @@ unsigned PortCreateTexture(const PortDecodedTexture &decoded, PortTextureOwner o
             const uint32_t level_height = std::max(1u, decoded.height >> level);
             gfx::UpdateTexture(entry.texture, static_cast<uint32_t>(level), 0, 0, level_width, level_height,
                                decoded.levels[level].data());
-            if (decoded.format == gfx::TextureFormat::Rgba8) {
-                MirrorTexturePixels(entry.texture, static_cast<uint32_t>(level), 0, 0, level_width, level_height, decoded.levels[level].data());
-            }
+            MirrorTexturePixels(entry.texture, static_cast<uint32_t>(level), 0, 0, level_width, level_height, decoded.levels[level].data());
         }
     }
     if (decoded.format == gfx::TextureFormat::Index8) {
@@ -826,7 +828,7 @@ bool PortMoveImage(unsigned src_tbp, unsigned src_psm, int x, int y, int width, 
             }
         }
         if (dst.palette->texture != gfx::kNullTexture) {
-            gfx::UpdatePalette(dst.palette->texture, to.data());
+            render::UpdatePalette(dst.palette->texture, to.data());
         }
         return true;
     }
@@ -861,7 +863,7 @@ bool PortLoadClut(unsigned cbp, const u_int *clut) {
         }
     }
     if (entry->texture != gfx::kNullTexture) {
-        gfx::UpdatePalette(entry->texture, rgba.data());
+        render::UpdatePalette(entry->texture, rgba.data());
     }
     return true;
 }

@@ -71,6 +71,13 @@ inline bool UpdateTexture(gfx::TextureHandle texture, std::uint32_t mip, std::ui
     return gfx::UpdateTexture(texture, mip, x, y, width, height, pixels);
 }
 
+inline bool UpdatePalette(gfx::TextureHandle palette, const std::uint32_t *colors, std::uint32_t first = 0, std::uint32_t count = 256) {
+    if (MirrorOn()) {
+        MirrorPalette(palette, colors, first, count);
+    }
+    return gfx::UpdatePalette(palette, colors, first, count);
+}
+
 inline bool UpdateTextureNow(gfx::TextureHandle texture, std::uint32_t mip, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, const void *pixels) {
     if (MirrorOn()) {
         MirrorTexturePixels(texture, mip, x, y, width, height, pixels);

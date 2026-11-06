@@ -13,6 +13,7 @@ namespace dc::render {
 // DC_NOKTUS_MIRROR=<path>: alongside today's renderer, draws the same 2D through Noktus Nimbus, offscreen, and writes its last picture
 // to path at exit. Noktus is built up against today's picture this way while the game keeps running on today's renderer.
 // DC_NOKTUS_MOMENT=<0 to 1>: also writes the last tick as drawn that far from the tick before, beside it as <name>.between.png.
+// DC_NOKTUS_PAINT_WINDOW=1 paints the window magenta in place of the picture, and DC_NOKTUS_TARGET_TIMES=0 paces frames by watching them arrive.
 // DC_NOKTUS_WINDOW=1: shows Noktus live in a second window, on its own thread and paced to the display, for judging motion by eye. The game keeps its own window and input.
 // DC_NOKTUS_CUSHION=<ticks> sets how far behind the newest tick it stands, and DC_NOKTUS_INTERPOLATE=0 shows each tick as it ended. How the frames went is printed at exit.
 // DC_NOKTUS_DEPTH_PROBE=1 asks for the depth at the middle of the frame every tick, so that a run compares Noktus's answers with today's whatever the game asks. How they went is printed at exit.
@@ -89,6 +90,9 @@ void MirrorClearStencil();
 void MirrorSurface(gfx::TextureHandle target, std::uint32_t width, std::uint32_t height, bool has_alpha, bool shares_depth, bool frame_target);
 void MirrorSetTarget(gfx::TextureHandle target);
 void MirrorSnapshotFrame(gfx::TextureHandle target);
+/** A palette's colours from first on, for the paletted textures drawn through it. */
+void MirrorPalette(gfx::TextureHandle palette, const std::uint32_t *colors, std::uint32_t first, std::uint32_t count);
+
 bool MirrorCopyDepth(const gfx::LogicalRect &source);
 void MirrorBlit(gfx::TextureHandle from, gfx::Rect from_rect, gfx::TextureHandle to, gfx::Rect to_rect, gfx::Filter filter);
 

@@ -51,7 +51,9 @@ downloads and locks in `<checkout>\.kazarov`, which both configurations share:
 `run.bat` extracts the data with `dcdata.exe` from `rom\pal\Dark Cloud (PAL).iso`,
 or from `rom\Dark Cloud (PAL).iso` when the first is missing, into `port\run\data\` in the checkout.
 It records the disc's and `dcdata.exe`'s sizes and times in `data\.kazarov-data`, so a
-later run with both unchanged skips the extraction.
+later run with both unchanged skips the extraction. With no disc at either path it uses
+an existing `data\` as it stands; with no `data\` either, the game asks for the disc and
+runs the `dcdata.exe` beside it, so that route converts the textures and models too.
 
 The PowerShell examples in this file use the variables below. Set them once,
 from the checkout root:
@@ -180,7 +182,7 @@ Interactive controls, visible windowed presentation, audible output, first-run
 disc selection, gameplay save/reload and a full campaign are not qualified by
 these checks. Validation-layer cleanliness is unverified without installed
 layers. The game's data, save, input-script and screenshot paths support
-Unicode; the standalone `dcdata` command, optional WAV capture and
+Unicode, as do `dcdata`'s arguments; optional WAV capture and
 memory-card leaf-name conversions retain narrow handling. Renderer
 approximations, overlay reinitialization gaps, arena headroom and aborting
 PS2 hardware stubs remain as described in `docs/PC.md`.

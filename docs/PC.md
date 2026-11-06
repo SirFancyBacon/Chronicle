@@ -2045,6 +2045,10 @@ retail records from them as it reads a file. `convert-models <raw> <out>`
 writes that conversion to a folder of its own, `bake-assets <raw> <data>`
 publishes it into extracted data, and `strip-models <data>` empties the
 converted originals (`docs/MODEL_FRAMEWORK.md`).
+The game's own first run extracts the files itself, for its progress screen,
+then runs the `dcdata` beside it with `extract` to do the rest, so its data is
+the same as a shell's (`platform/firstrun.cpp`). Where there's no `dcdata`, as
+on Android, the data stays raw and the game decodes the disc's textures itself.
 `extract` and `publish-gameplay` write the gameplay documents tracked in
 `port/gameplay` into the data under `gameplay/`, from the seed the build
 seals beside `dcdata` (`assets/data.zip`), so a package ships that folder with
@@ -2071,11 +2075,12 @@ file-chooser portal under Flatpak, zenity elsewhere), or a folder holding
 `DATA.DAT` and `DATA.HD2`. It extracts with `dcdata`'s core on a worker
 thread into `<data>.partial`, drawing the file and byte counts through
 `gfx::Draw2D` while the main thread pumps events, checks every file and
-renames the directory into place, then closes its window and `main` goes
-on. Closing the window stops it (a later start resumes from the
-partial directory); a failed extraction shows the extractor's message in a
+has `dcdata` convert the data, renames the directory into place, then closes
+its window and `main` goes on. Closing the window stops it (a later start
+resumes from the partial directory and converts again); a failed extraction
+shows the extractor's or `dcdata`'s message in a
 message box and exits with status 1. `FirstRunSetChooser` replaces the
-dialog, which is how the tests drive the flow headless. Declined, or
+dialog, which lets a headless run go through the flow. Declined, or
 headless, `main` stops with status 3 and one line naming the directory and
 the `dcdata` command, before anything else starts; `InitCDFile` would abort
 on the same conditions. `InitCDFile` warns
