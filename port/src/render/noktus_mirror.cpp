@@ -204,6 +204,46 @@ noktus::PresentMode ToPresentMode(gfx::PresentMode mode) {
     return noktus::PresentMode::VSync;
 }
 
+// A brightness set by hand, or 0 if there's none that makes sense.
+float NitsFromEnvironment(const char *name) {
+    const char *const text = std::getenv(name);
+    const float       nits = text != nullptr ? std::strtof(text, nullptr) : 0.0f;
+    return std::isfinite(nits) && nits > 0.0f ? nits : 0.0f;
+}
+
+// Asked for by hand until there's a settings screen. Windows says how bright it shows SDR's white and how far past that the display goes, and those are what HDR starts from.
+void ChooseDisplayOutput(noktus::VulkanHost &host, SDL_Window *window) {
+    const char *const      asked = std::getenv("DC_NOKTUS_HDR");
+    const std::string_view mode = asked != nullptr ? asked : "";
+    if (mode != "hdr10" && mode != "scrgb") {
+        return;
+    }
+    const SDL_PropertiesID properties = SDL_GetWindowProperties(window);
+    const float            white = SDL_GetFloatProperty(properties, SDL_PROP_WINDOW_SDR_WHITE_LEVEL_FLOAT, 1.0f); // in scRGB's terms, where 1 is 80 nits
+    // SDL's flag means there's room past SDR's white, which a dim panel with SDR's brightness turned up doesn't have. Any white but 1 says HDR is on all the same.
+    const bool  display_hdr = SDL_GetBooleanProperty(properties, SDL_PROP_WINDOW_HDR_ENABLED_BOOLEAN, false) || white != 1.0f;
+    const float paper_white = NitsFromEnvironment("DC_NOKTUS_PAPER_WHITE");
+    const float peak = NitsFromEnvironment("DC_NOKTUS_PEAK");
+    // A window can be offered scRGB with HDR off, and everything would then go out far too bright. Naming a paper white says the display is known to be in HDR, for when SDL can't tell.
+    if (!display_hdr && paper_white == 0.0f) {
+        std::fprintf(stderr, "noktus: %s asked for, but the display isn't in HDR, so it stays SDR\n", asked);
+        return;
+    }
+    host.display_output = mode == "scrgb" ? noktus::DisplayOutput::ScRgb : noktus::DisplayOutput::Hdr10;
+    if (display_hdr) {
+        host.paper_white = white * 80.0f;
+        host.peak_brightness = host.paper_white * std::max(SDL_GetFloatProperty(properties, SDL_PROP_WINDOW_HDR_HEADROOM_FLOAT, 1.0f), 1.0f);
+    }
+    if (paper_white > 0.0f) {
+        host.paper_white = paper_white;
+    }
+    if (peak > 0.0f) {
+        host.peak_brightness = peak;
+    }
+    host.paper_white = std::min(host.paper_white, host.peak_brightness);
+    std::fprintf(stderr, "noktus: %s asked for, the display %s in HDR, paper white %.0f nits, peak %.0f nits\n", asked, display_hdr ? "is" : "isn't said to be", host.paper_white, host.peak_brightness);
+}
+
 void Start(Mirror &mirror) {
     if (mirror.renderer) {
         return;
@@ -239,6 +279,7 @@ void Start(Mirror &mirror) {
         };
         host.paced = true;
         host.tick_rate = ClockTickRate();
+        ChooseDisplayOutput(host, mirror.window);
         if (const char *cushion = std::getenv("DC_NOKTUS_CUSHION")) {
             host.cushion = std::strtod(cushion, nullptr);
         }
