@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the PC port as a Flatpak (docs/FLATPAK.md) from the working tree, on
 # the host: flatpak-builder brings its own sandbox, so the dev container is
-# not involved. The result is chronicle.flatpak in the repository root.
+# not involved. The result is chronicle.flatpak in the repository root, with a copy in release/flatpak.
 #
 #   port/flatpak.sh              build chronicle.flatpak
 #   INSTALL=1 port/flatpak.sh    also install it for this user
@@ -47,7 +47,9 @@ flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/fl
 flatpak-builder --user --force-clean --install-deps-from=flathub \
     --repo=repo build-dir "$MANIFEST"
 flatpak build-bundle repo "$BUNDLE" "$APP_ID"
-echo "Built $BUNDLE"
+mkdir -p release/flatpak
+cp -f "$BUNDLE" release/flatpak/
+echo "Built release/flatpak/$BUNDLE"
 
 if [ "${INSTALL:-0}" = 1 ]; then
     flatpak install --user --noninteractive --reinstall "$BUNDLE"

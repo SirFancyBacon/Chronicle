@@ -26,6 +26,12 @@ using them. A directly launched executable retains the path defaults below.
 (cd port/build/pc && ctest --output-on-failure -j4)
 ```
 
+A build without named targets also brings `release/<config>/` up to date, for
+example `release/linux-x64-release/`: the executables, SDL3, `lang`, `glyphs`, `assets` and
+`play.sh`, which starts the game with its data and saves in that folder. It needs a system
+as recent as the build's. `data` and `save` are kept, and nothing checks that `data` still
+suits the build, so delete it after a change to `dcdata` or to what it makes.
+
 The build runs in the dev container (in place when already inside one) using
 the Debug `linux-x64` preset, and discards a `CMakeCache.txt` configured for
 another source path. `CLEAN=1`

@@ -109,6 +109,7 @@ if ($env:JOBS) { $jobs = @{ Jobs = [int]$env:JOBS } }
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
 if ($command -eq 'build') {
+    & "$PSScriptRoot/release.ps1" -Build $build -Folder (Join-Path $checkout "release/$name")
     $lock.Dispose()
     Write-Host "kazarov: built $build"
     exit 0

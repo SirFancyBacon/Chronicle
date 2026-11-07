@@ -93,10 +93,10 @@ through the file-chooser portal, which every Flatpak may call without a
 port/flatpak.sh
 ```
 
-builds `chronicle.flatpak` in the repository root from the working tree,
-installing the runtime, the SDK and the llvm22 extension from Flathub when
+builds `chronicle.flatpak` in the repository root from the working tree, with
+a copy in `release/flatpak/`, installing the runtime, the SDK and the llvm22 extension from Flathub when
 they are missing. `INSTALL=1` also installs the bundle for this user;
-`CLEAN=1` discards flatpak-builder's cache first. By hand, the same is:
+`CLEAN=1` discards flatpak-builder's cache first. By hand, leaving out that copy, the same is:
 
 ```sh
 flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo

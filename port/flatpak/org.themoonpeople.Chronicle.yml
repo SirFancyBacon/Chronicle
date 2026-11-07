@@ -159,6 +159,7 @@ modules:
           - ps2/asm
           - .private
           - chronicle.flatpak
+          - release
       # chronicle-source-end
       # flatpak-builder downloads these before entering its network-restricted build sandbox. They are
       # what Kazarov's CMake would download, at the same hashes: a library its FetchContent_Declare
