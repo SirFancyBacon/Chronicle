@@ -914,7 +914,10 @@ Both are in one program. Kazarov's renderer sources are built with `render/kazar
 The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion, Anisotropic Filter, HDR, Paper White and Peak Brightness
 change as the game runs. Calibrate HDR, under HDR, sets the last two by eye, and only while HDR is being sent: first Peak Brightness, raised in steps of
 10 nits up to 1,000, 50 up to 2,000 and 100 up to 4,000 until a square at that peak can't be told from the field round it at 10,000 nits, which Noktus
-draws through `MirrorHdrPatches`; then Paper White, in steps of 10 from 80 to 500, never past the peak. Circle on the first step puts both back as they were. The depth picks behind the lens flare are read from Noktus, whose answers come a few ticks later.
+draws through `MirrorHdrPatches`; then Paper White, in steps of 10 from 80 to 500, never past the peak. Circle on the first step puts both back as they were.
+
+Noktus makes all of its pipelines when it starts, and keeps them in `<save>/noktus_pipelines.cache` for the next start. A cache another GPU or driver
+made is left unused and replaced. The pacing line's `late pipelines` counts any made while drawing, which should always be 0. The depth picks behind the lens flare are read from Noktus, whose answers come a few ticks later.
 
 Noktus decides where 2D reaches past the frame from the layer it's told. A screen can name one; a draw left in the
 interface layer, where retail's 2D falls when nothing names it, takes the answer of Kazarov's rule for its shape and

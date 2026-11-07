@@ -28,6 +28,7 @@
 
 #include "noktus/vulkan_renderer.hpp"
 #include "platform/clock.hpp"
+#include "platform/paths.hpp"
 #include "render/noktus_adapter.hpp"
 #include "render/passes.hpp"
 
@@ -147,10 +148,10 @@ void DropWindow(Mirror &mirror) {
 
 void ReportPace(Mirror &mirror) {
     const noktus::PaceReport pace = noktus::TakePace(*mirror.renderer);
-    std::fprintf(stderr, "noktus pacing: %llu frames, %llu ticks, mean %.2f ms, slowest 1%% %.2f ms, worst %.2f ms, held %llu, missed %llu, %d ahead, display timing %s, %s, target lead %.1f ms, work: frame %.3f ms, of it waiting %.3f ms, tick %.3f ms, link %.3f ms, %d workers\n",
+    std::fprintf(stderr, "noktus pacing: %llu frames, %llu ticks, mean %.2f ms, slowest 1%% %.2f ms, worst %.2f ms, held %llu, missed %llu, %d ahead, display timing %s, %s, target lead %.1f ms, work: frame %.3f ms, of it waiting %.3f ms, tick %.3f ms, link %.3f ms, %d workers, late pipelines %llu\n",
                  static_cast<unsigned long long>(pace.frames), static_cast<unsigned long long>(pace.ticks), pace.mean_interval, pace.slowest_1_percent, pace.worst_interval,
                  static_cast<unsigned long long>(pace.held), static_cast<unsigned long long>(pace.missed), pace.frames_ahead, pace.display_timing ? "yes" : "no", pace.variable ? "variable" : "fixed", pace.lead,
-                 pace.mean_frame_work, pace.mean_frame_wait, pace.mean_tick_work, pace.mean_link_work, pace.workers);
+                 pace.mean_frame_work, pace.mean_frame_wait, pace.mean_tick_work, pace.mean_link_work, pace.workers, static_cast<unsigned long long>(pace.late_pipelines));
 }
 
 void WriteLastPicture() {
@@ -391,6 +392,8 @@ void Start(Mirror &mirror) {
     host.present_mode = ToPresentMode(g_settings.present_mode);
     host.frame_limit = g_settings.max_fps;
     host.anisotropy = g_settings.anisotropy;
+    // Beside config.json, so that it goes wherever the player's settings do.
+    host.pipeline_cache = PathsSaveRoot() / "noktus_pipelines.cache";
     if (const char *workers = std::getenv("DC_NOKTUS_WORKERS")) {
         host.workers = static_cast<int>(std::strtol(workers, nullptr, 10));
     }
