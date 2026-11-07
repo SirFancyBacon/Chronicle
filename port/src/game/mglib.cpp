@@ -392,8 +392,7 @@ void MGInitVSyncCallBack(int (*callback)(int)) {
 // The renderer builds no VIF packets; nothing reads the packet builders.
 void MGInitVif1Packet(u_long128 * /*buffer0*/, u_long128 * /*buffer1*/) {}
 
-// A tick records its drawing as a display list; MGEndFrame renders it. A frame someone opened
-// with render::BeginFrame is drawn into as it is.
+// A tick runs from here to MGEndFrame. A frame someone opened with render::BeginFrame is drawn into as it is.
 void MGBeginFrame() {
     render::PassTraceBeginTick();
     render::MirrorBeginTick();
@@ -442,10 +441,8 @@ void MGBeginFrame() {
 // game asked not to wait twice (mgWaitVSync 0). The count only moves when the clock is pumped, so
 // it is pumped first to see whether a tick went by.
 void MGEndFrame() {
-    if (render::MirrorHasWindow()) {
-        render::MirrorSetTarget(render::kMainTarget);
-        app::GameDrawFpsForNoktus();
-    }
+    render::MirrorSetTarget(render::kMainTarget);
+    app::GameDrawFps();
     static const bool                        trace_phases = std::getenv("DC_PERF_END_FRAME") != nullptr;
     std::array<EndFrameClock::time_point, 5> stamps{};
     uint32_t                                 depth_picks = 0;
@@ -453,7 +450,6 @@ void MGEndFrame() {
         stamps[0] = EndFrameClock::now();
     }
     {
-        render::RenderLease lease;
         if (trace_phases) {
             stamps[1] = EndFrameClock::now();
         }
@@ -485,13 +481,12 @@ void MGEndFrame() {
             textwipe::DrawDivider();
         }
         render::MirrorEndTick(); // last: the picks and the divider are part of the tick
-        render::DisplayListRef list;
         if (recording) {
-            list = render::EndRecording();
+            render::EndRecording();
             if (trace_phases) {
                 stamps[2] = EndFrameClock::now();
             }
-            app::GameRenderTick(list);
+            app::GameTickDone();
             sceVu0CopyMatrix(g_tick_view, mgRenderInfo.view_scaled);
             g_have_tick_view = true;
         } else {

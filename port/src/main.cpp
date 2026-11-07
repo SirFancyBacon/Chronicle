@@ -89,7 +89,6 @@ struct Options {
     const char  *input = nullptr;
     int          width = 0;
     int          height = 0;
-    int          display_per_tick = 0;
     const char  *jump = nullptr;
     const char  *give = nullptr;
     const char  *town_menu = nullptr;
@@ -101,7 +100,6 @@ struct Options {
     bool         fast_load = false;
     bool         show_fps = false;
     bool         screenshot_fps = false;
-    bool         perf_log = false;
     const char  *export_text = nullptr;
     const char  *export_gameplay = nullptr;
     const char  *font = nullptr;
@@ -124,38 +122,29 @@ float g_switch_render_scale = 0.0f;
                  " [--width W] [--height H]"
 #endif
                  " [--offscreen]\n"
-#ifndef __SWITCH__
-                 "          [--display-per-tick N]"
-#endif
                  " [--show-fps] [--jump MODE[:MAP]] [--fast-load]\n"
                  "          [--give ITEM,...]\n"
                  "  --data DIR         extracted game data or its sibling data.zip (default: DC_DATA,\n"
                  "                     then ./data, then data/ beside the executable)\n"
-                 "  --save DIR         saves, config.json and the pipeline cache (default: DC_SAVE, then\n"
+                 "  --save DIR         saves and config.json (default: DC_SAVE, then\n"
                  "                     ./save, then save/ beside the executable)\n"
                  "  --seed-save DIR    copy a save-root fixture before startup; requires explicit --save\n"
                  "                     pointing to a new or empty directory (omit on subsequent runs)\n"
-                 "  --headless         render offscreen (SDL offscreen driver, VK_EXT_headless_surface),\n"
-                 "                     no audio device, the game clock unbounded\n"
-                 "  --offscreen        --headless without a Vulkan surface: render to an image only (what\n"
-                 "                     --headless does when there is no VK_EXT_headless_surface)\n"
+                 "  --headless         draw into a picture with no window, no audio device, the game clock\n"
+                 "                     unbounded\n"
+                 "  --offscreen        the same as --headless\n"
                  "  --frames N         stop after N frames of the game's main loop\n"
-                 "  --screenshot PATH  write the last tick's image (no FPS counter) to PATH on exit\n"
+                 "  --screenshot PATH  write the last tick's picture to PATH on exit, with the FPS counter if it's on\n"
                  "  --input FILE       drive pad 1 from a script (default: DC_INPUT); see docs/PC.md\n"
 #ifndef __SWITCH__
                  "  --width, --height  window size in pixels (default: config.json, then the monitor's)\n"
 #endif
-                 "  --screenshot-fps   with --screenshot and --show-fps: the image as a window shows it, the\n"
-                 "                     FPS counter over it\n"
-#ifndef __SWITCH__
-                 "  --display-per-tick N  headless: also render N interpolated display frames per tick\n"
-#endif
+                 "  --screenshot-fps   with --screenshot: fail if the FPS counter is off\n"
                  "  --export-text DIR  write the game's message files to DIR as language JSON (docs/LOCALIZATION.md)\n"
                  "  --export-gameplay DIR  write the item, fishing and Georama tables to DIR as gameplay documents,\n"
                  "                     a starting point for a datapack (docs/ITEM_FRAMEWORK.md, docs/GEORAMA.md)\n"
                  "  --font FILE        draw message text from this TrueType font (else lang/font.ttf)\n"
                  "  --show-fps         draw the FPS counter on presented frames when headless too\n"
-                 "  --perf-log         log tick, render and GPU timings once a second\n"
                  "test hooks:\n"
                  "  --jump MODE[:MAP]  start in edit:<map>, e01/e03/e04 (populated presets), dungeon:<0-6>, title, rush, opening or menu,\n"
                  "                     or a save's town: load:<slot> or autosave\n"
@@ -243,12 +232,6 @@ Options ParseOptions(int argc, const char **argv) {
             options.show_fps = true;
         } else if (arg == "--screenshot-fps") {
             options.screenshot_fps = true;
-        } else if (arg == "--perf-log") {
-            options.perf_log = true;
-#ifndef __SWITCH__
-        } else if (arg == "--display-per-tick") {
-            options.display_per_tick = static_cast<int>(number());
-#endif
 #ifdef __SWITCH__
         } else if (arg == "--switch-core-affinity") {
             std::string_view mode = value();
@@ -420,19 +403,6 @@ void RenderAudio(void * /*user*/, float *out, int frames) {
     audio::DefaultMixer().Render(out, frames);
 }
 
-void ReportShaderProgress(uint32_t done, uint32_t total) {
-    static uint32_t    reported = 0;
-    constexpr uint32_t steps = 4;
-    if (total == 0) {
-        return;
-    }
-    uint32_t step = done * steps / total;
-    if (done == 0 || step > reported) {
-        reported = step;
-        std::fprintf(stderr, "compiling shaders %u/%u\n", done, total);
-    }
-}
-
 gfx::PresentMode PresentMode(ConfigPresentMode mode) {
 #ifdef __SWITCH__
     static_cast<void>(mode);
@@ -449,27 +419,13 @@ gfx::PresentMode PresentMode(ConfigPresentMode mode) {
 #endif
 }
 
-bool g_noktus_window = false;
 
 render::MirrorSettings MirrorSettingsOf(const Config &config) {
     return {.interpolate = config.interpolation, .present_mode = PresentMode(config.present_mode), .max_fps = config.max_fps, .anisotropy = config.anisotropy};
 }
 
 GamePresentSettings PresentSettings(const Config &config) {
-#ifdef __SWITCH__
-    return {.interpolation = false,
-            .max_fps = 60.0,
-            .display_per_tick = 0,
-            .show_fps = g_options.show_fps || (config.show_fps && !g_options.headless),
-            .fps_detail = config.fps_detail};
-#else
-    // With Noktus drawing the window, today's renderer draws each tick once and nothing more: nobody sees its frames between ticks.
-    return {.interpolation = config.interpolation && !g_noktus_window,
-            .max_fps = config.max_fps,
-            .display_per_tick = g_options.display_per_tick,
-            .show_fps = g_options.show_fps || (config.show_fps && !g_options.headless),
-            .fps_detail = config.fps_detail};
-#endif
+    return {.show_fps = g_options.show_fps || (config.show_fps && !g_options.headless), .fps_detail = config.fps_detail};
 }
 
 void ApplyDiscord(const Config &config) {
@@ -493,15 +449,10 @@ void ApplyConfigChange(const Config &before, const Config &after) {
         render::MirrorTickRate(after.tick_rate);
     }
 #endif
-    if (after.interpolation != before.interpolation || after.max_fps != before.max_fps ||
-        after.show_fps != before.show_fps || after.fps_detail != before.fps_detail) {
+    if (after.show_fps != before.show_fps || after.fps_detail != before.fps_detail) {
         GameSetPresentSettings(PresentSettings(after));
     }
     render::MirrorApply(MirrorSettingsOf(after));
-    if (!g_noktus_window) {
-        gfx::SetPresentMode(PresentMode(after.present_mode)); // otherwise it would only remake its images
-    }
-    gfx::SetAnisotropy(after.anisotropy);
 #ifdef __ANDROID__
     if (after.render_scale != before.render_scale) {
         gfx::SetRenderScale(after.render_scale);
@@ -517,47 +468,14 @@ void ApplyConfigChange(const Config &before, const Config &after) {
     }
 }
 
-// DC_PRESENT_STATS=1: what the ticks drew and what rendering them cost.
-void ReportPresentStats() {
-    const char *setting = std::getenv("DC_PRESENT_STATS");
-    if (setting == nullptr || *setting == '\0' || *setting == '0') {
-        return;
-    }
-    GamePresentStats stats = GamePresentStatistics();
-    if (stats.ticks == 0) {
-        return;
-    }
-    auto ticks = static_cast<double>(stats.ticks);
-    auto displays = static_cast<double>(std::max<std::uint64_t>(stats.display_frames, 1));
-    std::fprintf(stderr,
-                 "present: %.0f ticks, per tick %.1f mesh draws (%.1f keyed), %.1f 2D draws, %.1f stateful, "
-                 "at most %.0f draws; canonical %.2f ms per tick; %.0f display frames, %.2f ms each\n",
-                 ticks, static_cast<double>(stats.mesh_draws) / ticks,
-                 static_cast<double>(stats.keyed_mesh_draws) / ticks, static_cast<double>(stats.draws_2d) / ticks,
-                 static_cast<double>(stats.stateful) / ticks, static_cast<double>(stats.max_draws),
-                 stats.canonical_seconds * 1000.0 / ticks, static_cast<double>(stats.display_frames),
-                 stats.display_seconds * 1000.0 / displays);
-    if (GameShowingFps()) {
-        std::fprintf(stderr, "fps counter: %s\n", GameFpsText().c_str());
-    }
-}
-
 int Screenshot(const char *path) {
     std::vector<uint8_t> pixels;
     uint32_t             width = 0;
     uint32_t             height = 0;
-    bool                 grabbed = g_options.screenshot_fps ? GameScreenshotWithFps(pixels, width, height)
-                                                            : GameScreenshot(pixels, width, height);
+    bool                 grabbed = (!g_options.screenshot_fps || GameShowingFps()) && GameScreenshot(pixels, width, height);
     if (!grabbed || !gfx::WritePng(PathsFromUtf8(path), pixels.data(), width, height)) {
         std::fprintf(stderr, "cannot write the screenshot to %s\n", path);
         return kExitFailure;
-    }
-    if (const std::optional<float> moment = render::MirrorMoment()) {
-        // Noktus's picture of the same moment is written beside its own at exit.
-        std::vector<uint8_t> between;
-        if (GameScreenshotBetween(*moment, between, width, height)) {
-            gfx::WritePng(PathsFromUtf8(path).replace_extension(".between.png"), between.data(), width, height);
-        }
     }
     const char *rgba = std::getenv("DC_SCREENSHOT_RGBA");
     if (rgba != nullptr && std::string_view(rgba) == "1") {
@@ -697,15 +615,10 @@ int Run(int argc, const char **argv) {
     SwitchDisplaySize(window.width, window.height);
     window.fullscreen = false;
 #endif
-    bool offscreen = options.offscreen || (options.headless && !gfx::HeadlessSurfaceAvailable());
+    bool offscreen = options.offscreen || options.headless;
     window.vulkan = !offscreen;
     WindowInit(window);
-    const char *const asked_renderer = std::getenv("DC_RENDERER");
-    const bool        noktus_window = !offscreen && !options.headless && (asked_renderer != nullptr ? std::string_view(asked_renderer) == "noktus" : config.renderer == ConfigRenderer::Noktus);
-    if (noktus_window) {
-        render::MirrorTakeWindow(WindowHandle(), options.screenshot != nullptr); // a screenshot is today's renderer's picture
-        g_noktus_window = true;
-    }
+    render::MirrorTakeWindow(offscreen ? nullptr : WindowHandle());
     render::MirrorApply(MirrorSettingsOf(config));
     DC_ANDROID_TRACE("Run: window initialized");
     InputInit();
@@ -714,34 +627,18 @@ int Run(int argc, const char **argv) {
 #endif
 
     gfx::RendererConfig renderer;
-    renderer.app_name = "Chronicle: Dark Cloud";
     renderer.logical_width = kScreenWidth;
     renderer.logical_height = kScreenHeight;
     renderer.display_aspect = 4.0f / 3.0f;
-    renderer.present_mode = PresentMode(config.present_mode);
-    renderer.pipeline_cache = PathsSaveRoot() / "pipeline_cache.bin";
 #ifdef __SWITCH__
     SwitchConfigureRenderer(renderer);
     g_switch_render_scale = renderer.render_scale;
 #endif
-    renderer.progress = ReportShaderProgress;
-    renderer.offscreen = offscreen || noktus_window;
-    renderer.render_thread = config.render_thread;
-    if (const char *mode = SettingsEnv("RENDER_THREAD")) {
-        if (const auto parsed = gfx::ParseRenderThreadMode(mode)) {
-            renderer.render_thread = *parsed;
-        }
-    }
-    if (options.headless || options.screenshot != nullptr) {
-        renderer.render_thread = gfx::RenderThreadMode::Off;
-        // The renderer also reads this override; deterministic runs take precedence over it.
-        SDL_setenv_unsafe("KZ_RENDER_THREAD", "off", 1);
-    }
+    renderer.offscreen = true;
     renderer.layout = Layout(config);
 #ifdef __ANDROID__
     renderer.render_scale = config.render_scale;
 #endif
-    renderer.validation = renderer.validation || SettingsEnv("VULKAN_VALIDATION") != nullptr;
     gfx::RendererInit(WindowHandle(), renderer);
     GameLoadTraceCheckpoint("renderer_ready");
     DC_ANDROID_TRACE("Run: renderer initialized");
@@ -750,7 +647,6 @@ int Run(int argc, const char **argv) {
         SwitchConfigureThreads();
     }
 #endif
-    gfx::SetAnisotropy(config.anisotropy);
 #ifdef __ANDROID__
     gfx::SetRenderScale(config.render_scale);
 #endif
@@ -768,15 +664,6 @@ int Run(int argc, const char **argv) {
     ClockSetUnbounded(options.headless && (bounded_headless == nullptr || std::string_view(bounded_headless) != "1"));
     ClockAddPumpHook(PumpHost);
     GameSetFrameBudget(options.frames);
-    GameSetPerfLog(options.perf_log);
-    if (options.perf_log) {
-        std::fprintf(stderr,
-                     "perf config: layout %d scale %.3f thread %d interpolation %d detail %.3f shadow %.3f "
-                     "anisotropy %d soft_focus %d\n",
-                     static_cast<int>(renderer.layout.aspect), gfx::RenderScale(),
-                     static_cast<int>(gfx::ActiveRenderThreadMode()), PresentSettings(config).interpolation,
-                     ConfigDetailDistance(), ConfigShadowDistance(), config.anisotropy, config.options.soft_focus);
-    }
     ApplyDiscord(config);
     GameSetPresentSettings(PresentSettings(config));
     ConfigAddChangeHook(ApplyConfigChange);
@@ -785,19 +672,10 @@ int Run(int argc, const char **argv) {
     ConfigAddChangeHook(LocalizeConfigChanged);
 
     int status = RunGame(argc, const_cast<char **>(argv));
-    GameStopPresentation();
     if (status == kExitOk && options.screenshot != nullptr) {
         status = Screenshot(options.screenshot);
     }
     render::MirrorStop();
-    ReportPresentStats();
-#ifdef __SWITCH__
-    if (options.perf_log && std::getenv("DC_PERF_HOLD") != nullptr) {
-        for (;;) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
-#endif
 
     ConfigRemoveChangeHook(LocalizeConfigChanged);
     ConfigRemoveChangeHook(GameOptionsChanged);

@@ -125,21 +125,6 @@ double Shortest(float value) {
     return std::stod(std::format("{}", value));
 }
 
-bool ReadRenderer(const Json &value, ConfigRenderer &out) {
-    if (!value.is_string()) {
-        return false;
-    }
-    const std::string renderer = Lower(value.get<std::string>());
-    if (renderer == "kazarov") {
-        out = ConfigRenderer::Kazarov;
-    } else if (renderer == "noktus") {
-        out = ConfigRenderer::Noktus;
-    } else {
-        return false;
-    }
-    return true;
-}
-
 bool ReadAspect(const Json &value, ConfigAspect &out) {
     if (!value.is_string()) {
         return false;
@@ -494,15 +479,8 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         return ReadBool(value, config.interpolation);
 #endif
     }
-    if (name == "video.render_thread") {
-        if (!value.is_string()) {
-            return false;
-        }
-        const auto mode = gfx::ParseRenderThreadMode(value.get<std::string>());
-        if (!mode) {
-            return false;
-        }
-        config.render_thread = *mode;
+    // Settings of a renderer that has gone: saved files still hold them.
+    if (name == "video.render_thread" || name == "video.renderer") {
         return true;
     }
     if (name == "video.max_fps") {
@@ -547,9 +525,6 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
 #else
         return ReadBool(value, config.fullscreen);
 #endif
-    }
-    if (name == "video.renderer") {
-        return ReadRenderer(value, config.renderer);
     }
     if (name == "video.aspect") {
 #ifdef __SWITCH__
@@ -649,17 +624,6 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         return true;
     }
     return false;
-}
-
-const char *RenderThreadName(gfx::RenderThreadMode mode) {
-    switch (mode) {
-        case gfx::RenderThreadMode::Async:
-            return "async";
-        case gfx::RenderThreadMode::Lockstep:
-            return "lockstep";
-        default:
-            return "off";
-    }
 }
 
 const char *SoundName(const Config &config) {
@@ -777,12 +741,10 @@ std::string ConfigSerialize(const Config &config) {
     root["video"]["boss_shadow"] = config.boss_shadow;
     root["video"]["present_mode"] = PresentModeName(config.present_mode);
     root["video"]["interpolation"] = config.interpolation;
-    root["video"]["render_thread"] = RenderThreadName(config.render_thread);
     root["video"]["max_fps"] = config.max_fps;
     root["video"]["width"] = config.window_width;
     root["video"]["height"] = config.window_height;
     root["video"]["fullscreen"] = config.fullscreen;
-    root["video"]["renderer"] = config.renderer == ConfigRenderer::Noktus ? "noktus" : "kazarov";
     root["video"]["aspect"] = config.aspect == ConfigAspect::FourThree ? "4:3" : "auto";
     root["video"]["ui_scale"] = Shortest(config.ui_scale);
 #ifdef __ANDROID__
@@ -894,7 +856,7 @@ bool ConfigChange(const Config &config) {
 }
 
 bool ConfigAppliesOnRestart(std::string_view key) {
-    return key == "game.debug_mode" || key == "video.render_thread";
+    return key == "game.debug_mode";
 }
 
 } // namespace dc::platform

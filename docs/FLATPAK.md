@@ -62,7 +62,7 @@ so:
 | | |
 |---|---|
 | game data | `~/.var/app/org.themoonpeople.Chronicle/data/chronicle/data` |
-| saves, `config.json`, the pipeline cache | `~/.var/app/org.themoonpeople.Chronicle/data/chronicle/save` |
+| saves, `config.json` | `~/.var/app/org.themoonpeople.Chronicle/data/chronicle/save` |
 
 `config.json` is described in `docs/PC.md`. `flatpak uninstall --delete-data
 org.themoonpeople.Chronicle` removes both. The usual options still apply:

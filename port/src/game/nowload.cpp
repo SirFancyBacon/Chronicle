@@ -236,9 +236,7 @@ void PresentLoadingFrame() {
             DrawSprite();
         }
         textwipe::DrawDivider();
-        if (render::MirrorHasWindow()) {
-            app::GameDrawFpsForNoktus();
-        }
+        app::GameDrawFps();
     }
     render::EndFrame();
 }

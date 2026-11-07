@@ -35,6 +35,7 @@
 #include "platform/settings.hpp"
 #include "platform/window.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
 
 namespace dc::platform {
@@ -255,14 +256,14 @@ struct Canvas {
     }
 
     void Present() const {
-        if (!gfx::BeginFrame()) {
+        if (!render::BeginFrame()) {
             return;
         }
-        gfx::Clear(true, kBackground.data(), true, 0.0f);
+        render::Clear(true, kBackground.data(), true, 0.0f);
         if (!quads.empty()) {
             render::Draw2D(gfx::Primitive::Quads, quads, {}, gfx::DrawState{});
         }
-        gfx::EndFrame();
+        render::EndFrame();
     }
 };
 
@@ -827,7 +828,7 @@ void FirstRunIfNoData(bool headless) {
     window.height = config.window_height;
     window.fullscreen = config.fullscreen;
     window.headless = headless;
-    bool offscreen = headless && !gfx::HeadlessSurfaceAvailable();
+    bool offscreen = headless;
     window.vulkan = !offscreen;
     WindowInit(window);
     if (!headless) {
@@ -837,14 +838,12 @@ void FirstRunIfNoData(bool headless) {
     SDL_SetWindowTitle(WindowHandle(), "Game data needed");
 
     gfx::RendererConfig renderer;
-    renderer.app_name = "Dark Cloud";
     renderer.logical_width = kScreenWidth;
     renderer.logical_height = kScreenHeight;
     renderer.display_aspect = 4.0f / 3.0f;
-    renderer.pipeline_cache = PathsSaveRoot() / "pipeline_cache.bin";
     renderer.offscreen = offscreen;
-    renderer.validation = renderer.validation || SettingsEnv("VULKAN_VALIDATION") != nullptr;
     gfx::RendererInit(WindowHandle(), renderer);
+    render::MirrorTakeWindow(offscreen ? nullptr : WindowHandle());
 
     FirstRunOutcome         outcome;
     std::optional<fs::path> source = Choose(root);
@@ -868,10 +867,12 @@ void FirstRunIfNoData(bool headless) {
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "The game data could not be extracted", message.c_str(),
                                      WindowHandle());
         }
+        render::MirrorDropWindow();
         gfx::RendererShutdown();
         WindowShutdown();
         std::exit(kExitFailure);
     }
+    render::MirrorDropWindow();
     gfx::RendererShutdown();
     WindowShutdown();
     if (outcome.ok && source) {

@@ -13,12 +13,6 @@ namespace dc::platform {
 /**
  * The shape of the picture: the window's own, or 4:3 as on the PS2.
  */
-/** video.renderer: what draws to the game's window. */
-enum class ConfigRenderer {
-    Kazarov,
-    Noktus, /**< Noktus Nimbus. Kazarov still runs, without a window, since the game reads depth and other results from it. */
-};
-
 enum class ConfigAspect {
     Auto,
     FourThree,
@@ -61,8 +55,6 @@ struct Config : HostSettings {
 #else
     bool interpolation = true;
 #endif
-    gfx::RenderThreadMode render_thread = gfx::RenderThreadMode::Async;
-    ConfigRenderer        renderer = ConfigRenderer::Kazarov;
     ConfigAspect          aspect = ConfigAspect::Auto;
     float                 ui_scale = 1.0f;
 #if defined(__ANDROID__)

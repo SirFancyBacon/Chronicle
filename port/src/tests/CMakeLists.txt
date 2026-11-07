@@ -19,19 +19,21 @@ set_target_properties(darkcloud_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAK
 target_include_directories(darkcloud_tests PRIVATE ${NOKTUS_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/tools/dcdata)
 dc_link_game(darkcloud_tests)
 kz_port_tests(darkcloud_tests)
+# Kazarov's own renderer tests go with its renderer.
+get_target_property(darkcloud_test_sources darkcloud_tests SOURCES)
+list(FILTER darkcloud_test_sources EXCLUDE REGEX "/kazarov/src/cpp/tests/gfx_[a-z0-9_]+_test\\.cpp$")
+set_target_properties(darkcloud_tests PROPERTIES SOURCES "${darkcloud_test_sources}")
 target_link_libraries(darkcloud_tests PRIVATE GTest::gtest nlohmann_json::nlohmann_json)
 
 # A test that stalls is cut off; graphics startup can take several seconds on some systems. The clock
 # cases measure short sleeps, which the parallel gfx cases skew, so they run on their own.
 set(DC_TEST_TIMEOUT 30 CACHE STRING "Seconds a test case may run before it is cut off")
 # The cases that need a Vulkan device have the gpu label, so a machine without one runs ctest -LE gpu. They are
-# Kazarov's suites named GfxGpu* (its src/cpp/gfx/README.md, "Shared device test classification") and the ones
-# that start a device under another name (GfxMisc, GfxTim2 and GfxCachedTarget), and every suite in a Chronicle
-# test file that includes gfx_fixture.hpp or tex_fixture.hpp, found here so that a new one is labeled without a
+# every suite in a test file that includes gfx_fixture.hpp or tex_fixture.hpp, found here so that a new one is labeled without a
 # list to keep. Some start several renderers, each compiling every pipeline (seconds apiece, more on a software
 # driver such as lavapipe), so they have their own limit.
 set(DC_GPU_TEST_TIMEOUT 120 CACHE STRING "Seconds a test case that needs a Vulkan device may run")
-set(device_suites GfxMisc GfxTim2 GfxCachedTarget)
+set(device_suites)
 foreach(source IN LISTS TEST_SOURCES)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${source})
     file(STRINGS ${source} fixture REGEX "^#include \"(gfx|tex)_fixture\\.hpp\"")

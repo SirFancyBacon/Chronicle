@@ -17,7 +17,6 @@
 #include "data/data_read.hpp"
 #include "data_fixture.hpp"
 #include "dataread.hpp"
-#include "gfx/context.hpp"
 #include "platform/paths.hpp"
 #include "tex_fixture.hpp"
 
@@ -141,7 +140,7 @@ Bytes Conv8to32(int image_width, int image_height, const Bytes &source) {
 
 // GitHub's macOS runner GPU reads palette index 1 wrong; real Apple GPUs do not.
 bool OnParavirtualGpu() {
-    return std::string_view(gfx::detail::g.properties.deviceName).contains("Paravirtual");
+    return render::MirrorDeviceName().contains("Paravirtual");
 }
 
 } // namespace
@@ -288,11 +287,6 @@ TEST(TexDecode, Idtex4ExpandsToIndex8) {
     ASSERT_TRUE(ref.valid && ref.width == 4);
     auto info = gfx::GetTextureInfo(ref.binding.texture);
     ASSERT_TRUE(info && info->format == gfx::TextureFormat::Index8);
-    std::vector<uint8_t> indices;
-    uint32_t             width = 0;
-    uint32_t             height = 0;
-    ASSERT_TRUE(gfx::ReadbackTexture(ref.binding.texture, indices, width, height));
-    ASSERT_TRUE(width == 4 && indices[0] == 1 && indices[1] == 2 && indices[2] == 15 && indices[3] == 0);
     env.gfx.Frame({0, 0, 0, 0x80}, [&] { env.Draw(ref, 0, 0, 400, 100, 0, 0, 4, 1); });
     ASSERT_TRUE(env.gfx.PixelNear(50, 50, 255, 0, 0));
     ASSERT_TRUE(env.gfx.PixelNear(150, 50, 0, 255, 0));
@@ -347,11 +341,6 @@ TEST(TexDecode, Im2ArchiveDrawsUnswizzled) {
     Enter(img, 0, 1);
     PortTextureRef ref = Resolve("swz");
     ASSERT_TRUE(ref.valid);
-    std::vector<uint8_t> indices;
-    uint32_t             width = 0;
-    uint32_t             height = 0;
-    ASSERT_TRUE(gfx::ReadbackTexture(ref.binding.texture, indices, width, height));
-    ASSERT_TRUE(Bytes(indices.begin(), indices.end()) == linear);
     auto info = gfx::GetTextureInfo(ref.binding.texture);
     ASSERT_TRUE(info && info->mip_levels == 2);
     env.gfx.Frame({0, 0, 0, 0x80}, [&] { env.Draw(ref, 0, 0, 320, 320, 0, 0, 32, 32); });

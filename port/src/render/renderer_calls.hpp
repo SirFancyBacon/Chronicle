@@ -43,80 +43,54 @@ DC_RENDERER_CALL(VisibleLogicalRect)
 // A frame outside the game's ticks, as the loading screen draws: to Noktus it's a tick like any other.
 inline bool BeginFrame() {
     const bool open = gfx::BeginFrame();
-    if (open && MirrorOn()) {
+    if (open) {
         MirrorBeginTick();
     }
     return open;
 }
 
 inline void EndFrame() {
-    if (MirrorOn()) {
-        MirrorEndTick();
-    }
+    MirrorEndTick();
     gfx::EndFrame();
 }
 
 inline gfx::TextureHandle CreateTexture(const gfx::TextureDesc &desc) {
     const gfx::TextureHandle texture = gfx::CreateTexture(desc);
-    if (MirrorOn() && texture != gfx::kNullTexture) {
+    if (texture != gfx::kNullTexture) {
         MirrorTexture(texture, desc);
     }
     return texture;
 }
 
 inline bool UpdateTexture(gfx::TextureHandle texture, std::uint32_t mip, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, const void *pixels) {
-    if (MirrorOn()) {
-        MirrorTexturePixels(texture, mip, x, y, width, height, pixels);
-    }
+    MirrorTexturePixels(texture, mip, x, y, width, height, pixels);
     return gfx::UpdateTexture(texture, mip, x, y, width, height, pixels);
 }
 
 inline bool UpdatePalette(gfx::TextureHandle palette, const std::uint32_t *colors, std::uint32_t first = 0, std::uint32_t count = 256) {
-    if (MirrorOn()) {
-        MirrorPalette(palette, colors, first, count);
-    }
+    MirrorPalette(palette, colors, first, count);
     return gfx::UpdatePalette(palette, colors, first, count);
 }
 
 inline bool UpdateTextureNow(gfx::TextureHandle texture, std::uint32_t mip, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, const void *pixels) {
-    if (MirrorOn()) {
-        MirrorTexturePixels(texture, mip, x, y, width, height, pixels);
-    }
+    MirrorTexturePixels(texture, mip, x, y, width, height, pixels);
     return gfx::UpdateTextureNow(texture, mip, x, y, width, height, pixels);
 }
 
 inline void ReadDepth(std::uint32_t id, float x, float y, float width, float height) {
-    if (MirrorOn()) {
-        MirrorReadDepth(id, {x, y, width, height});
-    }
-    if (!MirrorDrawsAlone()) {
-        gfx::ReadDepth(id, x, y, width, height);
-    }
+    MirrorReadDepth(id, {x, y, width, height});
 }
 
 inline std::optional<float> DepthResult(std::uint32_t id) {
-    if (MirrorDrawsAlone()) {
-        return MirrorDepthResult(id);
-    }
-    const std::optional<float> depth = gfx::DepthResult(id);
-    if (depth && MirrorOn()) {
-        MirrorCompareDepth(id, *depth);
-    }
-    return depth;
+    return MirrorDepthResult(id);
 }
 
 inline void CutInterpolation() {
-    if (MirrorOn()) {
-        MirrorCutMotion();
-    }
-    gfx::CutInterpolation();
+    MirrorCutMotion();
 }
 
 inline void CutCameraInterpolation() {
-    if (MirrorOn()) {
-        MirrorCutCameraMotion();
-    }
-    gfx::CutCameraInterpolation();
+    MirrorCutCameraMotion();
 }
 
 inline void SetInterpKey(gfx::InterpKey key, bool no_interpolation = false, float teleport_distance = std::numeric_limits<float>::infinity(), bool blend_vertices = false) {
@@ -125,86 +99,51 @@ inline void SetInterpKey(gfx::InterpKey key, bool no_interpolation = false, floa
 }
 
 inline void UpdateMeshVertices(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices) {
-    if (MirrorOn()) {
-        MirrorUpdateMesh(mesh, first, vertices);
-    }
-    if (!MirrorDrawsAlone()) {
-        gfx::UpdateMeshVertices(mesh, first, vertices);
-    }
+    MirrorUpdateMesh(mesh, first, vertices);
 }
 
-inline void Clear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect = nullptr,
-                  const gfx::LogicalRect *presentation_rect = nullptr) {
-    if (MirrorOn()) {
-        MirrorClear(color, rgba, depth, depth_value, rect);
-    }
-    if (!MirrorDrawsAlone()) {
-        gfx::Clear(color, rgba, depth, depth_value, rect, presentation_rect);
-    }
+inline void Clear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect = nullptr, const gfx::LogicalRect * /*presentation_rect*/ = nullptr) {
+    MirrorClear(color, rgba, depth, depth_value, rect);
 }
 
-inline void ClearStencil(std::uint8_t value, const gfx::LogicalRect *rect = nullptr) {
-    if (MirrorOn()) {
-        MirrorClearStencil();
-    }
-    if (!MirrorDrawsAlone()) {
-        gfx::ClearStencil(value, rect);
-    }
+inline void ClearStencil(std::uint8_t /*value*/, const gfx::LogicalRect * /*rect*/ = nullptr) {
+    MirrorClearStencil();
 }
 
 inline void SetRenderTarget(gfx::TextureHandle target) {
-    if (MirrorOn()) {
-        MirrorSetTarget(target);
-    }
+    MirrorSetTarget(target);
     gfx::SetRenderTarget(target);
 }
 
 inline gfx::TextureHandle CreateRenderTarget(std::uint32_t width, std::uint32_t height, bool has_alpha, bool share_main_depth = false, bool frame_target = false) {
     const gfx::TextureHandle target = gfx::CreateRenderTarget(width, height, has_alpha, share_main_depth, frame_target);
-    if (MirrorOn()) {
-        MirrorSurface(target, width, height, has_alpha, share_main_depth, frame_target);
-    }
+    MirrorSurface(target, width, height, has_alpha, share_main_depth, frame_target);
     return target;
 }
 
 inline gfx::TextureHandle NamedRenderTarget(std::string_view name, std::uint32_t width, std::uint32_t height, bool has_alpha, bool share_main_depth = false,
                                             bool frame_target = false) {
-    const gfx::TextureHandle before = MirrorOn() ? gfx::FindNamedRenderTarget(name) : gfx::kNullTexture;
+    const gfx::TextureHandle before = gfx::FindNamedRenderTarget(name);
     const gfx::TextureHandle target = gfx::NamedRenderTarget(name, width, height, has_alpha, share_main_depth, frame_target);
-    if (MirrorOn()) {
-        // A name asked for in a new shape is a new target, and the old one is gone.
-        if (before != gfx::kNullTexture && before != target) {
-            MirrorDestroyTexture(before);
-        }
-        MirrorSurface(target, width, height, has_alpha, share_main_depth, frame_target);
+    // A name asked for in a new shape is a new target, and the old one is gone.
+    if (before != gfx::kNullTexture && before != target) {
+        MirrorDestroyTexture(before);
     }
+    MirrorSurface(target, width, height, has_alpha, share_main_depth, frame_target);
     return target;
 }
 
 inline bool CopyMainDepthToTarget(const gfx::LogicalRect &source) {
-    if (MirrorDrawsAlone()) {
-        return MirrorCopyDepth(source);
-    }
-    if (!gfx::CopyMainDepthToTarget(source)) {
-        return false;
-    }
-    if (MirrorOn()) {
-        MirrorCopyDepth(source);
-    }
-    return true;
+    return MirrorCopyDepth(source);
 }
 
 inline bool SnapshotFrame(gfx::TextureHandle target) {
-    if (MirrorOn()) {
-        MirrorSnapshotFrame(target);
-    }
-    return MirrorDrawsAlone() || gfx::SnapshotFrame(target);
+    MirrorSnapshotFrame(target);
+    return true;
 }
 
 inline void DestroyTexture(gfx::TextureHandle texture) {
-    if (MirrorOn()) {
-        MirrorDestroyTexture(texture);
-    }
+    MirrorDestroyTexture(texture);
     gfx::DestroyTexture(texture);
 }
 

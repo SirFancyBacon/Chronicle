@@ -123,8 +123,8 @@ void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
             const gfx::DrawState &state);
 
 /**
- * DC_PASS_TRACE=<path>: at exit writes each shape of frame seen, with its passes in order, as JSON. `drawn` is what the tick's
- * display list says it holds, the truth the counted draws are checked against: every draw has to come through the calls below.
+ * DC_PASS_TRACE=<path>: at exit writes each shape of frame seen, with its passes in order, as JSON. `drawn` is what Noktus
+ * says it was given, the truth the counted draws are checked against: every draw has to come through the calls below.
  */
 void PassTraceStart();
 void PassTraceBeginTick();
@@ -137,31 +137,21 @@ inline void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vert
     CountDraw();
     Note2D(primitive, vertices, texture, state);
     const Routed routed = Route(texture, state);
-    if (MirrorOn()) {
-        MirrorDraw2D(primitive, vertices, routed.texture, routed.state);
-    }
-    if (!MirrorDrawsAlone()) {
-        gfx::Draw2D(primitive, vertices, routed.texture, routed.state, presentation);
-    }
+    MirrorDraw2D(primitive, vertices, routed.texture, routed.state);
 }
 
 inline void DrawDepthPlanes2D(const gfx::DepthPlanes2D &planes, std::span<const gfx::Vertex2D, 4> quad,
                               const gfx::TextureBinding &texture, const gfx::DrawState &state) {
     CountDraw();
     const Routed routed = Route(texture, state);
-    if (MirrorOn()) {
-        std::array<gfx::Vertex2D, 4> plane;
-        std::ranges::copy(quad, plane.begin());
-        for (std::uint32_t i = 0; i < planes.count; i++) {
-            for (gfx::Vertex2D &vertex : plane) {
-                vertex.z = planes.depth[i];
-                vertex.color[3] = planes.alpha[i];
-            }
-            MirrorDraw2D(gfx::Primitive::Quads, plane, routed.texture, routed.state);
+    std::array<gfx::Vertex2D, 4> plane;
+    std::ranges::copy(quad, plane.begin());
+    for (std::uint32_t i = 0; i < planes.count; i++) {
+        for (gfx::Vertex2D &vertex : plane) {
+            vertex.z = planes.depth[i];
+            vertex.color[3] = planes.alpha[i];
         }
-    }
-    if (!MirrorDrawsAlone()) {
-        gfx::DrawDepthPlanes2D(planes, quad, routed.texture, routed.state);
+        MirrorDraw2D(gfx::Primitive::Quads, plane, routed.texture, routed.state);
     }
 }
 
@@ -171,12 +161,7 @@ inline void DrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint3
     CountDraw();
     NoteMesh(constants, transform, texture, state);
     const Routed routed = Route(texture, state);
-    if (MirrorOn()) {
-        MirrorDrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
-    }
-    if (!MirrorDrawsAlone()) {
-        gfx::DrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
-    }
+    MirrorDrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
 }
 
 inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices,
@@ -185,32 +170,23 @@ inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span
     CountDraw();
     NoteMesh(constants, transform, texture, state);
     const Routed routed = Route(texture, state);
-    if (MirrorOn()) {
-        MirrorDrawImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
-    }
-    if (!MirrorDrawsAlone()) {
-        gfx::DrawMeshImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
-    }
+    MirrorDrawImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
 }
 
 inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, std::int32_t dst_x,
                         std::int32_t dst_y) {
     CountCopy();
     NoteCopy(src_rect, gfx::Rect{dst_x, dst_y, src_rect.w, src_rect.h});
-    if (MirrorOn()) {
-        MirrorCopyTexture(src, src_rect, dst, dst_x, dst_y);
-    }
-    return MirrorDrawsAlone() || gfx::CopyTexture(src, src_rect, dst, dst_x, dst_y);
+    MirrorCopyTexture(src, src_rect, dst, dst_x, dst_y);
+    return true;
 }
 
 inline bool BlitTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, gfx::Rect dst_rect,
                         gfx::Filter filter) {
     CountCopy();
     NoteCopy(src_rect, dst_rect);
-    if (MirrorOn()) {
-        MirrorBlit(src, src_rect, dst, dst_rect, filter);
-    }
-    return MirrorDrawsAlone() || gfx::BlitTexture(src, src_rect, dst, dst_rect, filter);
+    MirrorBlit(src, src_rect, dst, dst_rect, filter);
+    return true;
 }
 
 } // namespace dc::render

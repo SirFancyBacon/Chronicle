@@ -6,7 +6,6 @@
 #include <fstream>
 #include <string_view>
 
-#include "gfx/context.hpp"
 #include "gfx_fixture.hpp"
 #include "localize/localize.hpp"
 #include "mainselect.hpp"
@@ -46,7 +45,7 @@ std::filesystem::path CaptionFontPath() {
 void CheckTranslatedCard(const char *text) {
     dc::test::GfxFixture fixture(640, 480, 1.0f, dc::test::GfxOptions{.offscreen = true});
     // GitHub's macOS runner GPU misreads the card's lettering; real Apple GPUs do not.
-    if (std::string_view(gfx::detail::g.properties.deviceName).contains("Paravirtual")) {
+    if (render::MirrorDeviceName().contains("Paravirtual")) {
         GTEST_SKIP() << "the CI runner's virtual GPU misreads the card";
     }
     CardFiles files;

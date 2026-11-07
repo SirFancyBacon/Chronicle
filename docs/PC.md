@@ -99,12 +99,12 @@ a language the data lacks, and its English button reads as the disc's art does.
 | Option | Meaning |
 |---|---|
 | `--data DIR` | the extracted data directory or the logical directory beside `data.zip` (default: `DC_DATA`, then `./data`, then `data/` beside the executable, then `$XDG_DATA_HOME/chronicle/data`) |
-| `--save DIR` | saves, `config.json`, the pipeline cache and host files (default: `DC_SAVE`, then `./save`, then `save/` beside the executable, then `save/` beside a local `data/`, then `$XDG_DATA_HOME/chronicle/save`); created on first use |
+| `--save DIR` | saves, `config.json` and host files (default: `DC_SAVE`, then `./save`, then `save/` beside the executable, then `save/` beside a local `data/`, then `$XDG_DATA_HOME/chronicle/save`); created on first use |
 | `--seed-save DIR` | copy this save-root fixture before startup reads it; requires an explicit `--save DIR` pointing to a new or empty directory; omit on subsequent runs |
-| `--headless` | SDL's offscreen video driver with `VK_EXT_headless_surface`, SDL's dummy audio driver, and the game clock unbounded (one tick per pump, no sleeping) |
-| `--offscreen` | `--headless` without a Vulkan surface: frames are drawn to an image only (what `--headless` does by itself when the loader has no `VK_EXT_headless_surface`) |
+| `--headless` | no window: Noktus draws into a picture. SDL's dummy audio driver, and the game clock unbounded (one tick per pump, no sleeping) |
+| `--offscreen` | the same as `--headless` |
 | `--frames N` | stop after N frames of the game's main loop |
-| `--screenshot PATH` | after the run, write the last tick's canonical image (or the loading screen's frame, if it presented since) to PATH as a PNG; never a display frame, so never the FPS counter |
+| `--screenshot PATH` | after the run, write the last tick's picture to PATH as a PNG, with the FPS counter if it's on |
 | `--input FILE` | drive the pads from a script (default: `DC_INPUT`; see "Scripted input") |
 | `--width W`, `--height H` | window size in pixels, over `config.json` (default: the monitor's resolution) |
 | `--jump MODE[:MAP]` | test hook: start in a mode (see "Test hooks"); also `DC_JUMP` |
@@ -112,17 +112,12 @@ a language the data lacks, and its English button reads as the disc's art does.
 | `--town-menu N`, `--town-event N` | test hooks: open a town menu, or raise a town program (see "Test hooks") |
 | `--town-clock H`, `--town-interior NAME`, `--dungeon-ura` | test hooks: set the town's clock, enter an interior, or swap to a floor's back side (see "Test hooks") |
 | `--give ITEM,...` | test hook: items and weapons the party is given when a town or dungeon starts (see "Test hooks"); also `DC_GIVE` |
-| `--display-per-tick N` | headless test aid: render N interpolated display frames per tick (offscreen, not presented) before presenting the tick's canonical image |
 | `--show-fps` | draw the FPS counter when headless too (a headless run leaves `show_fps` off) |
-| `--perf-log` | print tick, render-thread, GPU-timestamp and present timings once a second (see [Switch](SWITCH.md#performance-measurement)) |
-| `--screenshot-fps` | with `--screenshot` and `--show-fps`: write the image as a window shows it, the counter over the canonical image, instead of the canonical image alone |
+| `--screenshot-fps` | with `--screenshot`: fail if the FPS counter is off |
 
 Environment: `DC_DATA` and `DC_SAVE` (above), `DC_INPUT` (above), `DC_AUDIO=off` (no audio
-device), `DC_AUDIO_WAV` and `DC_AUDIO_TRACE` (see "Audio"), `DC_VULKAN_VALIDATION` (enable the Khronos validation layer in a
-release build; a debug build always asks for it), `DC_PASS_TRACE=<path>` (write each shape of frame seen, its render passes in order with their draws and copies, as JSON at exit;
-`port/src/render/passes.hpp`), `DC_PRESENT_STATS=1` (print
-draws per tick and render times at exit, and what the FPS counter said last
-when it is on), `DC_FISHING_TRACE=1` (print a fishing session's steps and each fish's actions about the
+device), `DC_AUDIO_WAV` and `DC_AUDIO_TRACE` (see "Audio"), `DC_PASS_TRACE=<path>` (write each shape of frame seen, its render passes in order with their draws and copies, as JSON at exit;
+`port/src/render/passes.hpp`), `DC_FISHING_TRACE=1` (print a fishing session's steps and each fish's actions about the
 bait, docs/FISHING_FRAMEWORK.md), and SDL's own variables.
 
 Exit statuses (`port/src/app/exitcodes.hpp`): 0 when the window was closed or
@@ -138,7 +133,7 @@ The source directory contains the save-root contents directly, such as `saves/1/
 and `saves/state.json`. Existing nonempty destinations, overlapping roots and source links
 are refused. Files are copied without inheriting read-only source permissions; the source
 is unchanged. An I/O failure can leave a partial destination, which is refused on retry.
-Omit `--seed-save` on later runs to retain that root's config and pipeline cache. Any
+Omit `--seed-save` on later runs to retain that root's config. Any
 `config.json` included in the fixture is loaded normally; omit it to use platform defaults.
 Seeding does not change rendering settings or command-line overrides.
 
@@ -174,7 +169,6 @@ key is optional; these are the defaults:
     "video": {
         "present_mode": "fifo",     // fifo, mailbox or immediate (each falls back to the next safer one)
         "interpolation": true,      // false: present each tick's image once, as rendered
-        "render_thread": "async",   // off, lockstep or async; takes effect after restarting
         "max_fps": 0,               // display frames per second at most; 0: as the present mode allows
         "width": 0,                 // window size in pixels; 0: the monitor's resolution. Both 0: fullscreen on the
         "height": 0,                //   monitor, so "aspect": "auto" takes the monitor's shape; headless: 1280x960
@@ -765,9 +759,7 @@ takes `--data`/`--save` out of argv; the other options are parsed; optional
 `--seed-save` copies a fixture into the explicit save root; the data
 directory is checked; `ConfigLoad` reads `config.json`; `WindowInit` opens the
 window (size and fullscreen from the config, offscreen when headless);
-`InputInit`; `gfx::RendererInit` with the config's present mode, the pipeline
-cache at `<save>/pipeline_cache.bin` and a progress callback that prints
-`compiling shaders n/total` at quarters; `AudioOutputStart` pulls
+`InputInit`; `gfx::RendererInit` with the frame's layout, and Noktus starts on the first tick; `AudioOutputStart` pulls
 `audio::DefaultMixer()` at its rate with the config's master gain; the clock
 gets the config's tick rate (unbounded when headless); a pump hook is
 installed that pumps window events (a close request stops the game) and
@@ -816,98 +808,27 @@ with the hardware taken out, line for line otherwise:
 
 ### Ticks and display frames
 
-The game logic runs at the fixed tick rate; the window is presented at its own
-rate, with motion interpolated between ticks (`tools/kazarov/src/cpp/gfx/README.md`,
-"Display lists"):
-
-1. `MGBeginFrame` starts recording the tick's display list: what the game draws,
-   copies and uploads is appended to the list rather than executed.
-2. `MGEndFrame` seals it and `GameRenderTick` (`gameloop.cpp`) renders it once,
-   in full, as the tick's canonical image. That image is what the next tick's
-   `MGGetFBuffBackTex` / `kPreviousFrame` samples and what frame copies and
-   `mgPickZBuff` read, and every copy, blit, texture or palette update in the
-   list (frame grabs into `frame_image` and `water`, texture animation,
-   `MGMoveImage`, `MGStretchMoveImage`) runs there, once per tick. The
-   previous-frame effects (the title's trail, water, depth of field) are
-   therefore tick-exact whatever the display rate.
-3. `MGEndFrame` then waits for the next tick as before (`mgWaitVSync`, the
-   count, the callbacks and every spin on the clock are unchanged), and while
-   it waits `GamePresentBetweenTicks` renders display frames from the last two
-   lists at alpha = the elapsed fraction of the tick and presents them, as fast
-   as `present_mode` and `max_fps` allow. A display frame replays the newest
-   list's drawing only, into its own image, with each `CFrame`'s model matrix
-   (`frame.cpp` tags its draws with the frame's address; a visual drawn
-   outside one with its record) and the camera interpolated between the two
-   ticks. A frame drawn at several places in a tick (a town's tiles and parts
-   share theirs) is matched place by place, not in draw order. A tick that did not wait, or presented nothing, presents its
-   canonical image.
-
-A grab of the frame that the tick draws back (the depth of field's blur, the water)
-is taken again by each display frame from its own image, so it lines up with the
-interpolated scene; the game's texture keeps the tick's grab. Cloth draws use a
-rigid coordinate system attached to their frame, with scale retained in the
-vertices. Display frames interpolate that transform and the local deformation
-separately, so turns carry the poncho around the body instead of blending its
-world positions through it. A frame or local vertex movement over 10 units cuts
-interpolation. The simulation and its world-space collisions are unchanged.
-
-Animated MDT visuals use the first VU block's host mesh for both display
-buffers. The display list records each remake, including stationary poses, so
-body geometry matches between ticks and interpolates alongside attached cloth.
-Alternating host meshes would prevent the renderer from matching those poses.
-
-What a display frame does not interpolate: 2D (the HUD is tick-exact), 3D
-sprites (2D quads with depth), objects that moved more than
-`kDraw3DTeleportDistance` (200 units) in a tick, a camera that moved more than
-200 units or turned more than 45 degrees, and the first tick of every mode
-(`RunGame` cuts there). `interpolation = off` presents each canonical image once,
-which is the PS2's picture at the tick rate. Headless runs (unbounded clock)
-present one canonical image per tick, so screenshots are those images.
-
-The loading screen still presents from the idle hook as immediate frames; once
-it has, display frames stop until the next tick's canonical render.
+The game logic runs at the fixed tick rate. Each tick, from `MGBeginFrame` to `MGEndFrame`, hands what it drew to
+Noktus Nimbus, which draws it on a thread of its own, paced to the display, and moves things between ticks. Frame
+grabs, copies and texture updates take effect once a tick, in order, and the previous-frame effects (the title's
+trail, water, depth of field) sample the tick before. `mgPickZBuff`'s depth reads come back from Noktus a few ticks
+later. `ClockWaitNextTick` keeps the ticks to time, and a tick only waits for Noktus to have taken the one before.
 
 ### The FPS counter
 
-With `video.show_fps` (on by default; `fps_toggle`, F3, flips it at any
-time), every presented frame carries one line at the window's top-left
-corner, in the game's own message font (white with a black edge, as the menus
-draw their text) while a mode has the font's textures loaded, and in the
-port's 5x7 font (`tools/kazarov/src/cpp/platform/overlay.cpp`, white on a translucent black
-backdrop, on whole pixels: one per logical unit, rounded) on the loading
-screens and between modes, where it has not:
+With `video.show_fps` (on by default; `fps_toggle`, F3, flips it at any time), each tick carries one line at the
+window's top-left corner, in the port's 5x7 font (`tools/kazarov/src/cpp/platform/overlay.cpp`, white on a translucent
+black backdrop, on whole pixels), on the loading screens too:
 
 ```
 FPS 143.9  TICK 60.0/60  DRAWS 412
 ```
 
-(`video.fps_detail`, and Options > Display > FPS Info, choose how much of it: `fps` is `FPS 143.9`
-alone, `ticks` adds the tick rate, `all`, the default, adds the draws.)
-
-the frames presented per second and the logic ticks rendered per second,
-each over the last half second or so, the configured tick rate, and the
-newest tick's mesh and 2D draws. It is drawn into a
-display list of its own (`gfx::Draw2D` for the 5x7 font, the game's `ClsMes` text
-code for the message font, anchored to the top-left of what the window shows), recorded only when the text, the window's mapping or the message font
-changes, never into a tick's list: a display frame draws it after the tick's
-list and before the present (`gfx::RenderOptions::overlay`), and a tick
-presented as its canonical image is presented as a display render of the
-counter alone, which starts from that image. So the canonical image, which
-`kPreviousFrame`, frame copies, pick-Z and `--screenshot` read, never holds
-it, and screenshots are the same byte for byte with it on or off (`--screenshot-fps` is the one
-exception, asked for by name). The
-loading screen's own presents do not carry it. Headless runs leave it off
-unless `--show-fps` is given.
-
-A display frame costs what drawing the tick costs on the GPU, plus little on the
-CPU: in the opening's first scene (about 2,100 mesh draws and 100 2D draws per
-tick, all of them keyed), a release build spends 1.6 ms interpolating and 1.8 ms
-replaying a list, and lavapipe about 150 ms rasterising it at 1280x960. The
-canonical render is the frame the port drew before, and the only one that pays
-for copies and readbacks. The first dungeon's floor B1 draws about 265 mesh and 145 2D
-draws a tick (at most 666). `darkcloud --headless --display-per-tick 4` leaves
-every screenshot of the title, the attract movie, the opening and that floor
-byte for byte the same.
+(`video.fps_detail`, and Options > Display > FPS Info, choose how much of it: `fps` is `FPS 143.9` alone, `ticks` adds
+the tick rate, `all`, the default, adds the draws.) These are the frames shown per second, the ticks per second, each
+over the last half second or so, the configured tick rate, and the newest tick's draws. With no window, frames are
+ticks. It's drawn into the tick (`GameDrawFps`), so what a next tick reads of the last frame holds it, and so does
+`--screenshot`. Headless runs leave it off unless `--show-fps` is given.
 
 Overlays are not re-initialised: `TITLE.BIN` and `DUN.BIN` are linked in
 once, where retail reloaded the overlay's data, zeroed its `.bss` and re-ran
@@ -962,7 +883,7 @@ them.
 - **Config** (`platform/config`) and **paths** (`platform/paths`): above.
 - **Overlay** (`platform/overlay`): the port's 5x7 font (the first-run screen
   draws with it too), a line of text drawn with `gfx::Draw2D` on whole pixels
-  at the window's corner and recorded as a display list of its own, and the
+  at the window's corner, and the
   rate meter behind the FPS counter ("The FPS counter").
 - **Audio output** (`platform/audio`): an SDL3 float stereo stream that pulls
   frames from a render callback on SDL's audio thread; `DC_AUDIO=off` or no
@@ -981,16 +902,10 @@ Vulkan blending and where it does not.
 
 ### Which renderer draws the window
 
-`video.renderer` in `config.json` is `kazarov`, the default, or `noktus`, and `DC_RENDERER` overrides it. With
-`noktus`, Noktus Nimbus (`tools/noktus`) draws to the game's window on a thread of its own, paced to the display,
-and Kazarov draws nothing: draws, clears and copies stop at the wrappers in `port/src/render` (`MirrorDrawsAlone`).
-Kazarov stays for what isn't drawing: it holds the game's textures and render targets, and each tick still runs an
-empty frame through it, which is what flushes its uploads and retires what's destroyed. `--screenshot` keeps it
-drawing, since a screenshot is its picture.
+Noktus Nimbus draws the game, with the window or, in a headless run, into a picture. `port/src/render/gfx_host.cpp` answers what game code still asks of a renderer, and Kazarov's own renderer isn't built.
 
 The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion and Anisotropic Filter
-change as the game runs. The depth picks behind the lens flare are read from Noktus, whose answers come a tick
-before Kazarov's would.
+change as the game runs. The depth picks behind the lens flare are read from Noktus, whose answers come a few ticks later.
 
 Noktus decides where 2D reaches past the frame from the layer it's told. A screen can name one; a draw left in the
 interface layer, where retail's 2D falls when nothing names it, takes the answer of Kazarov's rule for its shape and
@@ -1042,7 +957,7 @@ shape. With `video.aspect` `auto` the rest of the window is not bars:
 - **Frame grabs** (`frame_image`, `frame_buff` and the other `frame_*`
   placeholders, and the water's `water` and `water_buff`; `MGPortFrameTarget`)
   are as wide as the window, so what they hold and draw back includes the
-  sides; the canonical and display images are the window's size. The game's
+  sides; the picture is the window's size. The game's
   other 640xN target (`blender`) keeps its size at the render
   scale.
 - **Depth of field** (`DepthOfField`, `port/src/game/effectmacro.cpp`; the towns'
@@ -1084,8 +999,7 @@ shape. With `video.aspect` `auto` the rest of the window is not bars:
   the frame's sides; it is spread across, not enlarged) and the attract
   movie's turning title card are drawn larger by as much as the view is wider
   (`TitlePortBackdropScale`, `port/src/title/title_draw.cpp`).
-- **The FPS counter** is the host's and is never carried past the frame
-  (`gfx::RenderOptions::host`).
+- **The FPS counter** is drawn into the tick ("The FPS counter").
 - **Game logic** is unchanged: `MGRotTransPers*` answer in retail's GS and
   logical coordinates, which land on the meshes through the same mapping (the
   dungeon's lock-on corners, the town's edit cursor and name tags).
@@ -1108,9 +1022,8 @@ around one `render/` header:
   space and reverse-Z (`MGPortLogicalX/Y`, `MGPortDepth`); TBP0 0 and 0xFFF
   stand for the frame and the previous frame. The VSync group (`MGInit`,
   `MGInitVSyncCallBack`, `MGGetVSyncCount`, `MGBeginFrame`, `MGEndFrame`,
-  `MGFlipWaitVSync`) sits on the clock; `MGBeginFrame` starts recording a
-  tick, `MGEndFrame` renders it, presents between ticks and keeps retail's
-  "do not wait twice" rule. Pick-Z reads the canonical render's depth buffer.
+  `MGFlipWaitVSync`) sits on the clock; `MGBeginFrame` starts a tick, and
+  `MGEndFrame` hands it to Noktus and keeps retail's "do not wait twice" rule. Pick-Z reads Noktus's depth.
   `MGSetRenderInfo` keeps retail's matrices; the field squeeze is undone
   where the game's rects reach the renderer.
 - **`render/texture_registry.hpp`** (`game/texture.cpp`,
@@ -2106,22 +2019,7 @@ installing, the first start and where the data and saves live.
 
 ## Renderer performance and threading
 
-The Kazarov dependency is pinned at `726b1ee`. It includes
-ChronicleTwo's renderer work: cached camera re-basing, bone palettes stored separately
-from draw constants, shared storage-buffer records, deduplicated uploads and descriptor
-bindings, cached display-list rewrites, full-cover grabs without a redundant copy, and
-device-local host-visible transient memory when the device supports it. Bone palettes
-apply to prog0 draws; Chronicle's own animated MDTs still use its CPU skinning path.
-`KZ_TRANSIENT_MEMORY=host` selects the host-memory fallback.
-
-`video.render_thread` selects `async` (the desktop default), `lockstep`, or `off`.
-`DC_RENDER_THREAD` overrides the setting; `KZ_RENDER_THREAD` overrides both.
-Headless and screenshot runs force `off`, and Android always uses `off`.
-Changing the config key requires a restart. Async publishes immutable scene, previous
-scene and FPS-overlay lists. The worker presents while the game records the next tick;
-canonical rendering and depth readback hold a render lease. Shutdown parks the worker
-before reading screenshots or releasing the renderer. Input and game state remain on
-the game thread, so input is sampled at the game tick rate in async mode.
+Noktus draws on a thread of its own, paced to the display.
 
 Chronicle combines only adjacent strips with identical materials, texture state and
 terrain flags, preserving triangle order. Remaking a mesh uploads vertices only when

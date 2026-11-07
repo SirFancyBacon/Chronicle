@@ -35,9 +35,6 @@ namespace dc::render {
 
 namespace {
 
-// How many of Noktus's depth answers to look through for one of today's: the two answer a tick or so apart.
-constexpr std::size_t kDepthAnswersKept = 4;
-constexpr float       kDepthAgrees = 0.0005f;
 
 // A paletted texture, kept as the game gave it. Noktus has no palettes: what it draws is one of these through a palette, made as it's first drawn that way, and made again when either
 // changes. The game draws one image through another's palette, for text colours, so it's the pair that counts.
@@ -88,18 +85,11 @@ struct Mirror {
     bool                                                     vertices_move = false;
     std::uint64_t                                            draws_at_tick_end = 0;
     std::uint64_t                                            draws_last_tick = 0;
-    std::uint64_t                                            depth_compared = 0;
-    float                                                    depth_difference = 0.0f; // the largest seen
-    std::uint64_t                                            depth_differing = 0;
-    std::uint64_t                                            depth_on_something = 0;  // not open sky: a read of nothing but sky would prove little
-    std::array<std::array<float, kDepthAnswersKept>, noktus::Renderer::kDepthReads> depth_answers{}; // Noktus's latest, per slot, going round
-    std::array<std::uint32_t, noktus::Renderer::kDepthReads>                       depth_answer_count{};
 };
 
-// A mirror is a test tool: whatever goes wrong in it, the game plays on. With the game's own window it's what the player sees, and it can't.
 bool        g_failed = false;
+bool        g_ready = false; // there's a window to draw on, or none is wanted
 SDL_Window *g_game_window = nullptr;
-bool        g_draws_alone = false;
 MirrorSettings g_settings;
 // For a swapchain that asks, on the render thread.
 std::atomic<std::uint32_t> g_window_width = 0;
@@ -110,12 +100,11 @@ void Guarded(Work work) {
     try {
         work();
     } catch (const std::exception &error) {
-        std::fprintf(stderr, "noktus mirror: stopped: %s\n", error.what());
-        g_failed = true;
+        std::fprintf(stderr, "noktus: stopped: %s\n", error.what());
         if (g_game_window != nullptr) {
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Noktus Nimbus", error.what(), g_game_window);
-            std::_Exit(1);
         }
+        std::_Exit(1); // nothing else can draw
     }
 }
 
@@ -134,18 +123,7 @@ bool InterpolationForcedOff() {
     return setting != nullptr && std::string_view(setting) == "0";
 }
 
-bool WindowRequested() {
-    static const bool requested = [] {
-        const char *setting = std::getenv("DC_NOKTUS_WINDOW");
-        return setting != nullptr && std::string_view(setting) == "1";
-    }();
-    return requested;
-}
-
 void DropWindow(Mirror &mirror) {
-    if (mirror.window != nullptr && mirror.window != g_game_window) {
-        SDL_DestroyWindow(mirror.window);
-    }
     mirror.window = nullptr;
 }
 
@@ -180,15 +158,22 @@ void WriteLastPicture() {
         std::fprintf(stderr, "noktus mirror: %llu drawn, %llu skipped for a texture it lacks, %llu to other targets, %llu dropped, %zu paletted pictures\n",
                      static_cast<unsigned long long>(mirror.drawn + mirror.meshes_drawn), static_cast<unsigned long long>(mirror.skipped),
                      static_cast<unsigned long long>(mirror.elsewhere), static_cast<unsigned long long>(mirror.renderer->DroppedDraws()), mirror.expanded.size());
-        if (mirror.depth_compared != 0) {
-            std::fprintf(stderr, "noktus depth: %llu reads compared, %llu on something, %llu differing, largest difference %.6f\n", static_cast<unsigned long long>(mirror.depth_compared),
-                         static_cast<unsigned long long>(mirror.depth_on_something), static_cast<unsigned long long>(mirror.depth_differing), static_cast<double>(mirror.depth_difference));
-        }
         if (mirror.window != nullptr) {
             ReportPace(mirror);
         }
         mirror.renderer.reset();
         DropWindow(mirror);
+        // Nothing here means anything to a renderer started after this one.
+        mirror.textures.clear();
+        mirror.meshes.clear();
+        mirror.surfaces.clear();
+        mirror.indexed.clear();
+        mirror.palettes.clear();
+        mirror.expanded.clear();
+        mirror.frame_images.clear();
+        mirror.frames_at_rate = 0;
+        mirror.frames_per_second = 0.0;
+        mirror.rate_since = std::chrono::steady_clock::now();
     }
 }
 
@@ -255,13 +240,8 @@ void Start(Mirror &mirror) {
         *w = width;
         *h = height;
     };
-    if (WindowRequested() || g_game_window != nullptr) {
-        // Not focusable: the keyboard stays with the game's own window.
-        mirror.window = g_game_window != nullptr ? g_game_window
-                                                 : SDL_CreateWindow("Noktus Nimbus", static_cast<int>(mapping.pixel_width), static_cast<int>(mapping.pixel_height), SDL_WINDOW_VULKAN | SDL_WINDOW_NOT_FOCUSABLE);
-        if (mirror.window == nullptr) {
-            throw std::runtime_error(SDL_GetError());
-        }
+    if (g_game_window != nullptr) {
+        mirror.window = g_game_window;
         std::uint32_t      count = 0;
         const char *const *names = SDL_Vulkan_GetInstanceExtensions(&count);
         host.instance_extensions.assign(names, names + count);
@@ -439,7 +419,7 @@ noktus::Layer2D ToLayer(Layer2D layer) {
 } // namespace
 
 bool MirrorOn() {
-    return (RequestedPath() != nullptr || WindowRequested() || g_game_window != nullptr) && !g_failed;
+    return g_ready && !g_failed;
 }
 
 bool MirrorHasWindow() {
@@ -452,10 +432,6 @@ bool MirrorDepthProbe() {
         return setting != nullptr && std::string_view(setting) == "1";
     }();
     return probe;
-}
-
-bool MirrorDrawsAlone() {
-    return g_draws_alone;
 }
 
 void MirrorApply(const MirrorSettings &settings) {
@@ -498,40 +474,45 @@ std::optional<float> MirrorDepthResult(std::uint32_t slot) {
     return mirror.renderer ? mirror.renderer->DepthResult(slot) : std::nullopt;
 }
 
-void MirrorCompareDepth(std::uint32_t slot, float today) {
-    Mirror          &mirror = State();
-    std::scoped_lock guard(mirror.lock);
-    if (!mirror.renderer || slot >= noktus::Renderer::kDepthReads) {
-        return;
-    }
-    const std::optional<float> answer = mirror.renderer->DepthResult(slot);
-    if (!answer) {
-        return;
-    }
-    std::array<float, kDepthAnswersKept> &kept = mirror.depth_answers[slot];
-    std::uint32_t                        &count = mirror.depth_answer_count[slot];
-    kept[count++ % kDepthAnswersKept] = *answer;
-    if (count >= kDepthAnswersKept) {
-        float nearest = std::numeric_limits<float>::infinity();
-        for (const float value : kept) {
-            nearest = std::min(nearest, std::abs(today - value));
-        }
-        mirror.depth_compared++;
-        mirror.depth_on_something += today > 0.0f ? 1 : 0;
-        mirror.depth_differing += nearest > kDepthAgrees ? 1 : 0;
-        mirror.depth_difference = std::max(mirror.depth_difference, nearest);
-    }
-}
-
 double MirrorFramesPerSecond() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     return mirror.frames_per_second;
 }
 
-void MirrorTakeWindow(SDL_Window *window, bool keep_todays_drawing) {
+void MirrorTakeWindow(SDL_Window *window) {
     g_game_window = window;
-    g_draws_alone = !keep_todays_drawing;
+    g_ready = true;
+}
+
+void MirrorDropWindow() {
+    WriteLastPicture();
+    g_game_window = nullptr;
+    g_ready = false;
+}
+
+std::string MirrorDeviceName() {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    std::string      name;
+    if (MirrorOn()) {
+        Guarded([&] {
+            Start(mirror);
+            name = noktus::RendererDeviceName(*mirror.renderer);
+        });
+    }
+    return name;
+}
+
+bool MirrorReadScreen(std::vector<std::uint8_t> &pixels, std::uint32_t &width, std::uint32_t &height) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (!mirror.renderer) {
+        return false;
+    }
+    // With a window, the last picture is whatever frame came last: asking for the tick's end gives the same picture each run.
+    Guarded([&] { pixels = mirror.window != nullptr ? noktus::ReadMoment(*mirror.renderer, 1.0f, &width, &height) : noktus::ReadScreen(*mirror.renderer, &width, &height); });
+    return !pixels.empty();
 }
 
 void MirrorStop() {
@@ -555,7 +536,7 @@ void MirrorBeginTick() {
     std::scoped_lock      guard(mirror.lock);
     Guarded([&] {
         Start(mirror);
-        // What's being drawn to: the window if there is one, or else what today's renderer is drawing, to compare with.
+        // What's being drawn to: the window, or with none the size the run asked for.
         const gfx::LogicalMapping main = gfx::GetLogicalMapping(gfx::kMainTarget);
         int                       width = static_cast<int>(main.pixel_width);
         int                       height = static_cast<int>(main.pixel_height);
@@ -723,7 +704,7 @@ void MirrorDestroyTexture(gfx::TextureHandle texture) {
         }
     }
     const auto found = mirror.textures.find(texture);
-    if (found != mirror.textures.end()) {
+    if (found != mirror.textures.end() && mirror.renderer) {
         mirror.renderer->DestroyTexture(found->second);
         mirror.textures.erase(found);
     }
@@ -827,6 +808,9 @@ void MirrorBlit(gfx::TextureHandle from, gfx::Rect from_rect, gfx::TextureHandle
 }
 
 void MirrorSurface(gfx::TextureHandle target, std::uint32_t width, std::uint32_t height, bool has_alpha, bool shares_depth, bool frame_target) {
+    if (!MirrorOn()) {
+        return;
+    }
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (target == gfx::kNullTexture || mirror.surfaces.contains(target)) {
@@ -907,6 +891,9 @@ void MirrorClearStencil() {
 }
 
 void MirrorCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices) {
+    if (!MirrorOn()) {
+        return;
+    }
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     Guarded([&] {
@@ -919,7 +906,7 @@ void MirrorUpdateMesh(gfx::MeshHandle mesh, std::uint32_t first, std::span<const
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     const auto       found = mirror.meshes.find(mesh);
-    if (found != mirror.meshes.end()) {
+    if (found != mirror.meshes.end() && mirror.renderer) {
         Guarded([&] { mirror.renderer->UpdateMesh(found->second, first, Converted(vertices)); });
     }
 }
@@ -928,7 +915,7 @@ void MirrorDestroyMesh(gfx::MeshHandle mesh) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     const auto       found = mirror.meshes.find(mesh);
-    if (found != mirror.meshes.end()) {
+    if (found != mirror.meshes.end() && mirror.renderer) {
         Guarded([&] { mirror.renderer->DestroyMesh(found->second); });
         mirror.meshes.erase(found);
     }
@@ -970,7 +957,7 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
                   const gfx::DrawState &state, bool over_the_window) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
-    if (!mirror.open) {
+    if (!mirror.open || vertices.empty()) {
         return;
     }
     if (!mirror.target_known) {

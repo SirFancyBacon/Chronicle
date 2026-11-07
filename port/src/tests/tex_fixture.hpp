@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "gfx_fixture.hpp"
+#include "render/passes.hpp"
 #include "render/texture_registry.hpp"
 #include "texture.hpp"
 #include "tim2.hpp"
@@ -177,7 +178,7 @@ struct TexEnv {
         gfx::TextureBinding binding = ref.binding;
         binding.filter = gfx::Filter::Nearest;
         auto quad = dc::test::Quad(x, y, w, h, {0x80, 0x80, 0x80, 0x80}, u0, v0, u1, v1);
-        gfx::Draw2D(gfx::Primitive::Quads, quad, binding, state);
+        dc::render::Draw2D(gfx::Primitive::Quads, quad, binding, state);
     }
 };
 
