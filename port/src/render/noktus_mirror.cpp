@@ -211,6 +211,97 @@ noktus::PresentMode ToPresentMode(gfx::PresentMode mode) {
     return noktus::PresentMode::VSync;
 }
 
+// Unnamed has no counterpart, since Noktus keeps the last pass named: a trace counts draws there, and there should be none.
+// Switches with no default, so that -Wswitch warns of a pass added on either side without a counterpart.
+std::optional<noktus::Pass> ToNoktusPass(Pass pass) {
+    switch (pass) {
+        case Pass::Unnamed:
+        case Pass::Count:
+            return std::nullopt;
+        case Pass::TextureAnimation:
+            return noktus::Pass::TextureAnimation;
+        case Pass::Sky:
+            return noktus::Pass::Sky;
+        case Pass::Ground:
+            return noktus::Pass::Ground;
+        case Pass::Fishing:
+            return noktus::Pass::Fishing;
+        case Pass::Water:
+            return noktus::Pass::Water;
+        case Pass::DepthOfField:
+            return noktus::Pass::DepthOfField;
+        case Pass::Characters:
+            return noktus::Pass::Characters;
+        case Pass::Shadows:
+            return noktus::Pass::Shadows;
+        case Pass::MovingParts:
+            return noktus::Pass::MovingParts;
+        case Pass::Effects:
+            return noktus::Pass::Effects;
+        case Pass::LensFlare:
+            return noktus::Pass::LensFlare;
+        case Pass::Overlay:
+            return noktus::Pass::Overlay;
+        case Pass::Menu:
+            return noktus::Pass::Menu;
+        case Pass::Fade:
+            return noktus::Pass::Fade;
+        case Pass::Title:
+            return noktus::Pass::Title;
+        case Pass::Opening:
+            return noktus::Pass::Opening;
+        case Pass::Attract:
+            return noktus::Pass::Attract;
+        case Pass::Screen:
+            return noktus::Pass::Screen;
+    }
+    return std::nullopt;
+}
+
+Pass FromNoktusPass(noktus::Pass pass) {
+    switch (pass) {
+        case noktus::Pass::TextureAnimation:
+            return Pass::TextureAnimation;
+        case noktus::Pass::Sky:
+            return Pass::Sky;
+        case noktus::Pass::Ground:
+            return Pass::Ground;
+        case noktus::Pass::Fishing:
+            return Pass::Fishing;
+        case noktus::Pass::Water:
+            return Pass::Water;
+        case noktus::Pass::DepthOfField:
+            return Pass::DepthOfField;
+        case noktus::Pass::Characters:
+            return Pass::Characters;
+        case noktus::Pass::Shadows:
+            return Pass::Shadows;
+        case noktus::Pass::MovingParts:
+            return Pass::MovingParts;
+        case noktus::Pass::Effects:
+            return Pass::Effects;
+        case noktus::Pass::LensFlare:
+            return Pass::LensFlare;
+        case noktus::Pass::Overlay:
+            return Pass::Overlay;
+        case noktus::Pass::Menu:
+            return Pass::Menu;
+        case noktus::Pass::Fade:
+            return Pass::Fade;
+        case noktus::Pass::Title:
+            return Pass::Title;
+        case noktus::Pass::Opening:
+            return Pass::Opening;
+        case noktus::Pass::Attract:
+            return Pass::Attract;
+        case noktus::Pass::Screen:
+            return Pass::Screen;
+        case noktus::Pass::Count:
+            break;
+    }
+    return Pass::Unnamed;
+}
+
 const char *HdrName(MirrorHdr mode) {
     return mode == MirrorHdr::Hdr10 ? "hdr10" : mode == MirrorHdr::ScRgb ? "scrgb" : "off";
 }
@@ -314,6 +405,9 @@ void Start(Mirror &mirror) {
     }
     std::fprintf(stderr, "noktus: drawing on %s, window: %s\n", noktus::RendererDeviceName(*mirror.renderer).c_str(), noktus::DescribeWindow(*mirror.renderer).c_str());
     mirror.textures[gfx::kPreviousFrame] = mirror.renderer->LastFrame();
+    if (const std::optional<noktus::Pass> pass = ToNoktusPass(CurrentPass())) {
+        mirror.renderer->SetPass(*pass);
+    }
     std::atexit(WriteLastPicture);
 }
 
@@ -508,6 +602,33 @@ void MirrorApply(const MirrorSettings &settings) {
             noktus::SetHdrBrightness(*mirror.renderer, output.paper_white, output.peak);
         }
     }
+}
+
+void MirrorSetPass(Pass pass) {
+    const std::optional<noktus::Pass> named = ToNoktusPass(pass);
+    if (!named || !MirrorOn()) {
+        return;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.renderer) {
+        mirror.renderer->SetPass(*named);
+    }
+}
+
+std::vector<MirrorPassStretch> MirrorTickPasses() {
+    std::vector<MirrorPassStretch> stretches;
+    if (!MirrorOn()) {
+        return stretches;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.renderer) {
+        for (const noktus::PassStretch &stretch : noktus::TickPasses(*mirror.renderer)) {
+            stretches.push_back({.pass = FromNoktusPass(stretch.pass), .draws = stretch.draws, .copies = stretch.copies});
+        }
+    }
+    return stretches;
 }
 
 HdrOutput MirrorHdrShown() {

@@ -12,6 +12,8 @@ struct SDL_Window;
 
 namespace dc::render {
 
+enum class Pass : std::uint8_t;
+
 // DC_RENDERER=kazarov: Kazarov's renderer draws the game, for telling which renderer a bug is in. Noktus draws by default, and Kazarov's renderer doesn't start.
 // DC_NOKTUS_MIRROR=<path>: writes the last picture to path at exit. With DC_RENDERER=kazarov, Noktus also draws everything alongside, with no window, to compare.
 // DC_NOKTUS_HDR=hdr10, scrgb or off overrides the HDR setting for a run, for scripted tests. DC_NOKTUS_HDR_FORCE=1 says the display is in HDR when the system says it isn't.
@@ -89,6 +91,19 @@ bool MirrorHasWindow();
 
 /** Takes the settings as they stand, now and for when the mirror starts. */
 void MirrorApply(const MirrorSettings &settings);
+
+/** Names the pass Noktus records drawing in from now on. */
+void MirrorSetPass(Pass pass);
+
+/** A run of the last tick's draws and blits in one pass, as Noktus recorded them. */
+struct MirrorPassStretch {
+    Pass          pass;
+    std::uint32_t draws = 0;
+    std::uint32_t copies = 0;
+};
+
+/** The passes of the last tick Noktus was given, in order. Empty when Noktus isn't drawing. */
+std::vector<MirrorPassStretch> MirrorTickPasses();
 
 /** What the window is being sent: Off without HDR, a window or Noktus drawing it, or when HDR asked for fell back to SDR. */
 HdrOutput MirrorHdrShown();

@@ -83,6 +83,8 @@ std::uint64_t                g_ticks = 0;
 std::uint64_t                g_counted = 0;
 std::uint64_t                g_drawn = 0;
 std::uint64_t                g_mismatched_ticks = 0;
+std::uint64_t                g_noktus_checked = 0;   // ticks whose passes were checked against what Noktus recorded
+std::uint64_t                g_noktus_differing = 0;
 std::uint64_t                g_unnamed = 0;
 std::uint64_t                g_outside = 0;
 std::map<std::string, std::uint64_t> g_kinds;
@@ -97,7 +99,7 @@ Span &Current() {
 void WriteTrace() {
     std::ofstream out(g_path);
     out << "{\n \"ticks\": " << g_ticks << ",\n \"counted\": " << g_counted << ",\n \"drawn\": " << g_drawn
-        << ",\n \"mismatched_ticks\": " << g_mismatched_ticks << ",\n \"unnamed\": " << g_unnamed << ",\n \"outside\": " << g_outside << ",\n \"mesh_checked\": " << g_mesh_checked << ",\n \"mesh_lost\": " << g_mesh_lost << ",\n \"route_checked\": " << g_route_checked << ",\n \"route_lost\": " << g_route_lost << ",\n \"layer_checked\": " << g_layer_checked << ",\n \"layer_wrong\": " << g_layer_wrong << ",\n \"layer_differing\": " << g_layer_differing << ",\n \"shapes\": [\n";
+        << ",\n \"mismatched_ticks\": " << g_mismatched_ticks << ",\n \"noktus_checked\": " << g_noktus_checked << ",\n \"noktus_differing\": " << g_noktus_differing << ",\n \"unnamed\": " << g_unnamed << ",\n \"outside\": " << g_outside << ",\n \"mesh_checked\": " << g_mesh_checked << ",\n \"mesh_lost\": " << g_mesh_lost << ",\n \"route_checked\": " << g_route_checked << ",\n \"route_lost\": " << g_route_lost << ",\n \"layer_checked\": " << g_layer_checked << ",\n \"layer_wrong\": " << g_layer_wrong << ",\n \"layer_differing\": " << g_layer_differing << ",\n \"shapes\": [\n";
     bool first = true;
     for (const auto &[key, shape] : g_shapes) {
         out << (first ? "" : ",\n") << "  {\"ticks\": " << shape.ticks << ", \"passes\": [";
@@ -143,6 +145,7 @@ const char *PassName(Pass pass) {
 
 void SetPass(Pass pass) {
     g_pass = pass;
+    MirrorSetPass(pass);
 }
 
 Pass CurrentPass() {
@@ -338,6 +341,25 @@ void PassTraceTick(std::uint32_t drawn, bool list_has_draws) {
     g_counted += counted;
     g_drawn += drawn;
     g_mismatched_ticks += list_has_draws && counted != drawn ? 1 : 0;
+    // Noktus is told each pass as it's named, and has to have recorded the same runs of draws and copies.
+    if (MirrorOn()) {
+        const std::vector<MirrorPassStretch> recorded = MirrorTickPasses();
+        bool                                 same = recorded.size() == g_spans.size();
+        std::string                          theirs;
+        for (std::size_t i = 0; i < recorded.size(); i++) {
+            theirs += std::string(PassName(recorded[i].pass)) + ":" + std::to_string(recorded[i].draws) + "+" + std::to_string(recorded[i].copies) + " ";
+            same = same && recorded[i].pass == g_spans[i].pass && recorded[i].draws == g_spans[i].draws && recorded[i].copies == g_spans[i].copies;
+        }
+        g_noktus_checked++;
+        if (!same) {
+            std::string ours;
+            for (const Span &span : g_spans) {
+                ours += std::string(PassName(span.pass)) + ":" + std::to_string(span.draws) + "+" + std::to_string(span.copies) + " ";
+            }
+            g_noktus_differing++;
+            g_kinds["noktus passes " + ours + "| " + theirs]++;
+        }
+    }
     g_spans.clear();
 }
 
