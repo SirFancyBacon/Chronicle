@@ -912,7 +912,9 @@ Noktus Nimbus draws the game, with the window or, in a headless run, into a pict
 Both are in one program. Kazarov's renderer sources are built with `render/kazarov_names.hpp` forced in, which gives the calls `gfx_host.cpp` also defines other names, so `tools/kazarov` needs no change. `gfx_host.cpp` answers to the real names and passes each call on when Kazarov's renderer is drawing.
 
 The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion, Anisotropic Filter, HDR, Paper White and Peak Brightness
-change as the game runs. The depth picks behind the lens flare are read from Noktus, whose answers come a few ticks later.
+change as the game runs. Calibrate HDR, under HDR, sets the last two by eye, and only while HDR is being sent: first Peak Brightness, raised in steps of
+10 nits up to 1,000, 50 up to 2,000 and 100 up to 4,000 until a square at that peak can't be told from the field round it at 10,000 nits, which Noktus
+draws through `MirrorHdrPatches`; then Paper White, in steps of 10 from 80 to 500, never past the peak. Circle on the first step puts both back as they were. The depth picks behind the lens flare are read from Noktus, whose answers come a few ticks later.
 
 Noktus decides where 2D reaches past the frame from the layer it's told. A screen can name one; a draw left in the
 interface layer, where retail's 2D falls when nothing names it, takes the answer of Kazarov's rule for its shape and
@@ -1395,7 +1397,7 @@ help. Retail's screen-position row is gone: `MGAdjustScreen` moves nothing on PC
 | Page | Rows |
 |---|---|
 | Game | save cursor position, clock, time speed, dungeon map, enemy damage, party damage, enemy HP, names, Discord Rich Presence, element quick select, swap keeps lock-on, autosave |
-| Display | window mode, resolution (the monitor's own and the sizes that fit it), V-Sync (`fifo`, `mailbox`, `immediate`), frame limit, aspect ratio, interface size (`ui_scale`), smooth motion (`interpolation`), FPS counter, FPS info (`fps_detail`), anisotropic filter (`anisotropy`), soft focus, cloth (`cloth`), and on Windows HDR, Paper White and Peak Brightness (`hdr`, `hdr_paper_white`, `hdr_peak`) |
+| Display | window mode, resolution (the monitor's own and the sizes that fit it), V-Sync (`fifo`, `mailbox`, `immediate`), frame limit, aspect ratio, interface size (`ui_scale`), smooth motion (`interpolation`), FPS counter, FPS info (`fps_detail`), anisotropic filter (`anisotropy`), soft focus, cloth (`cloth`), and on Windows HDR, Calibrate HDR, Paper White and Peak Brightness (`hdr`, `hdr_paper_white`, `hdr_peak`) |
 | Audio | volume, sound (mono, stereo or surround), soundtrack (PS2 or custom) |
 | Controls | vibration, mouse sensitivity (in hundredths below 1 and tenths above, whatever its unit), invert mouse Y, vertical return, mouse wheel zoom, reset zoom (its binding), stick sensitivity, invert stick X and Y, gyro, gyro sensitivity, invert gyro X and Y |
 | Text | language, message speed, button symbols (original or new), symbols shown (glyph device), text font (sharp or original), text shadow, symbol shadow, area name shadow, floor label shadow, boss name shadow |

@@ -510,6 +510,29 @@ void MirrorApply(const MirrorSettings &settings) {
     }
 }
 
+HdrOutput MirrorHdrShown() {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    // What was asked for may have fallen back to SDR, where no patch shows.
+    if (!mirror.renderer || !MirrorOn() || mirror.window == nullptr || noktus::ShownOutput(*mirror.renderer) == noktus::DisplayOutput::Sdr) {
+        return {};
+    }
+    return mirror.hdr;
+}
+
+void MirrorHdrPatches(std::span<const MirrorHdrPatch> patches) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (!mirror.renderer || !MirrorOn()) {
+        return;
+    }
+    std::vector<noktus::HdrPatch> given;
+    for (const MirrorHdrPatch &patch : patches) {
+        given.push_back({.x = patch.x, .y = patch.y, .width = patch.width, .height = patch.height, .nits = patch.nits});
+    }
+    noktus::SetHdrPatches(*mirror.renderer, given);
+}
+
 void MirrorTickRate(double ticks_per_second) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);

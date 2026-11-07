@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <deque>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "options/rows.hpp"
@@ -37,6 +38,26 @@ constexpr int kHelpY = kExitY + 44;
  * Row index meaning the cursor is on the page tabs rather than on a row.
  */
 constexpr int kOnTabs = -1;
+
+// Calibrating HDR: a field at the most HDR10 holds, with a square in its middle at the peak being tried. Both are in the frame's 2D space.
+constexpr int kStepLabelY = 140;
+constexpr int kPatchX = 266;
+constexpr int kPatchY = 166;
+constexpr int kPatchWidth = 160;
+constexpr int kPatchHeight = 112;
+constexpr int kSquare = 40;
+constexpr int kCalibrateValueY = 292;
+constexpr int kCalibrateCenter = kPatchX + kPatchWidth / 2;
+constexpr int kBackY = kHelpY + 20;
+
+/**
+ * Which step of calibrating HDR the screen is on.
+ */
+enum class Calibration {
+    Off,
+    Peak,
+    PaperWhite,
+};
 
 /**
  * Clickable glyph the mouse pointer is over, drawn highlighted.
@@ -82,6 +103,9 @@ struct Screen {
     int                 binding_row = -1;
     std::string         binding_prompt;
     std::string         binding_wait;
+    Calibration         calibration = Calibration::Off;
+    platform::Config    before_calibration; /**< Put back if calibrating is backed out of. */
+    int                 patches_in = 0;     /**< Ticks until the peak step's patches show. */
 };
 
 extern Screen g_screen;
@@ -98,6 +122,12 @@ struct Texts {
     ui::Label                         l1;
     ui::Label                         r1;
     ui::Label                         shortcuts;
+    ui::Label                         calibrate_title;
+    ui::Label                         peak;
+    ui::Label                         paper_white;
+    ui::Label                         next;
+    ui::Label                         done;
+    ui::Label                         back;
     text::GameTextFile                help;
 
     Texts();
@@ -107,6 +137,16 @@ struct Texts {
  * Returns the screen's texts, building them on first use after a language change.
  */
 Texts &GetTexts();
+
+/**
+ * Returns whether the calibration step's value can move this way (-1 or 1).
+ */
+bool CalibrationCanStep(int direction);
+
+/**
+ * Returns the row a config.json name belongs to, or nullptr.
+ */
+const Row *FindRow(std::string_view key);
 
 /**
  * Returns the page the screen shows.

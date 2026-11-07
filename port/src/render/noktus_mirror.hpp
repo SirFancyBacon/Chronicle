@@ -48,6 +48,15 @@ struct HdrOutput {
     bool      operator==(const HdrOutput &) const = default;
 };
 
+/** A rectangle of the frame shown at nits of its own in HDR, past the peak, for setting HDR by eye. */
+struct MirrorHdrPatch {
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+    float nits = 0.0f;
+};
+
 /**
  * Works out HDR's output. The system's white is in scRGB's terms, where 1 is 80 nits, and its headroom is how far past that white the display goes.
  * A display not in HDR stays SDR whatever's saved, as it would be sent far too bright a picture, unless force_hdr says it's known to be in HDR, for when the system can't tell.
@@ -80,6 +89,12 @@ bool MirrorHasWindow();
 
 /** Takes the settings as they stand, now and for when the mirror starts. */
 void MirrorApply(const MirrorSettings &settings);
+
+/** What the window is being sent: Off without HDR, a window or Noktus drawing it, or when HDR asked for fell back to SDR. */
+HdrOutput MirrorHdrShown();
+
+/** Patches drawn over the picture in HDR until others are given: up to two, later over earlier. Empty takes them away. */
+void MirrorHdrPatches(std::span<const MirrorHdrPatch> patches);
 
 /** The ticks a second to expect, as the setting changes. */
 void MirrorTickRate(double ticks_per_second);

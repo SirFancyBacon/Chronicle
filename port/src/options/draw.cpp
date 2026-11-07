@@ -91,8 +91,9 @@ void DrawSelection(int alpha) {
         int val_left = val_center - (val_w / 2);
         int val_right = val_left + val_w;
 
-        int  choice = row.get(config);
-        int  count = row.count(config);
+        // An action row has no value to step through.
+        int  choice = row.get != nullptr ? row.get(config) : 0;
+        int  count = row.count != nullptr ? row.count(config) : 0;
         bool has_prev = (choice > 0);
         bool has_next = (choice < count - 1);
 
@@ -236,6 +237,54 @@ void DrawRows(int alpha) {
     }
 }
 
+// Calibrating HDR: the step's setting, with its value under the patches the renderer draws, and how to go on or back where the shortcuts go.
+void DrawCalibration(int alpha) {
+    Texts        &texts = GetTexts();
+    const bool    peak = g_screen.calibration == Calibration::Peak;
+    const Row    *row = FindRow(peak ? "video.hdr_peak" : "video.hdr_paper_white");
+    const Config &config = ConfigGet();
+
+    MenuTextureReload(0x1A);
+    texts.calibrate_title.Draw((L1X() + R1X() + texts.r1.GetWidth()) / 2, kTabY, alpha);
+    (peak ? texts.peak : texts.paper_white).Draw(kCalibrateCenter, kStepLabelY, alpha);
+
+    ui::Label       value(row != nullptr ? RowValue(*row, config) : std::string(), ui::ColorYellow, ui::Alignment::Center);
+    const int       value_left = kCalibrateCenter - value.GetWidth() / 2;
+    const int       value_right = value_left + value.GetWidth();
+    constexpr int   arrow_pad = 12;
+    value.Draw(kCalibrateCenter, kCalibrateValueY, alpha);
+    const bool has_prev = CalibrationCanStep(-1);
+    const bool has_next = CalibrationCanStep(1);
+    int        direction = g_screen.last_row_dir;
+    if (g_screen.pointing && g_screen.pointer_y >= kCalibrateValueY - 4 && g_screen.pointer_y < kCalibrateValueY + 20) {
+        direction = g_screen.pointer_x < kCalibrateCenter ? -1 : 1;
+    }
+    direction = direction < 0 && !has_prev ? 1 : direction > 0 && !has_next ? -1 : direction;
+    if (has_prev) {
+        texts.left.SetColor(direction < 0 ? ui::ColorYellow : ui::ColorWhite);
+        texts.left.Draw(value_left - arrow_pad - texts.left.GetWidth(), kCalibrateValueY, alpha);
+    }
+    if (has_next) {
+        texts.right.SetColor(direction > 0 ? ui::ColorYellow : ui::ColorWhite);
+        texts.right.Draw(value_right + arrow_pad, kCalibrateValueY, alpha);
+    }
+
+    (peak ? texts.next : texts.done).Draw(kExitX, kHelpY, alpha);
+    texts.back.Draw(kExitX, kBackY, alpha);
+
+    if (g_screen.pointing) {
+        s_cursor.SetPointer(g_screen.pointer_x, g_screen.pointer_y);
+    } else {
+        s_cursor.ClearPointer();
+    }
+    MenuTextureReload(g_screen.block_no);
+    const int box_left = value_left - arrow_pad - texts.left.GetWidth() - 18;
+    const int box_right = value_right + arrow_pad + texts.right.GetWidth() + 18;
+    s_brackets.Draw(box_left, box_right, kCalibrateValueY - 1, kCalibrateValueY + 21, alpha);
+    s_cursor.PointAt(static_cast<float>(box_left - 4), static_cast<float>(kCalibrateValueY + 10));
+    s_cursor.Draw(alpha);
+}
+
 void DrawHelp(int alpha) {
     float win_x = 0.0f;
     float win_y = 0.0f;
@@ -291,6 +340,12 @@ void Draw() {
     }
 
     DrawTabPlate(alpha);
+    if (g_screen.calibration != Calibration::Off) {
+        DrawHelp(alpha);
+        DrawCalibration(alpha);
+        setbilinear(1);
+        return;
+    }
     DrawScrollBar(alpha);
 
     MenuTextureReload(g_screen.block_no);

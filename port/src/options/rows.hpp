@@ -73,6 +73,11 @@ void ResetPage(const Page &page, platform::Config &config);
 void SetBinding(platform::Config &config, std::string_view action, std::string_view key);
 
 /**
+ * Starts the Calibrate HDR row's two steps, Peak Brightness then Paper White, or refuses when HDR isn't being sent.
+ */
+void BeginHdrCalibration();
+
+/**
  * Rebuilds the window sizes the Resolution row offers for the window's monitor.
  */
 void ListResolutions();

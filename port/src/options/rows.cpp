@@ -95,6 +95,10 @@ constexpr Row SettingRow(const char *key, const char *label, const char *help, i
             .restore = restore};
 }
 
+constexpr Row ActionRow(const char *key, const char *label, const char *help, void (*activate)()) {
+    return {.key = key, .label = label, .help = help, .activate = activate};
+}
+
 std::string ChoiceName(const char *names, int choice) {
     std::string_view rest = names;
     for (int i = 0; i < choice; ++i) {
@@ -701,6 +705,8 @@ constexpr Row kDisplayRows[] = {
                                       "Original|Enhanced"),
     SettingRow("video.hdr", "HDR", "\"HDR\"\nNeeds HDR on in your\nsystem's display\nsettings.", Three, HdrChoice, SetHdr,
                nullptr, "Off|HDR10|scRGB"),
+    ActionRow("video.hdr_calibrate", "Calibrate HDR",
+              "\"Calibrate HDR\"\nSets Peak Brightness\nand Paper White by\neye, with HDR on.", BeginHdrCalibration),
     SettingRow("video.hdr_paper_white", "Paper White",
                "\"Paper White\"\nHow bright the game's\nwhite is. Auto uses\nyour system's setting.", PaperWhiteCount,
                PaperWhiteChoice, SetPaperWhite, PaperWhiteText),
@@ -710,7 +716,7 @@ constexpr Row kDisplayRows[] = {
 };
 
 // The last rows of kDisplayRows. Windows is the only place HDR has been tried.
-constexpr std::size_t kHdrRows = 3;
+constexpr std::size_t kHdrRows = 4;
 
 #ifdef __ANDROID__
 constexpr Row kAndroidDisplayRows[] = {
@@ -1047,6 +1053,8 @@ void ResetPage(const Page &page, Config &config) {
     for (const Row &row : page.rows) {
         if (row.action != nullptr) {
             RemoveBinding(config, row.action);
+        } else if (row.activate != nullptr) {
+            continue; // nothing of its own to reset
         } else if (row.restore != nullptr) {
             row.restore(config, defaults);
         } else {

@@ -26,6 +26,7 @@
 #include "platform/input.hpp"
 #include "platform/window.hpp"
 #include "quest/quests.hpp"
+#include "render/renderer_calls.hpp"
 #include "snd.hpp"
 #include "sound.hpp"
 #include "texture.hpp"
@@ -50,6 +51,8 @@ constexpr int kRepeatDelay = 30;
 constexpr int kRepeatStep = 5;
 constexpr int kBarFrames = 75;
 
+constexpr int kPeakHelp = 993;
+constexpr int kPaperWhiteHelp = 994;
 constexpr int kDisplayNowHelp = 995;
 constexpr int kDisplayHelp = 996;
 constexpr int kSaveHelp = 997;
@@ -68,6 +71,23 @@ constexpr const char *kExitHelpText =
     "{cross} Close\n{square} This page's defaults\n{triangle} Undo every change\n{circle} Close from any row";
 constexpr const char *kDisplayNowText = "The display could not\nchange as asked. It is\nnow %1";
 constexpr const char *kFullscreenNowText = "fullscreen.";
+constexpr const char *kPeakHelpText = "Raise it until the\nmiddle square fades.\nIf it never does, turn\nTV tone mapping off.";
+constexpr const char *kPaperWhiteHelpText = "How bright the game's\nwhite is. Choose what\nlooks comfortable in\nyour room.";
+constexpr const char *kNextText = "{cross} Next";
+constexpr const char *kDoneText = "{cross} Done";
+constexpr const char *kBackText = "{circle} Back";
+
+// The peak is tried in steps a display's limit can be found to: 10 nits up to 1,000, then 50, then 100. A display brighter than the last isn't known of.
+constexpr int kLeastPeak = 100;
+constexpr int kMostPeak = 4000;
+constexpr int kLeastPaperWhite = 80;
+constexpr int kMostPaperWhite = 500;
+constexpr int kPaperWhiteStep = 10;
+// HDR10's most, which no display reaches, so the field is always as bright as the display goes.
+constexpr float kBrightestField = 10000.0f;
+// Patches show from the next frame, but the step's own 2D only once its tick is played, which can be a tick or two later.
+// Shown at once, the field would flash over the Display page's rows.
+constexpr int kPatchesWait = 3;
 constexpr const char *kWindowNowText = "a %1 x %2\nwindow.";
 
 int HelpIndex(int page, int row) {
@@ -142,11 +162,105 @@ void Step(const Row &row, int direction, bool wrap) {
     }
 }
 
+int PeakStep(int nits, int direction) {
+    const int from = direction > 0 ? nits : nits - 1; // a step down from 1,000 is a step of the range below it
+    return from >= 2000 ? 100 : from >= 1000 ? 50 : 10;
+}
+
+int OnPeakSteps(float nits) {
+    const int rounded = static_cast<int>(std::lround(nits));
+    const int step = PeakStep(rounded, 1);
+    return std::clamp((rounded + step / 2) / step * step, kLeastPeak, kMostPeak);
+}
+
+int OnPaperWhiteSteps(float nits, int peak) {
+    const int rounded = (static_cast<int>(std::lround(nits)) + kPaperWhiteStep / 2) / kPaperWhiteStep * kPaperWhiteStep;
+    return std::clamp(rounded, kLeastPaperWhite, std::max(kLeastPaperWhite, std::min(kMostPaperWhite, peak)));
+}
+
+// Only the peak's step has patches. They're taken away as soon as it's left, since they'd show over anything.
+void ShowPatches() {
+    if (g_screen.calibration != Calibration::Peak || g_screen.patches_in > 0) {
+        render::ShowHdrPatches({});
+        return;
+    }
+    const float                  peak = render::HdrShown().peak;
+    const render::MirrorHdrPatch patches[] = {
+        {.x = kPatchX, .y = kPatchY, .width = kPatchWidth, .height = kPatchHeight, .nits = kBrightestField},
+        {.x = kPatchX + (kPatchWidth - kSquare) / 2.0f, .y = kPatchY + (kPatchHeight - kSquare) / 2.0f, .width = kSquare, .height = kSquare, .nits = peak},
+    };
+    render::ShowHdrPatches(patches);
+}
+
+// On coming to the peak step.
+void ShowPatchesSoon() {
+    g_screen.patches_in = kPatchesWait;
+    ShowPatches();
+}
+
+void CountDownPatches() {
+    if (g_screen.patches_in > 0 && --g_screen.patches_in == 0) {
+        ShowPatches();
+    }
+}
+
+void EndCalibration() {
+    g_screen.calibration = Calibration::Off;
+    g_screen.patches_in = 0;
+    ShowPatches();
+}
+
+void CalibrateStep(int direction) {
+    Config    config = ConfigGet();
+    const int before = g_screen.calibration == Calibration::Peak ? config.hdr_peak : config.hdr_paper_white;
+    if (g_screen.calibration == Calibration::Peak) {
+        config.hdr_peak = std::clamp(config.hdr_peak + direction * PeakStep(config.hdr_peak, direction), kLeastPeak, kMostPeak);
+    } else {
+        config.hdr_paper_white = OnPaperWhiteSteps(static_cast<float>(config.hdr_paper_white + direction * kPaperWhiteStep), config.hdr_peak);
+    }
+    g_screen.last_row_dir = direction;
+    if ((g_screen.calibration == Calibration::Peak ? config.hdr_peak : config.hdr_paper_white) == before) {
+        return;
+    }
+    Apply(config);
+    ShowPatches();
+    ComMenuSePlay(MENU_SOUND_CURSOR);
+}
+
+void CalibrateNext() {
+    if (g_screen.calibration == Calibration::Peak) {
+        Config config = ConfigGet();
+        config.hdr_paper_white = OnPaperWhiteSteps(static_cast<float>(config.hdr_paper_white), config.hdr_peak);
+        Apply(config);
+        g_screen.calibration = Calibration::PaperWhite;
+        ShowPatches();
+    } else {
+        EndCalibration();
+    }
+    ComMenuSePlay(MENU_SOUND_CONFIRM);
+}
+
+void CalibrateBack() {
+    if (g_screen.calibration == Calibration::PaperWhite) {
+        g_screen.calibration = Calibration::Peak;
+        ShowPatchesSoon();
+    } else {
+        Config config = ConfigGet();
+        config.hdr_peak = g_screen.before_calibration.hdr_peak;
+        config.hdr_paper_white = g_screen.before_calibration.hdr_paper_white;
+        Apply(config);
+        EndCalibration();
+    }
+    ComMenuSePlay(MENU_SOUND_REFUSE);
+}
+
 void ShowHelp() {
     ClsMes &mes = CommonMenuMes2;
     short  *buffer = GetTexts().help.Data();
     int     message = kExitHelp;
-    if (DisplayGetWarning() == DisplayWarning::Kept) {
+    if (g_screen.calibration != Calibration::Off) {
+        message = g_screen.calibration == Calibration::Peak ? kPeakHelp : kPaperWhiteHelp;
+    } else if (DisplayGetWarning() == DisplayWarning::Kept) {
         message = kDisplayHelp;
     } else if (DisplayGetWarning() == DisplayWarning::Changed) {
         WindowMode  mode = DisplayShownMode();
@@ -180,6 +294,9 @@ void ShowHelp() {
 }
 
 void Close() {
+    if (g_screen.calibration != Calibration::Off) {
+        EndCalibration();
+    }
     g_screen.binding_row = -1;
     g_screen.binding_wait.clear();
     g_screen.save_failed = !ConfigChange(ConfigGet());
@@ -307,7 +424,11 @@ void RunMouse() {
         return;
     }
     if ((clicked & 2) != 0) {
-        Close();
+        if (g_screen.calibration != Calibration::Off) {
+            CalibrateBack();
+        } else {
+            Close();
+        }
         return;
     }
     if (moved || clicked != 0) {
@@ -331,6 +452,21 @@ void RunMouse() {
 
     float x = g_screen.pointer_x;
     float y = g_screen.pointer_y;
+    if (g_screen.calibration != Calibration::Off) {
+        if ((clicked & 1) == 0) {
+            return;
+        }
+        Texts &texts = GetTexts();
+        ui::Label &next = g_screen.calibration == Calibration::Peak ? texts.next : texts.done;
+        if (Inside(x, y, kExitX - 4, kHelpY - 2, kExitX + next.GetWidth() + 4, kHelpY + 18)) {
+            CalibrateNext();
+        } else if (Inside(x, y, kExitX - 4, kBackY - 2, kExitX + texts.back.GetWidth() + 4, kBackY + 18)) {
+            CalibrateBack();
+        } else if (Inside(x, y, kLabelX - 8, kCalibrateValueY - 4, kValueRight + 8, kCalibrateValueY + 20)) {
+            CalibrateStep(x < kCalibrateCenter ? -1 : 1);
+        }
+        return;
+    }
     int   rows = RowCount(g_screen.page);
     int   old_row = g_screen.row;
     int   old_page = g_screen.page;
@@ -413,9 +549,33 @@ void RunMouse() {
     }
 }
 
+void RunCalibration() {
+    const std::uint16_t held = HeldButtons();
+    const int           moves = Pressed(held, PAD_LEFT | PAD_RIGHT, true);
+    const int           actions = Pressed(held, PAD_CROSS | PAD_CIRCLE, false);
+    // The rest are only counted, so that one held across calibrating neither fires on the way out nor loses its next press.
+    Pressed(held, 0xFFFF & ~(PAD_LEFT | PAD_RIGHT | PAD_CROSS | PAD_CIRCLE), false);
+    if (moves != 0 || actions != 0) {
+        g_screen.pointing = false;
+    }
+    if ((actions & PAD_CIRCLE) != 0) {
+        CalibrateBack();
+    } else if ((actions & PAD_CROSS) != 0) {
+        CalibrateNext();
+    } else if ((moves & PAD_LEFT) != 0) {
+        CalibrateStep(-1);
+    } else if ((moves & PAD_RIGHT) != 0) {
+        CalibrateStep(1);
+    }
+}
+
 void RunKeys() {
     if (g_screen.binding_row >= 0) {
         RunBindingCapture();
+        return;
+    }
+    if (g_screen.calibration != Calibration::Off) {
+        RunCalibration();
         return;
     }
     int           old_page = g_screen.page;
@@ -487,6 +647,31 @@ void RunKeys() {
 
 } // namespace
 
+void BeginHdrCalibration() {
+    const render::HdrOutput shown = render::HdrShown();
+    if (shown.mode == render::MirrorHdr::Off) {
+        ComMenuSePlay(MENU_SOUND_REFUSE);
+        return;
+    }
+    g_screen.before_calibration = ConfigGet();
+    // From what's shown now, which may be the system's, so that the first step changes nothing.
+    Config config = ConfigGet();
+    config.hdr_peak = OnPeakSteps(shown.peak);
+    config.hdr_paper_white = OnPaperWhiteSteps(shown.paper_white, config.hdr_peak);
+    Apply(config);
+    g_screen.calibration = Calibration::Peak;
+    ShowPatchesSoon();
+    ComMenuSePlay(MENU_SOUND_CONFIRM);
+}
+
+bool CalibrationCanStep(int direction) {
+    const Config &config = ConfigGet();
+    if (g_screen.calibration == Calibration::Peak) {
+        return direction < 0 ? config.hdr_peak > kLeastPeak : config.hdr_peak < kMostPeak;
+    }
+    return direction < 0 ? config.hdr_paper_white > kLeastPaperWhite : config.hdr_paper_white < std::min(kMostPaperWhite, config.hdr_peak);
+}
+
 Texts::Texts() {
     left.SetText("<");
     left.SetColor(ui::ColorWhite);
@@ -499,10 +684,23 @@ Texts::Texts() {
 
     shortcuts.SetText(LocalizeText("options.shortcuts", kShortcutsText));
     shortcuts.SetColor(ui::ColorWhite);
+    const auto set = [](ui::Label &label, std::string_view text, u32 color, ui::Alignment align) {
+        label.SetText(text);
+        label.SetColor(color);
+        label.SetAlignment(align);
+    };
+    set(calibrate_title, LocalizeText("options.video.hdr_calibrate.label", "Calibrate HDR"), ui::ColorGold, ui::Alignment::Center);
+    set(peak, LocalizeText("options.video.hdr_peak.label", "Peak Brightness"), ui::ColorWhite, ui::Alignment::Center);
+    set(paper_white, LocalizeText("options.video.hdr_paper_white.label", "Paper White"), ui::ColorWhite, ui::Alignment::Center);
+    set(next, LocalizeText("options.calibrate.next", kNextText), ui::ColorWhite, ui::Alignment::Left);
+    set(done, LocalizeText("options.calibrate.done", kDoneText), ui::ColorWhite, ui::Alignment::Left);
+    set(back, LocalizeText("options.calibrate.back", kBackText), ui::ColorWhite, ui::Alignment::Left);
 
     help.Set(kSaveHelp, LocalizeText("options.help.save_failed", kSaveHelpText));
     help.Set(kDisplayHelp, LocalizeText("options.help.display_kept", kDisplayHelpText));
     help.Set(kExitHelp, LocalizeText("options.help.exit", kExitHelpText));
+    help.Set(kPeakHelp, LocalizeText("options.calibrate.peak.help", kPeakHelpText));
+    help.Set(kPaperWhiteHelp, LocalizeText("options.calibrate.paper_white.help", kPaperWhiteHelpText));
 
     int index = 0;
     int page_index = 0;
@@ -542,6 +740,17 @@ Texts &GetTexts() {
         g_texts_language = LanguageCode;
     }
     return *g_texts;
+}
+
+const Row *FindRow(std::string_view key) {
+    for (const Page &page : Pages()) {
+        for (const Row &row : page.rows) {
+            if (row.key != nullptr && key == row.key) {
+                return &row;
+            }
+        }
+    }
+    return nullptr;
 }
 
 const Page &CurrentPage() {
@@ -686,6 +895,7 @@ int Run() {
             if (g_screen.bar_frames > 0) {
                 g_screen.bar_frames--;
             }
+            CountDownPatches();
             RunMouse();
             if (g_screen.step == OPTION_STEP_RUN) {
                 RunKeys();
@@ -707,6 +917,11 @@ std::vector<std::pair<std::string, std::string>> OptionStrings() {
         {"options.help.display_now",       kDisplayNowText   },
         {"options.display.fullscreen_now", kFullscreenNowText},
         {"options.display.window_now",     kWindowNowText    },
+        {"options.calibrate.peak.help",        kPeakHelpText       },
+        {"options.calibrate.paper_white.help", kPaperWhiteHelpText },
+        {"options.calibrate.next",             kNextText           },
+        {"options.calibrate.done",             kDoneText           },
+        {"options.calibrate.back",             kBackText           },
     };
     for (auto &entry : RowStrings()) {
         out.push_back(std::move(entry));

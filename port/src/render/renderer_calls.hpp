@@ -173,6 +173,15 @@ inline void DestroyTexture(gfx::TextureHandle texture) {
     gfx::DestroyTexture(texture);
 }
 
+// What HDR is sending now, mode Off when it isn't, and the patches shown over the picture for calibrating it.
+inline HdrOutput HdrShown() {
+    return MirrorHdrShown();
+}
+
+inline void ShowHdrPatches(std::span<const MirrorHdrPatch> patches) {
+    MirrorHdrPatches(patches);
+}
+
 inline void SetUiAnchor(const gfx::UiAnchor &anchor) {
     gfx::SetUiAnchor(anchor);
 }
