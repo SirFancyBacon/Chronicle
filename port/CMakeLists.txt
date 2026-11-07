@@ -54,10 +54,12 @@ foreach(staged IN LISTS staged_dependencies)
     endif()
 endforeach()
 kz_port_host_library(dc_host)
-# Noktus draws the game: only Kazarov's TIM2 reader stays of its gfx. port/src/render/gfx_host.cpp answers the rest.
+# Noktus draws the game, and Kazarov's renderer is only there for DC_RENDERER=kazarov. Both define the gfx calls, so its sources are built with
+# other names for them: port/src/render/gfx_host.cpp answers to the real names, and passes a call on when Kazarov's renderer is drawing.
 get_target_property(dc_host_sources dc_host SOURCES)
-list(FILTER dc_host_sources EXCLUDE REGEX "/gfx/(displaylist|draw|memory|pipelines|readback|renderer|requirements|resources|thread|vulkan_android)\\.cpp$")
-set_target_properties(dc_host PROPERTIES SOURCES "${dc_host_sources}")
+set(kazarov_renderer_sources "${dc_host_sources}")
+list(FILTER kazarov_renderer_sources INCLUDE REGEX "/gfx/(displaylist|draw|memory|pipelines|readback|renderer|requirements|resources|thread|vulkan_android)\\.cpp$")
+set_source_files_properties(${kazarov_renderer_sources} PROPERTIES COMPILE_OPTIONS "-include;${CMAKE_CURRENT_SOURCE_DIR}/src/render/kazarov_names.hpp")
 if(NINTENDO_SWITCH)
     dc_switch_host(dc_host)
 endif()

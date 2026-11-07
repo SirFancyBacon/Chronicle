@@ -236,7 +236,9 @@ void PresentLoadingFrame() {
             DrawSprite();
         }
         textwipe::DrawDivider();
-        app::GameDrawFps();
+        if (!render::KazarovDraws()) {
+            app::GameDrawFps();
+        }
     }
     render::EndFrame();
 }

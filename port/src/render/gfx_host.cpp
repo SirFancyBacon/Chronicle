@@ -1,4 +1,6 @@
-// Answers what game code still asks of a renderer, now that Noktus does all the drawing: where the frame lies in the window, and what's known of each texture and target.
+// Answers what game code still asks of a renderer when Noktus does the drawing: where the frame lies in the window, and what's known of each texture and target.
+// With DC_RENDERER=kazarov, each of these passes straight on to Kazarov's renderer, whose own versions have Kazarov in front of their names: see kazarov_names.hpp.
+// Otherwise it's linked in and starts nothing.
 // The layout rules, the matrix inverse and WritePng come from Kazarov's gfx, by TheMoonPeople, under the MIT licence: see text/LICENSE.kazarov.
 
 #include <SDL3/SDL.h>
@@ -14,12 +16,28 @@
 #include <string>
 #include <unordered_map>
 
+// This order matters: here gfx.hpp declares only Kazarov's versions, and this file defines the plain names. render/passes.hpp can't come in,
+// since it calls the plain names.
+#include "render/kazarov_names.hpp"
 #include "gfx/displaylist.hpp" // Mat4
 #include "gfx/gfx.hpp"
+#include "render/kazarov_names_end.hpp"
 #include "render/noktus_mirror.hpp"
-#include "render/passes.hpp"
+
+namespace dc::render {
+void CountDraw();
+}
 
 namespace gfx {
+
+LogicalRect   LogicalFrame();
+LogicalRect   LogicalFrame(TextureHandle handle);
+LogicalMapping GetLogicalMapping(TextureHandle handle);
+float         LogicalWidth();
+float         LogicalHeight();
+TextureHandle FindNamedRenderTarget(std::string_view name);
+TextureHandle CreateRenderTarget(uint32_t logical_width, uint32_t logical_height, bool has_alpha, bool share_main_depth, bool frame_target);
+void          DestroyTexture(TextureHandle handle);
 
 namespace {
 
@@ -53,6 +71,8 @@ struct State {
 };
 
 State g;
+
+bool Old() { return dc::render::KazarovDraws(); }
 
 const Known *Find(TextureHandle handle) {
     const auto found = g.textures.find(handle);
@@ -297,6 +317,10 @@ TextureHandle MakeHandle(TextureInfo info, std::string name = {}) {
 } // namespace
 
 void RendererInit(SDL_Window *window, const RendererConfig &config) {
+    if (Old()) {
+        KazarovRendererInit(window, config);
+        return;
+    }
     g.config = config;
     g.window = window;
     g.layout = config.layout;
@@ -305,6 +329,10 @@ void RendererInit(SDL_Window *window, const RendererConfig &config) {
 }
 
 void RendererShutdown() {
+    if (Old()) {
+        KazarovRendererShutdown();
+        return;
+    }
     g.window = nullptr;
     g.textures.clear();
     g.named.clear();
@@ -313,22 +341,32 @@ void RendererShutdown() {
     g.recording = 0;
 }
 
-void RendererResize() { ReadWindowSize(); }
+void RendererResize() {
+    if (Old()) {
+        KazarovRendererResize();
+        return;
+    }
+    ReadWindowSize();
+}
 
-bool HeadlessSurfaceAvailable() { return false; } // Noktus reads pictures back with no surface at all
+bool HeadlessSurfaceAvailable() { return Old() && KazarovHeadlessSurfaceAvailable(); } // Noktus reads pictures back with no surface at all
 
-uint32_t PipelineCount() { return 1; }
-float RenderScale() { return g.render_scale; }
+uint32_t PipelineCount() { return Old() ? KazarovPipelineCount() : 1; }
+float RenderScale() { return Old() ? KazarovRenderScale() : g.render_scale; }
 
 void SetFrameLayout(const FrameLayout &layout) {
+    if (Old()) {
+        KazarovSetFrameLayout(layout);
+        return;
+    }
     g.layout = layout;
     ReshapeTargets();
 }
-FrameLayout CurrentFrameLayout() { return g.layout; }
+FrameLayout CurrentFrameLayout() { return Old() ? KazarovCurrentFrameLayout() : g.layout; }
 
-float LogicalWidth() { return g.config.logical_width; }
-float LogicalHeight() { return g.config.logical_height; }
-LogicalRect LogicalFrame() { return {0.0f, 0.0f, LogicalWidth(), LogicalHeight()}; }
+float LogicalWidth() { return Old() ? KazarovLogicalWidth() : g.config.logical_width; }
+float LogicalHeight() { return Old() ? KazarovLogicalHeight() : g.config.logical_height; }
+LogicalRect LogicalFrame() { return Old() ? KazarovLogicalFrame() : LogicalRect{0.0f, 0.0f, LogicalWidth(), LogicalHeight()}; }
 
 LogicalRect LogicalFrame(TextureHandle handle) {
     const Known *known = handle == kMainTarget ? nullptr : Find(handle);
@@ -336,6 +374,9 @@ LogicalRect LogicalFrame(TextureHandle handle) {
 }
 
 LogicalMapping GetLogicalMapping(TextureHandle handle) {
+    if (Old()) {
+        return KazarovGetLogicalMapping(handle);
+    }
     if (handle == kMainTarget || handle == kPreviousFrame) {
         ReadWindowSize();
         return MainMapping(g.main_width, g.main_height);
@@ -346,55 +387,109 @@ LogicalMapping GetLogicalMapping(TextureHandle handle) {
 }
 
 LogicalMapping GetUiMapping(TextureHandle handle) {
+    if (Old()) {
+        return KazarovGetUiMapping(handle);
+    }
     LogicalMapping mapping = GetLogicalMapping(handle);
     return handle == kMainTarget ? UiMapping(mapping) : mapping;
 }
 
 LogicalRect VisibleLogicalRect(TextureHandle handle) {
+    if (Old()) {
+        return KazarovVisibleLogicalRect(handle);
+    }
     LogicalRect frame = LogicalFrame(handle);
     uint32_t    axes = ExtentAxes(handle);
     return axes == 0 ? frame : ExtendRect(frame, axes, frame, GetLogicalMapping(handle));
 }
 
-void SetUiAnchor(const UiAnchor &anchor) { g.ui_anchor = anchor; }
-UiAnchor CurrentUiAnchor() { return g.ui_anchor; }
+void SetUiAnchor(const UiAnchor &anchor) {
+    if (Old()) {
+        KazarovSetUiAnchor(anchor);
+        return;
+    }
+    g.ui_anchor = anchor;
+}
+UiAnchor CurrentUiAnchor() { return Old() ? KazarovCurrentUiAnchor() : g.ui_anchor; }
 
-void SetRenderTarget(TextureHandle target) { g.target = target; }
-TextureHandle CurrentRenderTarget() { return g.target; }
+void SetRenderTarget(TextureHandle target) {
+    if (Old()) {
+        KazarovSetRenderTarget(target);
+        return;
+    }
+    g.target = target;
+}
+TextureHandle CurrentRenderTarget() { return Old() ? KazarovCurrentRenderTarget() : g.target; }
 bool CanCopyMainDepth(TextureHandle target) {
+    if (Old()) {
+        return KazarovCanCopyMainDepth(target);
+    }
     const Known *known = Find(target);
     return known != nullptr && known->info.render_target && !known->info.shares_main_depth;
 }
-bool CopyMainDepthToTarget(const LogicalRect &) { return true; }
-bool DepthPlanesAvailable() { return false; }
+bool CopyMainDepthToTarget(const LogicalRect &source) { return !Old() || KazarovCopyMainDepthToTarget(source); }
+bool DepthPlanesAvailable() { return Old() && KazarovDepthPlanesAvailable(); }
 
 bool BeginFrame() {
+    if (Old()) {
+        return KazarovBeginFrame();
+    }
     g.in_frame = true;
     return true;
 }
-void EndFrame() { g.in_frame = false; }
-bool InFrame() { return g.in_frame || g.recording > 0; }
+void EndFrame() {
+    if (Old()) {
+        KazarovEndFrame();
+        return;
+    }
+    g.in_frame = false;
+}
+bool InFrame() { return Old() ? KazarovInFrame() : g.in_frame || g.recording > 0; }
 
-void BeginRecording(RecordingKind) { g.recording++; }
+void BeginRecording(RecordingKind kind) {
+    if (Old()) {
+        KazarovBeginRecording(kind);
+        return;
+    }
+    g.recording++;
+}
 DisplayListRef EndRecording() {
+    if (Old()) {
+        return KazarovEndRecording();
+    }
     g.recording--;
     return nullptr;
 }
-bool Recording() { return g.recording > 0; }
+bool Recording() { return Old() ? KazarovRecording() : g.recording > 0; }
 
-void SetInterpKey(InterpKey key, bool no_interpolation, float, bool) {
+void SetInterpKey(InterpKey key, bool no_interpolation, float teleport_distance, bool blend_vertices) {
+    if (Old()) {
+        KazarovSetInterpKey(key, no_interpolation, teleport_distance, blend_vertices);
+        return;
+    }
     g.interp_key = key;
     g.no_interpolation = no_interpolation;
 }
-InterpKey CurrentInterpKey() { return g.interp_key; }
-bool CurrentNoInterpolation() { return g.no_interpolation; }
-void CutInterpolation() {}
-void CutCameraInterpolation() {}
+InterpKey CurrentInterpKey() { return Old() ? KazarovCurrentInterpKey() : g.interp_key; }
+bool CurrentNoInterpolation() { return Old() ? KazarovCurrentNoInterpolation() : g.no_interpolation; }
+void CutInterpolation() {
+    if (Old()) {
+        KazarovCutInterpolation();
+    }
+}
+void CutCameraInterpolation() {
+    if (Old()) {
+        KazarovCutCameraInterpolation();
+    }
+}
 
 // A size no GPU the game supports can hold: Noktus would stop the game over it, where the game can do without the picture.
 constexpr uint32_t kLargestTexture = 16384;
 
 TextureHandle CreateTexture(const TextureDesc &desc) {
+    if (Old()) {
+        return KazarovCreateTexture(desc);
+    }
     const uint32_t longest = std::max(desc.width, desc.height);
     if (longest == 0 || desc.width == 0 || desc.height == 0 || longest > kLargestTexture || desc.mip_levels == 0 || desc.mip_levels > static_cast<uint32_t>(std::bit_width(longest))) {
         std::fprintf(stderr, "texture: %ux%u with %u levels can't be made\n", desc.width, desc.height, desc.mip_levels);
@@ -410,6 +505,9 @@ TextureHandle CreateTexture(const TextureDesc &desc) {
 }
 
 TextureHandle CreatePalette() {
+    if (Old()) {
+        return KazarovCreatePalette();
+    }
     TextureInfo info = {};
     info.width = info.pixel_width = 256;
     info.height = info.pixel_height = 1;
@@ -420,6 +518,9 @@ TextureHandle CreatePalette() {
 }
 
 TextureHandle CreateRenderTarget(uint32_t logical_width, uint32_t logical_height, bool has_alpha, bool share_main_depth, bool frame_target) {
+    if (Old()) {
+        return KazarovCreateRenderTarget(logical_width, logical_height, has_alpha, share_main_depth, frame_target);
+    }
     if (share_main_depth) {
         logical_width = static_cast<uint32_t>(g.config.logical_width);
         logical_height = static_cast<uint32_t>(g.config.logical_height);
@@ -442,11 +543,17 @@ TextureHandle CreateRenderTarget(uint32_t logical_width, uint32_t logical_height
 }
 
 TextureHandle FindNamedRenderTarget(std::string_view name) {
+    if (Old()) {
+        return KazarovFindNamedRenderTarget(name);
+    }
     const auto found = g.named.find(name);
     return found == g.named.end() ? kNullTexture : found->second;
 }
 
 TextureHandle NamedRenderTarget(std::string_view name, uint32_t logical_width, uint32_t logical_height, bool has_alpha, bool share_main_depth, bool frame_target) {
+    if (Old()) {
+        return KazarovNamedRenderTarget(name, logical_width, logical_height, has_alpha, share_main_depth, frame_target);
+    }
     const TextureHandle before = FindNamedRenderTarget(name);
     if (const Known *known = Find(before)) {
         const TextureInfo &info = known->info;
@@ -464,6 +571,9 @@ TextureHandle NamedRenderTarget(std::string_view name, uint32_t logical_width, u
 }
 
 std::optional<TextureInfo> GetTextureInfo(TextureHandle handle) {
+    if (Old()) {
+        return KazarovGetTextureInfo(handle);
+    }
     if (handle == kMainTarget || handle == kPreviousFrame) {
         ReadWindowSize();
         return TextureInfo{static_cast<uint32_t>(g.config.logical_width), static_cast<uint32_t>(g.config.logical_height), g.main_width, g.main_height, TextureFormat::Rgba8, 1, true, true, false, false};
@@ -474,17 +584,36 @@ std::optional<TextureInfo> GetTextureInfo(TextureHandle handle) {
 }
 
 void DestroyTexture(TextureHandle handle) {
+    if (Old()) {
+        KazarovDestroyTexture(handle);
+        return;
+    }
     std::erase_if(g.named, [&](const auto &entry) { return entry.second == handle; });
     g.textures.erase(handle);
 }
 
-bool UpdateTexture(TextureHandle texture, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, const void *, uint32_t) { return Find(texture) != nullptr; }
-bool UpdateTextureNow(TextureHandle texture, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, const void *, uint32_t) { return Find(texture) != nullptr; }
-bool UpdatePalette(TextureHandle palette, const uint32_t *, uint32_t, uint32_t) { return Find(palette) != nullptr; }
+bool UpdateTexture(TextureHandle texture, uint32_t mip, uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void *pixels, uint32_t row_pixels) {
+    return Old() ? KazarovUpdateTexture(texture, mip, x, y, width, height, pixels, row_pixels) : Find(texture) != nullptr;
+}
+bool UpdateTextureNow(TextureHandle texture, uint32_t mip, uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void *pixels, uint32_t row_pixels) {
+    return Old() ? KazarovUpdateTextureNow(texture, mip, x, y, width, height, pixels, row_pixels) : Find(texture) != nullptr;
+}
+bool UpdatePalette(TextureHandle palette, const uint32_t *colors, uint32_t first, uint32_t count) {
+    return Old() ? KazarovUpdatePalette(palette, colors, first, count) : Find(palette) != nullptr;
+}
 
-MeshHandle CreateMesh(std::span<const Vertex3D> vertices, std::span<const uint32_t> indices) { return vertices.empty() || indices.empty() ? kNullMesh : g.next_mesh++; }
-bool UpdateMeshVertices(MeshHandle, uint32_t, std::span<const Vertex3D>) { return true; }
-void DestroyMesh(MeshHandle) {}
+MeshHandle CreateMesh(std::span<const Vertex3D> vertices, std::span<const uint32_t> indices) {
+    if (Old()) {
+        return KazarovCreateMesh(vertices, indices);
+    }
+    return vertices.empty() || indices.empty() ? kNullMesh : g.next_mesh++;
+}
+bool UpdateMeshVertices(MeshHandle mesh, uint32_t first, std::span<const Vertex3D> vertices) { return !Old() || KazarovUpdateMeshVertices(mesh, first, vertices); }
+void DestroyMesh(MeshHandle mesh) {
+    if (Old()) {
+        KazarovDestroyMesh(mesh);
+    }
+}
 
 void ConvertPs2Alpha(uint32_t *rgba, size_t count) {
     uint8_t *bytes = reinterpret_cast<uint8_t *>(rgba);
@@ -514,7 +643,11 @@ bool InvertAffineTransform(const float matrix[16], float inverse[16]) {
 }
 
 // Kazarov's overlay text, which is the FPS counter and the text-wipe tool's labels, draws through this.
-void Draw2D(Primitive primitive, std::span<const Vertex2D> vertices, const TextureBinding &binding, const DrawState &state, const Presentation2D *) {
+void Draw2D(Primitive primitive, std::span<const Vertex2D> vertices, const TextureBinding &binding, const DrawState &state, const Presentation2D *presentation) {
+    if (Old()) {
+        KazarovDraw2D(primitive, vertices, binding, state, presentation);
+        return;
+    }
     dc::render::CountDraw();
     dc::render::MirrorDraw2D(primitive, vertices, binding, state, true);
 }

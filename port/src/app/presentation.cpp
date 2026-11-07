@@ -2,7 +2,9 @@
 
 #include <chrono>
 #include <format>
+#include <utility>
 
+#include "app/kazarov_presentation.hpp"
 #include "platform/clock.hpp"
 #include "platform/input.hpp"
 #include "platform/overlay.hpp"
@@ -38,30 +40,48 @@ void PollFpsToggle() {
 } // namespace
 
 void GameSetPresentSettings(const GamePresentSettings &settings) {
+    if (render::KazarovDraws()) {
+        kazarov::GameSetPresentSettings(settings);
+        return;
+    }
     g_fps.on = settings.show_fps;
     g_fps.detail = settings.fps_detail;
 }
 
-void GameTickDone() {
+void GameTickDone(gfx::DisplayListRef list) {
+    if (render::KazarovDraws()) {
+        kazarov::GameRenderTick(std::move(list));
+        return;
+    }
     render::PassTraceTick(static_cast<std::uint32_t>(render::MirrorDrawsLastTick()), true);
     g_fps.ticks.Count(PresentClock::now());
 }
 
-bool GamePresentBetweenTicks(double /*fraction*/, std::chrono::steady_clock::time_point /*next_tick*/) {
+bool GamePresentBetweenTicks(double fraction, std::chrono::steady_clock::time_point next_tick) {
+    if (render::KazarovDraws()) {
+        return kazarov::GamePresentBetweenTicks(fraction, next_tick);
+    }
     PollFpsToggle();
     return false;
 }
 
 void GamePresentTickEnd() {
+    if (render::KazarovDraws()) {
+        kazarov::GamePresentTickEnd();
+        return;
+    }
     PollFpsToggle();
     g_polled = false;
 }
 
 bool GameShowingFps() {
-    return g_fps.on;
+    return render::KazarovDraws() ? kazarov::GameShowingFps() : g_fps.on;
 }
 
 std::string GameFpsText() {
+    if (render::KazarovDraws()) {
+        return kazarov::GameFpsText();
+    }
     // With no window, frames are ticks.
     std::string text = std::format("FPS {:.1f}", render::MirrorHasWindow() ? render::MirrorFramesPerSecond() : g_fps.ticks.PerSecond());
     if (g_fps.detail != ConfigFpsDetail::Fps) {
@@ -83,7 +103,7 @@ void GameDrawFps() {
 }
 
 bool GameScreenshot(std::vector<std::uint8_t> &rgba, std::uint32_t &width, std::uint32_t &height) {
-    return render::MirrorReadScreen(rgba, width, height);
+    return render::KazarovDraws() ? kazarov::GameScreenshot(rgba, width, height) : render::MirrorReadScreen(rgba, width, height);
 }
 
 } // namespace dc::app

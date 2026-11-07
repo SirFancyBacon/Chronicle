@@ -87,7 +87,7 @@ The fresh Mesa 26.2.4 NRO was also tested with Ryubing Canary 1.3.351 (Windows x
 
 Use the same PAL data, isolated save root, scripted inputs, scene and camera path
 for comparisons. Keep console mode, clocks, output resolution and render scale
-fixed. `--perf-log` works on every platform and reports CPU work, render-thread
+fixed. `--perf-log` works with `DC_RENDERER=kazarov` and reports CPU work, render-thread
 cost, Vulkan GPU timestamps, present waits and late ticks once a second.
 `DC_PERF_LOAD=1` adds archive/source-read timings; `KZ_PERF_INIT_TRACE=1` reports
 pipeline-cache acceptance. These timings describe separate stages, not total

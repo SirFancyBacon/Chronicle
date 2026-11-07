@@ -828,7 +828,7 @@ void FirstRunIfNoData(bool headless) {
     window.height = config.window_height;
     window.fullscreen = config.fullscreen;
     window.headless = headless;
-    bool offscreen = headless;
+    bool offscreen = headless && !gfx::HeadlessSurfaceAvailable();
     window.vulkan = !offscreen;
     WindowInit(window);
     if (!headless) {
@@ -838,10 +838,13 @@ void FirstRunIfNoData(bool headless) {
     SDL_SetWindowTitle(WindowHandle(), "Game data needed");
 
     gfx::RendererConfig renderer;
+    renderer.app_name = "Dark Cloud";
     renderer.logical_width = kScreenWidth;
     renderer.logical_height = kScreenHeight;
     renderer.display_aspect = 4.0f / 3.0f;
+    renderer.pipeline_cache = PathsSaveRoot() / "pipeline_cache.bin";
     renderer.offscreen = offscreen;
+    renderer.validation = renderer.validation || SettingsEnv("VULKAN_VALIDATION") != nullptr;
     gfx::RendererInit(WindowHandle(), renderer);
     render::MirrorTakeWindow(offscreen ? nullptr : WindowHandle());
 

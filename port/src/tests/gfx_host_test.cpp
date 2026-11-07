@@ -3,6 +3,7 @@
 
 #include "gfx_fixture.hpp"
 #include "platform/window.hpp"
+#include "render/noktus_mirror.hpp"
 
 namespace dc::test {
 
@@ -11,6 +12,14 @@ namespace {
 constexpr float kWide = 1.5f; // 720 rows over the frame's 480
 
 } // namespace
+
+TEST(GfxHost, OnlyKazarovByNameBringsTheOldRendererBack) {
+    EXPECT_TRUE(render::KazarovAsked("kazarov"));
+    EXPECT_FALSE(render::KazarovAsked("noktus"));
+    EXPECT_FALSE(render::KazarovAsked("Kazarov"));
+    EXPECT_FALSE(render::KazarovAsked(""));
+    EXPECT_FALSE(render::KazarovAsked(nullptr));
+}
 
 TEST(GfxHost, TheFrameLiesInTheMiddleOfAWideWindow) {
     GfxFixture                fixture(1280, 720);

@@ -79,18 +79,30 @@ inline bool UpdateTextureNow(gfx::TextureHandle texture, std::uint32_t mip, std:
 
 inline void ReadDepth(std::uint32_t id, float x, float y, float width, float height) {
     MirrorReadDepth(id, {x, y, width, height});
+    if (KazarovDraws()) {
+        gfx::ReadDepth(id, x, y, width, height);
+    }
 }
 
 inline std::optional<float> DepthResult(std::uint32_t id) {
-    return MirrorDepthResult(id);
+    if (!KazarovDraws()) {
+        return MirrorDepthResult(id);
+    }
+    const std::optional<float> depth = gfx::DepthResult(id);
+    if (depth) {
+        MirrorCompareDepth(id, *depth);
+    }
+    return depth;
 }
 
 inline void CutInterpolation() {
     MirrorCutMotion();
+    gfx::CutInterpolation();
 }
 
 inline void CutCameraInterpolation() {
     MirrorCutCameraMotion();
+    gfx::CutCameraInterpolation();
 }
 
 inline void SetInterpKey(gfx::InterpKey key, bool no_interpolation = false, float teleport_distance = std::numeric_limits<float>::infinity(), bool blend_vertices = false) {
@@ -100,14 +112,21 @@ inline void SetInterpKey(gfx::InterpKey key, bool no_interpolation = false, floa
 
 inline void UpdateMeshVertices(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices) {
     MirrorUpdateMesh(mesh, first, vertices);
+    gfx::UpdateMeshVertices(mesh, first, vertices);
 }
 
-inline void Clear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect = nullptr, const gfx::LogicalRect * /*presentation_rect*/ = nullptr) {
+inline void Clear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect = nullptr, const gfx::LogicalRect *presentation_rect = nullptr) {
     MirrorClear(color, rgba, depth, depth_value, rect);
+    if (KazarovDraws()) {
+        gfx::Clear(color, rgba, depth, depth_value, rect, presentation_rect);
+    }
 }
 
-inline void ClearStencil(std::uint8_t /*value*/, const gfx::LogicalRect * /*rect*/ = nullptr) {
+inline void ClearStencil(std::uint8_t value, const gfx::LogicalRect *rect = nullptr) {
     MirrorClearStencil();
+    if (KazarovDraws()) {
+        gfx::ClearStencil(value, rect);
+    }
 }
 
 inline void SetRenderTarget(gfx::TextureHandle target) {
@@ -134,12 +153,19 @@ inline gfx::TextureHandle NamedRenderTarget(std::string_view name, std::uint32_t
 }
 
 inline bool CopyMainDepthToTarget(const gfx::LogicalRect &source) {
-    return MirrorCopyDepth(source);
+    if (!KazarovDraws()) {
+        return MirrorCopyDepth(source);
+    }
+    if (!gfx::CopyMainDepthToTarget(source)) {
+        return false;
+    }
+    MirrorCopyDepth(source);
+    return true;
 }
 
 inline bool SnapshotFrame(gfx::TextureHandle target) {
     MirrorSnapshotFrame(target);
-    return true;
+    return !KazarovDraws() || gfx::SnapshotFrame(target);
 }
 
 inline void DestroyTexture(gfx::TextureHandle texture) {

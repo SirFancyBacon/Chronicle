@@ -123,7 +123,7 @@ void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
             const gfx::DrawState &state);
 
 /**
- * DC_PASS_TRACE=<path>: at exit writes each shape of frame seen, with its passes in order, as JSON. `drawn` is what Noktus
+ * DC_PASS_TRACE=<path>: at exit writes each shape of frame seen, with its passes in order, as JSON. `drawn` is what the renderer
  * says it was given, the truth the counted draws are checked against: every draw has to come through the calls below.
  */
 void PassTraceStart();
@@ -138,6 +138,9 @@ inline void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vert
     Note2D(primitive, vertices, texture, state);
     const Routed routed = Route(texture, state);
     MirrorDraw2D(primitive, vertices, routed.texture, routed.state);
+    if (KazarovDraws()) {
+        gfx::Draw2D(primitive, vertices, routed.texture, routed.state, presentation);
+    }
 }
 
 inline void DrawDepthPlanes2D(const gfx::DepthPlanes2D &planes, std::span<const gfx::Vertex2D, 4> quad,
@@ -153,6 +156,9 @@ inline void DrawDepthPlanes2D(const gfx::DepthPlanes2D &planes, std::span<const 
         }
         MirrorDraw2D(gfx::Primitive::Quads, plane, routed.texture, routed.state);
     }
+    if (KazarovDraws()) {
+        gfx::DrawDepthPlanes2D(planes, quad, routed.texture, routed.state);
+    }
 }
 
 inline void DrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint32_t index_count,
@@ -162,6 +168,9 @@ inline void DrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint3
     NoteMesh(constants, transform, texture, state);
     const Routed routed = Route(texture, state);
     MirrorDrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
+    if (KazarovDraws()) {
+        gfx::DrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
+    }
 }
 
 inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices,
@@ -171,6 +180,9 @@ inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span
     NoteMesh(constants, transform, texture, state);
     const Routed routed = Route(texture, state);
     MirrorDrawImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
+    if (KazarovDraws()) {
+        gfx::DrawMeshImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
+    }
 }
 
 inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, std::int32_t dst_x,
@@ -178,7 +190,7 @@ inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::Texture
     CountCopy();
     NoteCopy(src_rect, gfx::Rect{dst_x, dst_y, src_rect.w, src_rect.h});
     MirrorCopyTexture(src, src_rect, dst, dst_x, dst_y);
-    return true;
+    return !KazarovDraws() || gfx::CopyTexture(src, src_rect, dst, dst_x, dst_y);
 }
 
 inline bool BlitTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, gfx::Rect dst_rect,
@@ -186,7 +198,7 @@ inline bool BlitTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::Texture
     CountCopy();
     NoteCopy(src_rect, dst_rect);
     MirrorBlit(src, src_rect, dst, dst_rect, filter);
-    return true;
+    return !KazarovDraws() || gfx::BlitTexture(src, src_rect, dst, dst_rect, filter);
 }
 
 } // namespace dc::render

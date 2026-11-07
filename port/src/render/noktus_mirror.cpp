@@ -35,6 +35,9 @@ namespace dc::render {
 
 namespace {
 
+// How many of Noktus's depth answers to look through for one of Kazarov's: the two answer a tick or so apart.
+constexpr std::size_t kDepthAnswersKept = 4;
+constexpr float       kDepthAgrees = 0.0005f;
 
 // A paletted texture, kept as the game gave it. Noktus has no palettes: what it draws is one of these through a palette, made as it's first drawn that way, and made again when either
 // changes. The game draws one image through another's palette, for text colours, so it's the pair that counts.
@@ -85,6 +88,12 @@ struct Mirror {
     bool                                                     vertices_move = false;
     std::uint64_t                                            draws_at_tick_end = 0;
     std::uint64_t                                            draws_last_tick = 0;
+    std::uint64_t                                            depth_compared = 0;
+    float                                                    depth_difference = 0.0f; // the largest seen
+    std::uint64_t                                            depth_differing = 0;
+    std::uint64_t                                            depth_on_something = 0;  // not open sky: a read of nothing but sky would prove little
+    std::array<std::array<float, kDepthAnswersKept>, noktus::Renderer::kDepthReads> depth_answers{}; // Noktus's latest, per slot, going round
+    std::array<std::uint32_t, noktus::Renderer::kDepthReads>                       depth_answer_count{};
 };
 
 bool        g_failed = false;
@@ -95,12 +104,19 @@ MirrorSettings g_settings;
 std::atomic<std::uint32_t> g_window_width = 0;
 std::atomic<std::uint32_t> g_window_height = 0;
 
+Mirror &State();
+
 template <typename Work>
 void Guarded(Work work) {
     try {
         work();
     } catch (const std::exception &error) {
         std::fprintf(stderr, "noktus: stopped: %s\n", error.what());
+        if (KazarovDraws()) {
+            g_failed = true; // only a comparison stops: the game is still on screen
+            State().open = false; // no more reaches a renderer that failed
+            return;
+        }
         if (g_game_window != nullptr) {
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Noktus Nimbus", error.what(), g_game_window);
         }
@@ -158,6 +174,10 @@ void WriteLastPicture() {
         std::fprintf(stderr, "noktus mirror: %llu drawn, %llu skipped for a texture it lacks, %llu to other targets, %llu dropped, %zu paletted pictures\n",
                      static_cast<unsigned long long>(mirror.drawn + mirror.meshes_drawn), static_cast<unsigned long long>(mirror.skipped),
                      static_cast<unsigned long long>(mirror.elsewhere), static_cast<unsigned long long>(mirror.renderer->DroppedDraws()), mirror.expanded.size());
+        if (mirror.depth_compared != 0) {
+            std::fprintf(stderr, "noktus depth: %llu reads compared, %llu on something, %llu differing, largest difference %.6f\n", static_cast<unsigned long long>(mirror.depth_compared),
+                         static_cast<unsigned long long>(mirror.depth_on_something), static_cast<unsigned long long>(mirror.depth_differing), static_cast<double>(mirror.depth_difference));
+        }
         if (mirror.window != nullptr) {
             ReportPace(mirror);
         }
@@ -418,6 +438,21 @@ noktus::Layer2D ToLayer(Layer2D layer) {
 
 } // namespace
 
+bool KazarovAsked(const char *setting) {
+    return setting != nullptr && std::string_view(setting) == "kazarov";
+}
+
+bool KazarovDraws() {
+    static const bool asked = [] {
+        const char *const setting = std::getenv("DC_RENDERER");
+        if (setting != nullptr && !KazarovAsked(setting) && std::string_view(setting) != "noktus") {
+            std::fprintf(stderr, "DC_RENDERER: %s isn't a renderer, so Noktus draws: it takes noktus or kazarov\n", setting);
+        }
+        return KazarovAsked(setting);
+    }();
+    return asked;
+}
+
 bool MirrorOn() {
     return g_ready && !g_failed;
 }
@@ -438,7 +473,7 @@ void MirrorApply(const MirrorSettings &settings) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     g_settings = settings;
-    if (mirror.renderer) {
+    if (mirror.renderer && MirrorOn()) {
         noktus::SetInterpolation(*mirror.renderer, settings.interpolate && !InterpolationForcedOff());
         noktus::SetPresentMode(*mirror.renderer, ToPresentMode(settings.present_mode));
         noktus::SetFrameLimit(*mirror.renderer, settings.max_fps);
@@ -449,7 +484,7 @@ void MirrorApply(const MirrorSettings &settings) {
 void MirrorTickRate(double ticks_per_second) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
-    if (mirror.renderer) {
+    if (mirror.renderer && MirrorOn()) {
         noktus::SetTickRate(*mirror.renderer, ticks_per_second);
     }
 }
@@ -474,6 +509,31 @@ std::optional<float> MirrorDepthResult(std::uint32_t slot) {
     return mirror.renderer ? mirror.renderer->DepthResult(slot) : std::nullopt;
 }
 
+void MirrorCompareDepth(std::uint32_t slot, float today) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (!mirror.renderer || slot >= noktus::Renderer::kDepthReads) {
+        return;
+    }
+    const std::optional<float> answer = mirror.renderer->DepthResult(slot);
+    if (!answer) {
+        return;
+    }
+    std::array<float, kDepthAnswersKept> &kept = mirror.depth_answers[slot];
+    std::uint32_t                        &count = mirror.depth_answer_count[slot];
+    kept[count++ % kDepthAnswersKept] = *answer;
+    if (count >= kDepthAnswersKept) {
+        float nearest = std::numeric_limits<float>::infinity();
+        for (const float value : kept) {
+            nearest = std::min(nearest, std::abs(today - value));
+        }
+        mirror.depth_compared++;
+        mirror.depth_on_something += today > 0.0f ? 1 : 0;
+        mirror.depth_differing += nearest > kDepthAgrees ? 1 : 0;
+        mirror.depth_difference = std::max(mirror.depth_difference, nearest);
+    }
+}
+
 double MirrorFramesPerSecond() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
@@ -481,8 +541,8 @@ double MirrorFramesPerSecond() {
 }
 
 void MirrorTakeWindow(SDL_Window *window) {
-    g_game_window = window;
-    g_ready = true;
+    g_game_window = KazarovDraws() ? nullptr : window;
+    g_ready = !KazarovDraws() || RequestedPath() != nullptr;
 }
 
 void MirrorDropWindow() {
@@ -536,7 +596,7 @@ void MirrorBeginTick() {
     std::scoped_lock      guard(mirror.lock);
     Guarded([&] {
         Start(mirror);
-        // What's being drawn to: the window, or with none the size the run asked for.
+        // What's being drawn to: the window, or with none the size the run asked for, which beside Kazarov's renderer is what it's drawing.
         const gfx::LogicalMapping main = gfx::GetLogicalMapping(gfx::kMainTarget);
         int                       width = static_cast<int>(main.pixel_width);
         int                       height = static_cast<int>(main.pixel_height);
@@ -596,6 +656,9 @@ void MirrorMotion(gfx::InterpKey key, bool no_interpolation, float teleport_dist
 }
 
 void MirrorCutMotion() {
+    if (!MirrorOn()) {
+        return;
+    }
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (mirror.renderer) {
@@ -604,6 +667,9 @@ void MirrorCutMotion() {
 }
 
 void MirrorCutCameraMotion() {
+    if (!MirrorOn()) {
+        return;
+    }
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (mirror.renderer) {
@@ -780,6 +846,9 @@ bool CopyIndexed(Mirror &mirror, gfx::TextureHandle from, const gfx::Rect &from_
 } // namespace
 
 void MirrorCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHandle to, std::int32_t x, std::int32_t y) {
+    if (!MirrorOn()) {
+        return;
+    }
     Mirror           &mirror = State();
     std::scoped_lock  guard(mirror.lock);
     if (CopyIndexed(mirror, from, rect, to, {x, y, rect.w, rect.h})) {
@@ -795,6 +864,9 @@ void MirrorCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHand
 }
 
 void MirrorBlit(gfx::TextureHandle from, gfx::Rect from_rect, gfx::TextureHandle to, gfx::Rect to_rect, gfx::Filter filter) {
+    if (!MirrorOn()) {
+        return;
+    }
     Mirror           &mirror = State();
     std::scoped_lock  guard(mirror.lock);
     if (CopyIndexed(mirror, from, from_rect, to, to_rect)) {
@@ -903,6 +975,9 @@ void MirrorCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> verti
 }
 
 void MirrorUpdateMesh(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices) {
+    if (!MirrorOn()) {
+        return;
+    }
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     const auto       found = mirror.meshes.find(mesh);
@@ -912,6 +987,9 @@ void MirrorUpdateMesh(gfx::MeshHandle mesh, std::uint32_t first, std::span<const
 }
 
 void MirrorDestroyMesh(gfx::MeshHandle mesh) {
+    if (!MirrorOn()) {
+        return;
+    }
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     const auto       found = mirror.meshes.find(mesh);

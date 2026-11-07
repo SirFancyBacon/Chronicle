@@ -902,7 +902,11 @@ Vulkan blending and where it does not.
 
 ### Which renderer draws the window
 
-Noktus Nimbus draws the game, with the window or, in a headless run, into a picture. `port/src/render/gfx_host.cpp` answers what game code still asks of a renderer, and Kazarov's own renderer isn't built.
+Noktus Nimbus draws the game, with the window or, in a headless run, into a picture. `port/src/render/gfx_host.cpp` answers what game code still asks of a renderer, and Kazarov's renderer doesn't start.
+
+`DC_RENDERER=kazarov` has Kazarov's renderer draw instead, for telling which renderer a bug is in. It's a test tool, so it's in the environment only: older builds saved `video.renderer` as `kazarov`, and that setting is read and dropped. With it, `--perf-log`, `--display-per-tick`, `DC_PRESENT_STATS` and `DC_RENDER_THREAD` work, and `app/kazarov_presentation.cpp` presents the frames. HDR is Noktus's alone. Add `DC_NOKTUS_MIRROR=<path>` and Noktus draws everything alongside with no window, writing its last picture to the path, for comparing the two.
+
+Both are in one program. Kazarov's renderer sources are built with `render/kazarov_names.hpp` forced in, which gives the calls `gfx_host.cpp` also defines other names, so `tools/kazarov` needs no change. `gfx_host.cpp` answers to the real names and passes each call on when Kazarov's renderer is drawing.
 
 The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion and Anisotropic Filter
 change as the game runs. The depth picks behind the lens flare are read from Noktus, whose answers come a few ticks later.

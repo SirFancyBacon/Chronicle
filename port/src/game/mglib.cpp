@@ -441,8 +441,10 @@ void MGBeginFrame() {
 // game asked not to wait twice (mgWaitVSync 0). The count only moves when the clock is pumped, so
 // it is pumped first to see whether a tick went by.
 void MGEndFrame() {
-    render::MirrorSetTarget(render::kMainTarget);
-    app::GameDrawFps();
+    if (!render::KazarovDraws()) {
+        render::MirrorSetTarget(render::kMainTarget);
+        app::GameDrawFps();
+    }
     static const bool                        trace_phases = std::getenv("DC_PERF_END_FRAME") != nullptr;
     std::array<EndFrameClock::time_point, 5> stamps{};
     uint32_t                                 depth_picks = 0;
@@ -450,6 +452,10 @@ void MGEndFrame() {
         stamps[0] = EndFrameClock::now();
     }
     {
+        std::optional<render::RenderLease> lease; // only Kazarov's renderer has a thread to hold off
+        if (render::KazarovDraws()) {
+            lease.emplace();
+        }
         if (trace_phases) {
             stamps[1] = EndFrameClock::now();
         }
@@ -482,11 +488,11 @@ void MGEndFrame() {
         }
         render::MirrorEndTick(); // last: the picks and the divider are part of the tick
         if (recording) {
-            render::EndRecording();
+            render::DisplayListRef list = render::EndRecording();
             if (trace_phases) {
                 stamps[2] = EndFrameClock::now();
             }
-            app::GameTickDone();
+            app::GameTickDone(std::move(list));
             sceVu0CopyMatrix(g_tick_view, mgRenderInfo.view_scaled);
             g_have_tick_view = true;
         } else {
