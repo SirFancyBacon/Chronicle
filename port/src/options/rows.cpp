@@ -266,6 +266,53 @@ void SetAnisotropy(Config &config, int choice) {
     config.anisotropy = kAnisotropy[choice];
 }
 
+int HdrChoice(const Config &config) {
+    return static_cast<int>(config.hdr);
+}
+
+void SetHdr(Config &config, int choice) {
+    config.hdr = static_cast<ConfigHdr>(choice);
+}
+
+constexpr double kPaperWhite[] = {0, 80, 100, 120, 150, 200, 250, 300, 400, 500};
+constexpr double kPeak[] = {0, 400, 600, 800, 1000, 1500, 2000, 4000};
+
+std::string NitsText(int nits) {
+    return nits > 0 ? std::format("{} nits", nits) : "Auto";
+}
+
+int PaperWhiteCount(const Config & /*config*/) {
+    return static_cast<int>(std::size(kPaperWhite));
+}
+
+int PaperWhiteChoice(const Config &config) {
+    return Nearest(kPaperWhite, config.hdr_paper_white);
+}
+
+void SetPaperWhite(Config &config, int choice) {
+    config.hdr_paper_white = static_cast<int>(kPaperWhite[choice]);
+}
+
+std::string PaperWhiteText(const Config &config) {
+    return NitsText(config.hdr_paper_white);
+}
+
+int PeakCount(const Config & /*config*/) {
+    return static_cast<int>(std::size(kPeak));
+}
+
+int PeakChoice(const Config &config) {
+    return Nearest(kPeak, config.hdr_peak);
+}
+
+void SetPeak(Config &config, int choice) {
+    config.hdr_peak = static_cast<int>(kPeak[choice]);
+}
+
+std::string PeakText(const Config &config) {
+    return NitsText(config.hdr_peak);
+}
+
 int Aspect(const Config &config) {
     return config.aspect == ConfigAspect::FourThree ? 1 : 0;
 }
@@ -652,7 +699,18 @@ constexpr Row kDisplayRows[] = {
     NamedRow<&Config::enhanced_cloth>("video.cloth", "Cloth",
                                       "\"Cloth\"\nOriginal: the PS2's.\nEnhanced: the body no\nlonger passes through.",
                                       "Original|Enhanced"),
+    SettingRow("video.hdr", "HDR", "\"HDR\"\nNeeds HDR on in your\nsystem's display\nsettings.", Three, HdrChoice, SetHdr,
+               nullptr, "Off|HDR10|scRGB"),
+    SettingRow("video.hdr_paper_white", "Paper White",
+               "\"Paper White\"\nHow bright the game's\nwhite is. Auto uses\nyour system's setting.", PaperWhiteCount,
+               PaperWhiteChoice, SetPaperWhite, PaperWhiteText),
+    SettingRow("video.hdr_peak", "Peak Brightness",
+               "\"Peak Brightness\"\nThe brightest your\ndisplay can show.\nAuto asks the system.", PeakCount, PeakChoice,
+               SetPeak, PeakText),
 };
+
+// The last rows of kDisplayRows. Windows is the only place HDR has been tried.
+constexpr std::size_t kHdrRows = 3;
 
 #ifdef __ANDROID__
 constexpr Row kAndroidDisplayRows[] = {
@@ -687,8 +745,10 @@ std::span<const Row> DisplayRows() {
     return kAndroidDisplayRows;
 #elifdef __SWITCH__
     return kSwitchDisplayRows;
-#else
+#elifdef _WIN32
     return kDisplayRows;
+#else
+    return std::span(kDisplayRows).first(std::size(kDisplayRows) - kHdrRows);
 #endif
 }
 
@@ -922,25 +982,34 @@ std::vector<std::pair<std::string, std::string>> RowStrings() {
         }
         out.emplace_back(std::move(key), std::move(english));
     };
+    auto add_row = [&](const Row &row) {
+        const std::string prefix = "options." + std::string(row.key);
+        add(prefix + ".label", row.label);
+        if (row.help != nullptr) {
+            add(prefix + ".help", row.help);
+        }
+        if (row.names != nullptr) {
+            const int count = row.count(ConfigGet());
+            for (int choice = 0; choice < count; ++choice) {
+                add(prefix + ".choice." + std::to_string(choice), ChoiceName(row.names, choice));
+            }
+        }
+    };
     for (const Page &page : Pages()) {
         add(PageKey(page.name), page.name);
         add(PageKey(page.name) + ".help", page.help);
         for (const Row &row : page.rows) {
-            const std::string prefix = "options." + std::string(row.key);
-            add(prefix + ".label", row.label);
-            if (row.help != nullptr) {
-                add(prefix + ".help", row.help);
-            }
-            if (row.names != nullptr) {
-                const int count = row.count(ConfigGet());
-                for (int choice = 0; choice < count; ++choice) {
-                    add(prefix + ".choice." + std::to_string(choice), ChoiceName(row.names, choice));
-                }
-            }
+            add_row(row);
         }
+    }
+    // Translated everywhere, whether or not this platform shows them.
+    for (const Row &row : std::span(kDisplayRows).last(kHdrRows)) {
+        add_row(row);
     }
     add("options.video.width.value.Desktop", "Desktop");
     add("options.video.max_fps.value.Unlimited", "Unlimited");
+    add("options.video.hdr_paper_white.value.Auto", "Auto");
+    add("options.video.hdr_peak.value.Auto", "Auto");
     return out;
 }
 

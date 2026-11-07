@@ -450,7 +450,14 @@ gfx::PresentMode PresentMode(ConfigPresentMode mode) {
 
 
 render::MirrorSettings MirrorSettingsOf(const Config &config) {
-    return {.interpolate = config.interpolation, .present_mode = PresentMode(config.present_mode), .max_fps = config.max_fps, .anisotropy = config.anisotropy};
+    const render::MirrorHdr hdr = config.hdr == ConfigHdr::Hdr10 ? render::MirrorHdr::Hdr10 : config.hdr == ConfigHdr::ScRgb ? render::MirrorHdr::ScRgb : render::MirrorHdr::Off;
+    return {.interpolate = config.interpolation,
+            .present_mode = PresentMode(config.present_mode),
+            .max_fps = config.max_fps,
+            .anisotropy = config.anisotropy,
+            .hdr = hdr,
+            .paper_white = static_cast<float>(config.hdr_paper_white),
+            .peak = static_cast<float>(config.hdr_peak)};
 }
 
 GamePresentSettings PresentSettings(const Config &config) {

@@ -21,6 +21,43 @@ TEST(GfxHost, OnlyKazarovByNameBringsTheOldRendererBack) {
     EXPECT_FALSE(render::KazarovAsked(nullptr));
 }
 
+TEST(HdrChoice, OffStaysOffWhateverTheDisplayIs) {
+    EXPECT_EQ(render::ChooseHdr({.paper_white = 200.0f}, true, 3.0f, 4.0f).mode, render::MirrorHdr::Off);
+}
+
+TEST(HdrChoice, ADisplayNotInHdrStaysSdr) {
+    EXPECT_EQ(render::ChooseHdr({.hdr = render::MirrorHdr::Hdr10}, false, 1.0f, 1.0f).mode, render::MirrorHdr::Off);
+}
+
+TEST(HdrChoice, ASavedPaperWhiteDoesntTurnHdrOnForADisplayNotInIt) {
+    EXPECT_EQ(render::ChooseHdr({.hdr = render::MirrorHdr::Hdr10, .paper_white = 200.0f, .peak = 800.0f}, false, 1.0f, 1.0f).mode, render::MirrorHdr::Off);
+}
+
+TEST(HdrChoice, ForcingSaysTheDisplayIsInHdr) {
+    const render::HdrOutput output = render::ChooseHdr({.hdr = render::MirrorHdr::ScRgb, .paper_white = 150.0f, .force_hdr = true}, false, 1.0f, 1.0f);
+    EXPECT_EQ(output.mode, render::MirrorHdr::ScRgb);
+    EXPECT_EQ(output.paper_white, 150.0f);
+    EXPECT_EQ(output.peak, 1000.0f);
+}
+
+TEST(HdrChoice, AutoTakesWhatTheSystemSays) {
+    const render::HdrOutput output = render::ChooseHdr({.hdr = render::MirrorHdr::Hdr10}, true, 2.5f, 4.0f);
+    EXPECT_EQ(output.mode, render::MirrorHdr::Hdr10);
+    EXPECT_EQ(output.paper_white, 200.0f);
+    EXPECT_EQ(output.peak, 800.0f);
+}
+
+TEST(HdrChoice, SettingsBeatTheSystem) {
+    const render::HdrOutput output = render::ChooseHdr({.hdr = render::MirrorHdr::Hdr10, .paper_white = 120.0f, .peak = 600.0f}, true, 2.5f, 4.0f);
+    EXPECT_EQ(output.paper_white, 120.0f);
+    EXPECT_EQ(output.peak, 600.0f);
+}
+
+TEST(HdrChoice, WhiteNeverPassesThePeak) {
+    const render::HdrOutput output = render::ChooseHdr({.hdr = render::MirrorHdr::Hdr10, .paper_white = 500.0f, .peak = 400.0f}, true, 1.0f, 1.0f);
+    EXPECT_EQ(output.paper_white, 400.0f);
+}
+
 TEST(GfxHost, TheFrameLiesInTheMiddleOfAWideWindow) {
     GfxFixture                fixture(1280, 720);
     const gfx::LogicalMapping mapping = gfx::GetLogicalMapping(gfx::kMainTarget);

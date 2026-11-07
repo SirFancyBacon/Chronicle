@@ -18,6 +18,13 @@ enum class ConfigAspect {
     FourThree,
 };
 
+/** video.hdr: what's sent to a display in HDR. */
+enum class ConfigHdr {
+    Off,
+    Hdr10,
+    ScRgb,
+};
+
 /**
  * The game's own Options screen settings, which retail keeps in each save: here they hold for every
  * save, and the save's copy follows them. config.json keeps each in the section of the screen's page
@@ -66,6 +73,9 @@ struct Config : HostSettings {
     float             detail_distance = 0.0f;
     float             shadow_distance = 0.0f;
     int               anisotropy = 0;
+    ConfigHdr         hdr = ConfigHdr::Off;
+    int               hdr_paper_white = 0; // nits; 0 takes what the system says
+    int               hdr_peak = 0;        // nits; 0 takes what the system says
     bool              enhanced_cloth = false;     /**< video.cloth: false runs the PS2's cloth, true also keeps it out of the body. */
     float             mouse_camera_return = 0.2f; /**< Third-person vertical return after mouse input: 0 holds height, 1 is retail's rate. */
     bool              radial_dead_zone = true;    /**< input.dead_zone: true (radial) measures from the centre, false (axial) zeroes each stick axis on its own. */

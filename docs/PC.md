@@ -180,6 +180,9 @@ key is optional; these are the defaults:
         "detail_distance": 0,       // how far full detail reaches (world units); 0: at any distance
         "shadow_distance": 0,       // how far town parts cast full shadows (world units); 0: at any distance
         "anisotropy": 0,            // anisotropic filtering of 3D textures: 0 (off), 2, 4, 8 or 16 samples
+        "hdr": "off",               // off, hdr10 or scrgb; a display not in HDR stays SDR. On the Options screen on Windows only
+        "hdr_paper_white": 0,       // nits SDR's white is shown at; 0 takes the system's
+        "hdr_peak": 0,              // the most nits to send; 0 takes the system's
         "soft_focus": true,         // the game's farside soft focus
         "cloth": "original"         // original: the PS2's cloth; enhanced: also kept out of the body (docs/MODEL_FRAMEWORK.md)
     },
@@ -908,7 +911,7 @@ Noktus Nimbus draws the game, with the window or, in a headless run, into a pict
 
 Both are in one program. Kazarov's renderer sources are built with `render/kazarov_names.hpp` forced in, which gives the calls `gfx_host.cpp` also defines other names, so `tools/kazarov` needs no change. `gfx_host.cpp` answers to the real names and passes each call on when Kazarov's renderer is drawing.
 
-The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion and Anisotropic Filter
+The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion, Anisotropic Filter, HDR, Paper White and Peak Brightness
 change as the game runs. The depth picks behind the lens flare are read from Noktus, whose answers come a few ticks later.
 
 Noktus decides where 2D reaches past the frame from the layer it's told. A screen can name one; a draw left in the
@@ -1392,7 +1395,7 @@ help. Retail's screen-position row is gone: `MGAdjustScreen` moves nothing on PC
 | Page | Rows |
 |---|---|
 | Game | save cursor position, clock, time speed, dungeon map, enemy damage, party damage, enemy HP, names, Discord Rich Presence, element quick select, swap keeps lock-on, autosave |
-| Display | window mode, resolution (the monitor's own and the sizes that fit it), V-Sync (`fifo`, `mailbox`, `immediate`), frame limit, aspect ratio, interface size (`ui_scale`), smooth motion (`interpolation`), FPS counter, FPS info (`fps_detail`), anisotropic filter (`anisotropy`), soft focus, cloth (`cloth`) |
+| Display | window mode, resolution (the monitor's own and the sizes that fit it), V-Sync (`fifo`, `mailbox`, `immediate`), frame limit, aspect ratio, interface size (`ui_scale`), smooth motion (`interpolation`), FPS counter, FPS info (`fps_detail`), anisotropic filter (`anisotropy`), soft focus, cloth (`cloth`), and on Windows HDR, Paper White and Peak Brightness (`hdr`, `hdr_paper_white`, `hdr_peak`) |
 | Audio | volume, sound (mono, stereo or surround), soundtrack (PS2 or custom) |
 | Controls | vibration, mouse sensitivity (in hundredths below 1 and tenths above, whatever its unit), invert mouse Y, vertical return, mouse wheel zoom, reset zoom (its binding), stick sensitivity, invert stick X and Y, gyro, gyro sensitivity, invert gyro X and Y |
 | Text | language, message speed, button symbols (original or new), symbols shown (glyph device), text font (sharp or original), text shadow, symbol shadow, area name shadow, floor label shadow, boss name shadow |

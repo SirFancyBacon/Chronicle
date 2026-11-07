@@ -51,8 +51,8 @@ downloads and locks in `<checkout>\.kazarov`, which both configurations share:
 Each Windows `build.bat` also brings `release\<config>\` up to date, for example
 `release\windows-x64-release\`, with the executables, DLLs, `lang`, `glyphs` and `assets`.
 Copy that folder to any place you can write to, on Windows 10 or later with a Vulkan 1.3 driver,
-and start `Play.bat`, or `Play HDR.bat` with HDR on in Windows. Both write `chronicle.log` beside
-the game. The folder starts with no game data: the first start asks for the disc and keeps the
+and start `Play.bat`, which writes `chronicle.log` beside the game. HDR is on the Display page of
+Options, with HDR on in Windows. The folder starts with no game data: the first start asks for the disc and keeps the
 data in a `data` folder beside the game, with saves in `save`. Later builds leave both alone, and
 nothing checks that `data` still suits the build, so delete it after a change to `dcdata` or to
 what it makes. A game left running from the folder stops the next build.

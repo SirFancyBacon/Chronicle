@@ -14,11 +14,19 @@ namespace dc::render {
 
 // DC_RENDERER=kazarov: Kazarov's renderer draws the game, for telling which renderer a bug is in. Noktus draws by default, and Kazarov's renderer doesn't start.
 // DC_NOKTUS_MIRROR=<path>: writes the last picture to path at exit. With DC_RENDERER=kazarov, Noktus also draws everything alongside, with no window, to compare.
+// DC_NOKTUS_HDR=hdr10, scrgb or off overrides the HDR setting for a run, for scripted tests. DC_NOKTUS_HDR_FORCE=1 says the display is in HDR when the system says it isn't.
 // DC_NOKTUS_MOMENT=<0 to 1>: also writes the last tick as drawn that far from the tick before, beside it as <name>.between.png.
 // DC_NOKTUS_PAINT_WINDOW=1 paints the window magenta in place of the picture, and DC_NOKTUS_TARGET_TIMES=0 paces frames by watching them arrive.
 // DC_NOKTUS_CUSHION=<ticks> sets how far behind the newest tick it stands, and DC_NOKTUS_INTERPOLATE=0 shows each tick as it ended. How the frames went is printed at exit.
 // DC_NOKTUS_DEPTH_PROBE=1 asks for the depth at the middle of the frame every tick, to exercise depth reads whatever the scene does. Beside Kazarov's renderer, how the two compared is printed at exit.
 // DC_NOKTUS_WORKERS=<n> sets the threads sharing the work, and DC_NOKTUS_PARALLEL_FROM=<draws> how many mesh draws a tick needs before they're shared.
+
+/** What's sent to a display in HDR. */
+enum class MirrorHdr : std::uint8_t {
+    Off,
+    Hdr10,
+    ScRgb,
+};
 
 /** What the Options screen says about drawing. */
 struct MirrorSettings {
@@ -26,7 +34,25 @@ struct MirrorSettings {
     gfx::PresentMode present_mode = gfx::PresentMode::Fifo;
     double           max_fps = 0.0;
     int              anisotropy = 0;
+    MirrorHdr        hdr = MirrorHdr::Off;
+    float            paper_white = 0.0f; // nits; 0 takes what the system says
+    float            peak = 0.0f;        // nits; 0 takes what the system says
+    bool             force_hdr = false;  // DC_NOKTUS_HDR_FORCE: the display is in HDR, whatever the system says
 };
+
+/** What goes to the window, once the settings have met what the system says. */
+struct HdrOutput {
+    MirrorHdr mode = MirrorHdr::Off;
+    float     paper_white = 203.0f;
+    float     peak = 1000.0f;
+    bool      operator==(const HdrOutput &) const = default;
+};
+
+/**
+ * Works out HDR's output. The system's white is in scRGB's terms, where 1 is 80 nits, and its headroom is how far past that white the display goes.
+ * A display not in HDR stays SDR whatever's saved, as it would be sent far too bright a picture, unless force_hdr says it's known to be in HDR, for when the system can't tell.
+ */
+HdrOutput ChooseHdr(const MirrorSettings &settings, bool display_hdr, float white, float headroom);
 
 /** What DC_RENDERER's value asks for: only "kazarov" means Kazarov's renderer. */
 bool KazarovAsked(const char *setting);

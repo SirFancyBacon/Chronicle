@@ -125,6 +125,48 @@ double Shortest(float value) {
     return std::stod(std::format("{}", value));
 }
 
+bool ReadHdr(const Json &value, ConfigHdr &out) {
+    if (!value.is_string()) {
+        return false;
+    }
+    std::string hdr = Lower(value.get<std::string>());
+    if (hdr == "off") {
+        out = ConfigHdr::Off;
+    } else if (hdr == "hdr10") {
+        out = ConfigHdr::Hdr10;
+    } else if (hdr == "scrgb") {
+        out = ConfigHdr::ScRgb;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+const char *HdrName(ConfigHdr hdr) {
+    switch (hdr) {
+        case ConfigHdr::Hdr10:
+            return "hdr10";
+        case ConfigHdr::ScRgb:
+            return "scrgb";
+        case ConfigHdr::Off:
+            break;
+    }
+    return "off";
+}
+
+// 0 asks the system. PQ, which HDR10 sends, stops at 10,000.
+bool ReadNits(const Json &value, int &out) {
+    if (!value.is_number_integer()) {
+        return false;
+    }
+    const int nits = value.get<int>();
+    if (nits < 0 || nits > 10000) {
+        return false;
+    }
+    out = nits;
+    return true;
+}
+
 bool ReadAspect(const Json &value, ConfigAspect &out) {
     if (!value.is_string()) {
         return false;
@@ -583,6 +625,15 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         config.detail_distance = distance;
         return true;
     }
+    if (name == "video.hdr") {
+        return ReadHdr(value, config.hdr);
+    }
+    if (name == "video.hdr_paper_white") {
+        return ReadNits(value, config.hdr_paper_white);
+    }
+    if (name == "video.hdr_peak") {
+        return ReadNits(value, config.hdr_peak);
+    }
     if (name == "video.anisotropy") {
         if (!value.is_number_integer()) {
             return false;
@@ -756,6 +807,9 @@ std::string ConfigSerialize(const Config &config) {
     root["video"]["detail_distance"] = Shortest(config.detail_distance);
     root["video"]["shadow_distance"] = Shortest(config.shadow_distance);
     root["video"]["anisotropy"] = config.anisotropy;
+    root["video"]["hdr"] = HdrName(config.hdr);
+    root["video"]["hdr_paper_white"] = config.hdr_paper_white;
+    root["video"]["hdr_peak"] = config.hdr_peak;
     root["video"]["soft_focus"] = options.soft_focus;
     root["video"]["cloth"] = config.enhanced_cloth ? "enhanced" : "original";
     root["audio"]["master_volume"] = Shortest(config.master_volume);

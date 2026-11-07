@@ -33,5 +33,5 @@ function Write-Launcher([string]$Name, [string[]]$Settings) {
     Set-Content -LiteralPath (Join-Path $Folder $Name) -Value $lines -Encoding ascii
 }
 Write-Launcher 'Play.bat' @()
-Write-Launcher 'Play HDR.bat' @('set DC_NOKTUS_HDR=hdr10')
+Remove-Item -LiteralPath (Join-Path $Folder 'Play HDR.bat') -ErrorAction SilentlyContinue # HDR is in Options now
 Write-Host "kazarov: release folder $Folder"

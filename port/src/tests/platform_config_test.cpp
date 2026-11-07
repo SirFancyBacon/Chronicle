@@ -660,6 +660,16 @@ TEST(PlatformConfig, TextWipe) {
     ASSERT_TRUE(!ConfigParse(R"({"game": {"text_wipe": "yes"}})").text_wipe);
 }
 
+TEST(PlatformConfig, Hdr) {
+    ASSERT_TRUE(ConfigParse("").hdr == ConfigHdr::Off);
+    ASSERT_TRUE(ConfigParse(R"({"video": {"hdr": "banana"}})").hdr == ConfigHdr::Off);
+    ASSERT_TRUE(ConfigParse(R"({"video": {"hdr_peak": -1}})").hdr_peak == 0);
+    const Config hdr = ConfigParse(ConfigSerialize(ConfigParse(R"({"video": {"hdr": "scrgb", "hdr_paper_white": 200, "hdr_peak": 800}})")));
+    ASSERT_TRUE(hdr.hdr == ConfigHdr::ScRgb);
+    ASSERT_TRUE(hdr.hdr_paper_white == 200);
+    ASSERT_TRUE(hdr.hdr_peak == 800);
+}
+
 TEST(PlatformConfig, Anisotropy) {
     ASSERT_TRUE(ConfigParse("").anisotropy == 0);
     ASSERT_TRUE(ConfigParse(R"({"video": {"anisotropy": 16}})").anisotropy == 16);
