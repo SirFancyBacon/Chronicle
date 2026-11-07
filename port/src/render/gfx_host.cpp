@@ -70,22 +70,27 @@ struct State {
     int                                     recording = 0; // the FPS counter records inside a tick
 };
 
-State g;
+// Game code's static constructors call in here before main, in whatever order the platform's linker gives them, so this can't be a global with a constructor of
+// its own: on Windows they reached it unbuilt. Never destroyed, for the same reason at exit.
+State &G() {
+    static State *const state = new State;
+    return *state;
+}
 
 bool Old() { return dc::render::KazarovDraws(); }
 
 const Known *Find(TextureHandle handle) {
-    const auto found = g.textures.find(handle);
-    return found == g.textures.end() ? nullptr : &found->second;
+    const auto found = G().textures.find(handle);
+    return found == G().textures.end() ? nullptr : &found->second;
 }
 
 
 LogicalMapping MainMapping(uint32_t width, uint32_t height) {
     float w = static_cast<float>(width);
     float h = static_cast<float>(height);
-    const float logical_w = g.config.logical_width;
-    const float logical_h = g.config.logical_height;
-    const float aspect = g.config.display_aspect;
+    const float logical_w = G().config.logical_width;
+    const float logical_h = G().config.logical_height;
+    const float aspect = G().config.display_aspect;
     float       scale_x;
     float       scale_y;
     if (logical_w / logical_h == aspect) {
@@ -101,12 +106,12 @@ LogicalMapping MainMapping(uint32_t width, uint32_t height) {
 }
 
 LogicalMapping UiMapping(const LogicalMapping &mapping) {
-    float scale = g.layout.ui_scale;
+    float scale = G().layout.ui_scale;
     if (scale == 1.0f) {
         return mapping;
     }
-    float logical_w = g.config.logical_width;
-    float logical_h = g.config.logical_height;
+    float logical_w = G().config.logical_width;
+    float logical_h = G().config.logical_height;
     float centre_x = logical_w * 0.5f * mapping.scale_x + mapping.offset_x;
     float centre_y = logical_h * 0.5f * mapping.scale_y + mapping.offset_y;
     float scale_x = mapping.scale_x * scale;
@@ -114,11 +119,11 @@ LogicalMapping UiMapping(const LogicalMapping &mapping) {
     return LogicalMapping{scale_x, scale_y, std::round(centre_x - logical_w * 0.5f * scale_x), std::round(centre_y - logical_h * 0.5f * scale_y), mapping.pixel_width, mapping.pixel_height};
 }
 
-bool FillsWindow() { return g.layout.aspect == AspectMode::Fill; }
+bool FillsWindow() { return G().layout.aspect == AspectMode::Fill; }
 
 bool FrameShaped(const TextureInfo &info) { return info.frame_target && FillsWindow(); }
 
-bool FullHeightFrame(const TextureInfo &info) { return info.frame_target && static_cast<float>(info.height) == g.config.logical_height; }
+bool FullHeightFrame(const TextureInfo &info) { return info.frame_target && static_cast<float>(info.height) == G().config.logical_height; }
 
 uint32_t ScaledSize(uint32_t logical, float scale) {
     return std::max(1u, static_cast<uint32_t>(std::ceil(static_cast<float>(logical) * scale)));
@@ -127,20 +132,20 @@ uint32_t ScaledSize(uint32_t logical, float scale) {
 // What a render target's image measures: see Kazarov's TargetPixelSize.
 void TargetPixelSize(TextureInfo &info) {
     if (info.shares_main_depth || (FrameShaped(info) && FullHeightFrame(info))) {
-        info.pixel_width = g.main_width;
-        info.pixel_height = g.main_height;
+        info.pixel_width = G().main_width;
+        info.pixel_height = G().main_height;
     } else if (FrameShaped(info)) {
-        info.pixel_width = g.main_width;
-        info.pixel_height = ScaledSize(info.height, MainMapping(g.main_width, g.main_height).scale_y);
+        info.pixel_width = G().main_width;
+        info.pixel_height = ScaledSize(info.height, MainMapping(G().main_width, G().main_height).scale_y);
     } else {
-        info.pixel_width = ScaledSize(info.width, g.render_scale);
-        info.pixel_height = ScaledSize(info.height, g.render_scale);
+        info.pixel_width = ScaledSize(info.width, G().render_scale);
+        info.pixel_height = ScaledSize(info.height, G().render_scale);
     }
 }
 
 // A resized window or a change of aspect reshapes the targets that follow the frame, in Noktus and so here.
 void ReshapeTargets() {
-    for (auto &[handle, known] : g.textures) {
+    for (auto &[handle, known] : G().textures) {
         if (known.info.render_target) {
             TargetPixelSize(known.info);
         }
@@ -148,17 +153,17 @@ void ReshapeTargets() {
 }
 
 void ReadWindowSize() {
-    if (g.window == nullptr) {
+    if (G().window == nullptr) {
         return;
     }
     int width = 0;
     int height = 0;
-    SDL_GetWindowSizeInPixels(g.window, &width, &height);
+    SDL_GetWindowSizeInPixels(G().window, &width, &height);
     const uint32_t main_width = static_cast<uint32_t>(std::max(width, 1));
     const uint32_t main_height = static_cast<uint32_t>(std::max(height, 1));
-    if (main_width != g.main_width || main_height != g.main_height) {
-        g.main_width = main_width;
-        g.main_height = main_height;
+    if (main_width != G().main_width || main_height != G().main_height) {
+        G().main_width = main_width;
+        G().main_height = main_height;
         ReshapeTargets();
     }
 }
@@ -169,13 +174,13 @@ LogicalMapping TextureMapping(const TextureInfo &info) {
     }
     if (FrameShaped(info) && FullHeightFrame(info)) {
         LogicalMapping mapping = MainMapping(info.pixel_width, info.pixel_height);
-        mapping.scale_x = mapping.scale_x * g.config.logical_width / static_cast<float>(info.width);
+        mapping.scale_x = mapping.scale_x * G().config.logical_width / static_cast<float>(info.width);
         return mapping;
     }
     if (FrameShaped(info)) {
-        LogicalMapping main = MainMapping(g.main_width, g.main_height);
+        LogicalMapping main = MainMapping(G().main_width, G().main_height);
         float          rows = static_cast<float>(info.pixel_height) / static_cast<float>(info.height);
-        return LogicalMapping{main.scale_x * g.config.logical_width / static_cast<float>(info.width), rows, main.offset_x, 0.0f, info.pixel_width, info.pixel_height};
+        return LogicalMapping{main.scale_x * G().config.logical_width / static_cast<float>(info.width), rows, main.offset_x, 0.0f, info.pixel_width, info.pixel_height};
     }
     return LogicalMapping{static_cast<float>(info.pixel_width) / static_cast<float>(info.width), static_cast<float>(info.pixel_height) / static_cast<float>(info.height), 0.0f, 0.0f, info.pixel_width, info.pixel_height};
 }
@@ -309,8 +314,8 @@ bool InvertAffine(const Mat4 &m, Mat4 &out) {
 }
 
 TextureHandle MakeHandle(TextureInfo info, std::string name = {}) {
-    const TextureHandle handle = g.next_texture++;
-    g.textures[handle] = Known{info, std::move(name)};
+    const TextureHandle handle = G().next_texture++;
+    G().textures[handle] = Known{info, std::move(name)};
     return handle;
 }
 
@@ -321,11 +326,11 @@ void RendererInit(SDL_Window *window, const RendererConfig &config) {
         KazarovRendererInit(window, config);
         return;
     }
-    g.config = config;
-    g.window = window;
-    g.layout = config.layout;
+    G().config = config;
+    G().window = window;
+    G().layout = config.layout;
     ReadWindowSize();
-    g.render_scale = config.render_scale > 0.0f ? config.render_scale : std::max(1.0f, std::round(static_cast<float>(g.main_height) / config.logical_height));
+    G().render_scale = config.render_scale > 0.0f ? config.render_scale : std::max(1.0f, std::round(static_cast<float>(G().main_height) / config.logical_height));
 }
 
 void RendererShutdown() {
@@ -333,12 +338,12 @@ void RendererShutdown() {
         KazarovRendererShutdown();
         return;
     }
-    g.window = nullptr;
-    g.textures.clear();
-    g.named.clear();
-    g.target = kMainTarget;
-    g.in_frame = false;
-    g.recording = 0;
+    G().window = nullptr;
+    G().textures.clear();
+    G().named.clear();
+    G().target = kMainTarget;
+    G().in_frame = false;
+    G().recording = 0;
 }
 
 void RendererResize() {
@@ -352,20 +357,20 @@ void RendererResize() {
 bool HeadlessSurfaceAvailable() { return Old() && KazarovHeadlessSurfaceAvailable(); } // Noktus reads pictures back with no surface at all
 
 uint32_t PipelineCount() { return Old() ? KazarovPipelineCount() : 1; }
-float RenderScale() { return Old() ? KazarovRenderScale() : g.render_scale; }
+float RenderScale() { return Old() ? KazarovRenderScale() : G().render_scale; }
 
 void SetFrameLayout(const FrameLayout &layout) {
     if (Old()) {
         KazarovSetFrameLayout(layout);
         return;
     }
-    g.layout = layout;
+    G().layout = layout;
     ReshapeTargets();
 }
-FrameLayout CurrentFrameLayout() { return Old() ? KazarovCurrentFrameLayout() : g.layout; }
+FrameLayout CurrentFrameLayout() { return Old() ? KazarovCurrentFrameLayout() : G().layout; }
 
-float LogicalWidth() { return Old() ? KazarovLogicalWidth() : g.config.logical_width; }
-float LogicalHeight() { return Old() ? KazarovLogicalHeight() : g.config.logical_height; }
+float LogicalWidth() { return Old() ? KazarovLogicalWidth() : G().config.logical_width; }
+float LogicalHeight() { return Old() ? KazarovLogicalHeight() : G().config.logical_height; }
 LogicalRect LogicalFrame() { return Old() ? KazarovLogicalFrame() : LogicalRect{0.0f, 0.0f, LogicalWidth(), LogicalHeight()}; }
 
 LogicalRect LogicalFrame(TextureHandle handle) {
@@ -379,7 +384,7 @@ LogicalMapping GetLogicalMapping(TextureHandle handle) {
     }
     if (handle == kMainTarget || handle == kPreviousFrame) {
         ReadWindowSize();
-        return MainMapping(g.main_width, g.main_height);
+        return MainMapping(G().main_width, G().main_height);
     }
     ReadWindowSize();
     const Known *known = Find(handle);
@@ -408,18 +413,18 @@ void SetUiAnchor(const UiAnchor &anchor) {
         KazarovSetUiAnchor(anchor);
         return;
     }
-    g.ui_anchor = anchor;
+    G().ui_anchor = anchor;
 }
-UiAnchor CurrentUiAnchor() { return Old() ? KazarovCurrentUiAnchor() : g.ui_anchor; }
+UiAnchor CurrentUiAnchor() { return Old() ? KazarovCurrentUiAnchor() : G().ui_anchor; }
 
 void SetRenderTarget(TextureHandle target) {
     if (Old()) {
         KazarovSetRenderTarget(target);
         return;
     }
-    g.target = target;
+    G().target = target;
 }
-TextureHandle CurrentRenderTarget() { return Old() ? KazarovCurrentRenderTarget() : g.target; }
+TextureHandle CurrentRenderTarget() { return Old() ? KazarovCurrentRenderTarget() : G().target; }
 bool CanCopyMainDepth(TextureHandle target) {
     if (Old()) {
         return KazarovCanCopyMainDepth(target);
@@ -434,7 +439,7 @@ bool BeginFrame() {
     if (Old()) {
         return KazarovBeginFrame();
     }
-    g.in_frame = true;
+    G().in_frame = true;
     return true;
 }
 void EndFrame() {
@@ -442,36 +447,36 @@ void EndFrame() {
         KazarovEndFrame();
         return;
     }
-    g.in_frame = false;
+    G().in_frame = false;
 }
-bool InFrame() { return Old() ? KazarovInFrame() : g.in_frame || g.recording > 0; }
+bool InFrame() { return Old() ? KazarovInFrame() : G().in_frame || G().recording > 0; }
 
 void BeginRecording(RecordingKind kind) {
     if (Old()) {
         KazarovBeginRecording(kind);
         return;
     }
-    g.recording++;
+    G().recording++;
 }
 DisplayListRef EndRecording() {
     if (Old()) {
         return KazarovEndRecording();
     }
-    g.recording--;
+    G().recording--;
     return nullptr;
 }
-bool Recording() { return Old() ? KazarovRecording() : g.recording > 0; }
+bool Recording() { return Old() ? KazarovRecording() : G().recording > 0; }
 
 void SetInterpKey(InterpKey key, bool no_interpolation, float teleport_distance, bool blend_vertices) {
     if (Old()) {
         KazarovSetInterpKey(key, no_interpolation, teleport_distance, blend_vertices);
         return;
     }
-    g.interp_key = key;
-    g.no_interpolation = no_interpolation;
+    G().interp_key = key;
+    G().no_interpolation = no_interpolation;
 }
-InterpKey CurrentInterpKey() { return Old() ? KazarovCurrentInterpKey() : g.interp_key; }
-bool CurrentNoInterpolation() { return Old() ? KazarovCurrentNoInterpolation() : g.no_interpolation; }
+InterpKey CurrentInterpKey() { return Old() ? KazarovCurrentInterpKey() : G().interp_key; }
+bool CurrentNoInterpolation() { return Old() ? KazarovCurrentNoInterpolation() : G().no_interpolation; }
 void CutInterpolation() {
     if (Old()) {
         KazarovCutInterpolation();
@@ -522,8 +527,8 @@ TextureHandle CreateRenderTarget(uint32_t logical_width, uint32_t logical_height
         return KazarovCreateRenderTarget(logical_width, logical_height, has_alpha, share_main_depth, frame_target);
     }
     if (share_main_depth) {
-        logical_width = static_cast<uint32_t>(g.config.logical_width);
-        logical_height = static_cast<uint32_t>(g.config.logical_height);
+        logical_width = static_cast<uint32_t>(G().config.logical_width);
+        logical_height = static_cast<uint32_t>(G().config.logical_height);
         frame_target = false;
     }
     if (logical_width == 0 || logical_height == 0) {
@@ -546,8 +551,8 @@ TextureHandle FindNamedRenderTarget(std::string_view name) {
     if (Old()) {
         return KazarovFindNamedRenderTarget(name);
     }
-    const auto found = g.named.find(name);
-    return found == g.named.end() ? kNullTexture : found->second;
+    const auto found = G().named.find(name);
+    return found == G().named.end() ? kNullTexture : found->second;
 }
 
 TextureHandle NamedRenderTarget(std::string_view name, uint32_t logical_width, uint32_t logical_height, bool has_alpha, bool share_main_depth, bool frame_target) {
@@ -565,7 +570,7 @@ TextureHandle NamedRenderTarget(std::string_view name, uint32_t logical_width, u
     }
     const TextureHandle target = CreateRenderTarget(logical_width, logical_height, has_alpha, share_main_depth, frame_target);
     if (target != kNullTexture) {
-        g.named.insert_or_assign(std::string(name), target);
+        G().named.insert_or_assign(std::string(name), target);
     }
     return target;
 }
@@ -576,7 +581,7 @@ std::optional<TextureInfo> GetTextureInfo(TextureHandle handle) {
     }
     if (handle == kMainTarget || handle == kPreviousFrame) {
         ReadWindowSize();
-        return TextureInfo{static_cast<uint32_t>(g.config.logical_width), static_cast<uint32_t>(g.config.logical_height), g.main_width, g.main_height, TextureFormat::Rgba8, 1, true, true, false, false};
+        return TextureInfo{static_cast<uint32_t>(G().config.logical_width), static_cast<uint32_t>(G().config.logical_height), G().main_width, G().main_height, TextureFormat::Rgba8, 1, true, true, false, false};
     }
     ReadWindowSize();
     const Known *known = Find(handle);
@@ -588,8 +593,8 @@ void DestroyTexture(TextureHandle handle) {
         KazarovDestroyTexture(handle);
         return;
     }
-    std::erase_if(g.named, [&](const auto &entry) { return entry.second == handle; });
-    g.textures.erase(handle);
+    std::erase_if(G().named, [&](const auto &entry) { return entry.second == handle; });
+    G().textures.erase(handle);
 }
 
 bool UpdateTexture(TextureHandle texture, uint32_t mip, uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void *pixels, uint32_t row_pixels) {
@@ -606,7 +611,7 @@ MeshHandle CreateMesh(std::span<const Vertex3D> vertices, std::span<const uint32
     if (Old()) {
         return KazarovCreateMesh(vertices, indices);
     }
-    return vertices.empty() || indices.empty() ? kNullMesh : g.next_mesh++;
+    return vertices.empty() || indices.empty() ? kNullMesh : G().next_mesh++;
 }
 bool UpdateMeshVertices(MeshHandle mesh, uint32_t first, std::span<const Vertex3D> vertices) { return !Old() || KazarovUpdateMeshVertices(mesh, first, vertices); }
 void DestroyMesh(MeshHandle mesh) {
