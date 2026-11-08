@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -17,7 +18,9 @@
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <stop_token>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -46,8 +49,11 @@ struct State {
     std::set<std::string>                                                       failed;
     bool                                                                        stripped = false;
     std::unordered_map<std::string, std::unique_ptr<std::vector<std::uint8_t>>> rebuilt;
-    std::deque<std::string>                                                     rebuilt_order;
+    std::deque<std::string>                                                     rebuilt_order; // those that can be let go, oldest first
     std::size_t                                                                 rebuilt_bytes = 0;
+    std::set<std::string>                                                       kept_ahead; // rebuilt by PrepareAhead, never let go
+    bool                                                                        keep_new_bundles = true;
+    std::jthread                                                                preparer; // last, so it stops before the rest goes
 };
 
 // Rebuilt sources are kept, up to this many bytes, for the files the game reads again.
@@ -108,6 +114,7 @@ void Forget(State &state) {
     state.rebuilt.clear();
     state.rebuilt_order.clear();
     state.rebuilt_bytes = 0;
+    state.kept_ahead.clear();
 }
 
 // Stops the game: data whose sources were emptied can't run without the models that rebuild them.
@@ -208,6 +215,10 @@ std::shared_ptr<const Bundle> LoadBundle(State &state, const std::string &path) 
         storage.bytes.resize(data.size());
         std::memcpy(storage.bytes.data(), data.data(), data.size());
         buffer.data = std::move(storage);
+    }
+    // Rebuilding ahead parses each bundle once, and would push out those the game is using.
+    if (!state.keep_new_bundles) {
+        return bundle;
     }
     // Holders keep their bundles alive past an eviction.
     while (state.recent.size() >= kKeptBundles) {
@@ -856,6 +867,26 @@ bool Publishes(std::string_view alias) {
 
 namespace {
 
+// A source's bytes rebuilt and checked, or null, with the state locked. A failure is remembered.
+std::unique_ptr<std::vector<std::uint8_t>> BuildChecked(State &state, std::string_view alias, const std::string &key, const Json &entry) {
+    std::unique_ptr<std::vector<std::uint8_t>> bytes;
+    try {
+        bytes = Build(state, alias, entry);
+        // Models, weights and bind poses come back as the disc has them, or not at all.
+        if (bytes != nullptr && !IsMotion(KindOf(entry)) && entry.contains("crc32") && Crc32(*bytes) != entry["crc32"].get<std::uint32_t>()) {
+            throw std::runtime_error("rebuilt bytes don't match the disc's");
+        }
+    } catch (const std::exception &error) {
+        std::fprintf(stderr, "%.*s: cannot rebuild from its glTF: %s\n", static_cast<int>(alias.size()), alias.data(),
+                     error.what());
+        bytes.reset();
+    }
+    if (bytes == nullptr) {
+        state.failed.insert(key);
+    }
+    return bytes;
+}
+
 // Rebuild, with the state locked. The bytes live until the next rebuild.
 const std::vector<std::uint8_t> *RebuildLocked(State &state, std::string_view alias) {
     Refresh(state);
@@ -868,21 +899,8 @@ const std::vector<std::uint8_t> *RebuildLocked(State &state, std::string_view al
     if (entry == state.index.end() || state.failed.contains(key)) {
         return nullptr;
     }
-    std::unique_ptr<std::vector<std::uint8_t>> bytes;
-    try {
-        bytes = Build(state, alias, entry->second);
-        // Models, weights and bind poses come back as the disc has them, or not at all.
-        if (bytes != nullptr && !IsMotion(KindOf(entry->second)) && entry->second.contains("crc32") &&
-            Crc32(*bytes) != entry->second["crc32"].get<std::uint32_t>()) {
-            throw std::runtime_error("rebuilt bytes don't match the disc's");
-        }
-    } catch (const std::exception &error) {
-        std::fprintf(stderr, "%.*s: cannot rebuild from its glTF: %s\n", static_cast<int>(alias.size()), alias.data(),
-                     error.what());
-        bytes.reset();
-    }
+    std::unique_ptr<std::vector<std::uint8_t>> bytes = BuildChecked(state, alias, key, entry->second);
     if (bytes == nullptr) {
-        state.failed.insert(key);
         return nullptr;
     }
     while (!state.rebuilt_order.empty() && state.rebuilt_bytes + bytes->size() > kKeptRebuiltBytes) {
@@ -1038,7 +1056,76 @@ void Splice(std::string_view path, std::span<std::uint8_t> bytes) {
     }
 }
 
+void StopPreparing() {
+    State &state = Shared();
+    // Not under the lock: the thread takes it between sources. So nothing may call this holding the lock: were indexing the data ever to happen
+    // from within Refresh while the thread lives, DataReadIndex would wait here on a thread waiting for that lock.
+    if (state.preparer.joinable()) {
+        state.preparer.request_stop();
+        state.preparer.join();
+    }
+}
+
+void PrepareAhead(std::vector<std::string> prefixes) {
+    StopPreparing();
+    State                                    &state = Shared();
+    const auto                                started = std::chrono::steady_clock::now();
+    std::vector<std::pair<std::string, Json>> sources;
+    std::uint64_t                             generation = 0;
+    {
+        // Here, so that indexing the data (when it isn't yet) happens on the game's thread.
+        std::lock_guard<std::mutex> lock(state.mutex);
+        Refresh(state);
+        generation = state.generation;
+        for (const std::string &prefix : prefixes) {
+            const std::string folded = Key(prefix);
+            for (auto it = state.index.lower_bound(folded); it != state.index.end() && it->first.starts_with(folded); ++it) {
+                if (KindOf(it->second) != SourceKind::Other) {
+                    sources.emplace_back(it->first, it->second);
+                }
+            }
+        }
+    }
+    state.preparer = std::jthread([&state, started, generation, sources = std::move(sources)](std::stop_token stop) {
+        std::size_t made = 0;
+        std::size_t kept_bytes = 0;
+        for (const auto &[key, entry] : sources) {
+            if (stop.stop_requested()) {
+                return;
+            }
+            // One source at a time, so that the game's own rebuilds wait for one at most.
+            std::lock_guard<std::mutex> lock(state.mutex);
+            if (!state.indexed || state.generation != generation || state.kept_ahead.contains(key) || state.failed.contains(key)) {
+                continue;
+            }
+            if (auto found = state.rebuilt.find(key); found != state.rebuilt.end()) {
+                // Already rebuilt for the game: kept from here on, out of the bytes that can be let go.
+                if (auto at = std::ranges::find(state.rebuilt_order, key); at != state.rebuilt_order.end()) {
+                    state.rebuilt_order.erase(at);
+                    state.rebuilt_bytes -= found->second->size();
+                }
+                state.kept_ahead.insert(key);
+                kept_bytes += found->second->size();
+                continue;
+            }
+            state.keep_new_bundles = false;
+            std::unique_ptr<std::vector<std::uint8_t>> bytes = BuildChecked(state, key, key, entry);
+            state.keep_new_bundles = true;
+            if (bytes != nullptr) {
+                kept_bytes += bytes->size();
+                state.rebuilt.emplace(key, std::move(bytes));
+                state.kept_ahead.insert(key);
+                made++;
+            }
+        }
+        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+        std::fprintf(stderr, "models: %zu of %zu sources rebuilt ahead in %.2f s, %.1f MB kept\n", made, sources.size(), seconds,
+                     static_cast<double>(kept_bytes) / (1024.0 * 1024.0));
+    });
+}
+
 void Reset() {
+    StopPreparing();
     State                      &state = Shared();
     std::lock_guard<std::mutex> lock(state.mutex);
     Forget(state);

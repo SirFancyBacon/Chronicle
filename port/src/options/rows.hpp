@@ -82,4 +82,9 @@ void BeginHdrCalibration();
  */
 void ListResolutions();
 
+/**
+ * Asks for the monitor's display modes ahead of Options, as the game starts, and asks again only after a display changes.
+ */
+void ListDisplayModesAhead();
+
 } // namespace dc::options

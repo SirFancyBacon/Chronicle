@@ -200,6 +200,7 @@ int LoadFile(char *path, void *buffer, int *out_size) {
 }
 
 int LoadFile2(char *path, void *buffer, int *out_size, int /*mode*/) {
+    const dc::platform::load_profile::Span profile(dc::platform::load_profile::Kind::Read);
     if (out_size) {
         *out_size = 0;
     }

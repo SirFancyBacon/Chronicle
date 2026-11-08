@@ -192,6 +192,13 @@ come from: `port/src/data/model_gltf.cpp` rebuilds them from the published bundl
 Georama scenes (`.scn`), dungeon map parts (`.mpd`), the opening's scenes (`.sne`) and the title load
 the same way: the converter finds their scenes, and the rebuild puts each back at its offset.
 
+**Kept.** Parsed bundles are kept while they're among the last 16 used, and rebuilt sources up to
+128 MB, so a file read again isn't rebuilt again. The menus' models (everything under `commenu/`,
+690 sources, about 33 MB) are rebuilt as the game starts, on a thread of their own, one source at a
+time, and kept for good (`model_gltf::PrepareAhead`): the first opening of the weapon menu otherwise
+waited about 70 ms while all of a character's weapons were rebuilt. A rebuild the game asks for
+meanwhile waits for one source at most. Indexing the data again stops it first.
+
 **Chronicle's own loader.** The glTF is read with fastgltf, which Kazarov already builds, by a loader
 in Chronicle's `port/src`. ChronicleTwo's loader does the same
 for Dark Cloud 2's; the general parts of the two (documents and their datapack candidates,

@@ -48,9 +48,11 @@
 #include "menu_save.hpp"
 #include "nowload.hpp"
 #include "options/menu_option.hpp"
+#include "options/rows.hpp"
 #include "platform/audio.hpp"
 #include "platform/clock.hpp"
 #include "platform/config.hpp"
+#include "platform/hitches.hpp"
 #include "platform/data_archive.hpp"
 #include "platform/discord.hpp"
 #include "platform/display.hpp"
@@ -770,6 +772,7 @@ int Run(int argc, const char **argv) {
 #endif
     // Its first texture starts Noktus, which takes the tick rate as it then stands.
     glyphs::Preload();
+    ListDisplayModesAhead();
     const char *bounded_headless = std::getenv("DC_HEADLESS_BOUNDED");
     ClockSetUnbounded(options.headless && (bounded_headless == nullptr || std::string_view(bounded_headless) != "1"));
     ClockAddPumpHook(PumpHost);
@@ -798,6 +801,7 @@ int Run(int argc, const char **argv) {
 
     int status = RunGame(argc, const_cast<char **>(argv));
     ConfigFlush(); // settings Options applied but hadn't written yet, when the game is closed with it open
+    platform::HitchFlush();
     if (render::KazarovDraws()) {
         dc::app::kazarov::GameStopPresentation();
     }

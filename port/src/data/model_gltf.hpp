@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -32,7 +33,19 @@ const std::vector<std::uint8_t> *Rebuild(std::string_view alias);
 void Splice(std::string_view path, std::span<std::uint8_t> bytes);
 
 /**
- * Forgets the index, the bundles and every rebuilt file, for when the data changes.
+ * Rebuilds every published source whose alias starts with one of `prefixes`, on a thread of its own, and keeps them for good: the files menus open, so
+ * that opening one doesn't wait while dozens of models are rebuilt. A rebuild the game asks for meanwhile waits for one source at most. Called again, it
+ * stops the last one first. The data's reader isn't made to be indexed while it's read, so call it once the data is indexed.
+ */
+void PrepareAhead(std::vector<std::string> prefixes);
+
+/**
+ * Stops rebuilding ahead, for good: before the data is indexed again.
+ */
+void StopPreparing();
+
+/**
+ * Forgets the index, the bundles and every rebuilt file, for when the data changes. Stops rebuilding ahead.
  */
 void Reset();
 

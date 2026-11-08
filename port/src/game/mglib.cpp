@@ -24,6 +24,7 @@
 #include "frame.hpp"
 #include "mathutil.hpp"
 #include "platform/clock.hpp"
+#include "platform/hitches.hpp"
 #include "rect.hpp"
 #include "render/draw3d.hpp"
 #include "render/gs_state.hpp"
@@ -441,6 +442,7 @@ void MGBeginFrame() {
 // game asked not to wait twice (mgWaitVSync 0). The count only moves when the clock is pumped, so
 // it is pumped first to see whether a tick went by.
 void MGEndFrame() {
+    platform::HitchTickWorkEnds();
     if (!render::KazarovDraws()) {
         render::MirrorSetTarget(render::kMainTarget);
         app::GameDrawFps();
@@ -525,6 +527,7 @@ void MGEndFrame() {
     if (trace_phases) {
         NoteEndFramePhases(stamps, depth_picks);
     }
+    platform::HitchHandedOver();
     if (!mgWaitVSync) {
         ClockPump();
     }
@@ -534,6 +537,7 @@ void MGEndFrame() {
     }
     g_old_vcount = static_cast<int>(ClockTickCount());
     app::GamePresentTickEnd();
+    platform::HitchTickWorkBegins();
 
     DBuffID = !DBuffID;
 }

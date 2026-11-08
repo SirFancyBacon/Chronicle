@@ -5,9 +5,12 @@
 #include <deque>
 #include <format>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <SDL3/SDL_events.h>
 
 #include "localize/localize.hpp"
 #include "options/menu_option.hpp"
@@ -134,6 +137,23 @@ constexpr OptionResolution kWindowSizes[] = {
 };
 
 std::vector<OptionResolution> g_sizes;
+
+// SDL asks the system for a display's modes at every call, which on X11 held the game's thread up about 60 ms: each time Options opened, and at each
+// display setting changed in it. So they're kept, and only asked for again after a display or the window's monitor changes.
+std::optional<std::vector<DisplayModeSize>> g_display_modes;
+
+void ForgetDisplayModes(const SDL_Event &event) {
+    if ((event.type >= SDL_EVENT_DISPLAY_FIRST && event.type <= SDL_EVENT_DISPLAY_LAST) || event.type == SDL_EVENT_WINDOW_DISPLAY_CHANGED) {
+        g_display_modes.reset();
+    }
+}
+
+const std::vector<DisplayModeSize> &DisplayModes() {
+    if (!g_display_modes) {
+        g_display_modes = WindowDisplayModes();
+    }
+    return *g_display_modes;
+}
 
 bool Desktop(const Config &config) {
     return config.window_width == 0 && config.window_height == 0;
@@ -1068,8 +1088,13 @@ void ListResolutions() {
     int           width = 0;
     int           height = 0;
     bool          known = WindowDisplaySize(width, height, !config.fullscreen && !Desktop(config));
-    g_sizes = OptionResolutionList(WindowDisplayModes(), config.window_width, config.window_height, known, width,
+    g_sizes = OptionResolutionList(DisplayModes(), config.window_width, config.window_height, known, width,
                                    height);
+}
+
+void ListDisplayModesAhead() {
+    WindowAddEventHook(ForgetDisplayModes);
+    DisplayModes();
 }
 
 int OptionZoomResetChoice(const Config &config) {

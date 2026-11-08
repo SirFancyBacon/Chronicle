@@ -2058,6 +2058,17 @@ These loading paths are enabled on all native platforms. For comparisons, set
 enables its path; other values disable it. `DC_PERF_LOAD=1` adds archive and source-read
 timings and byte counts; it is disabled by default.
 
+The game's thread logs each tick whose own work, from waking to handing the tick to the
+renderer, took longer than a tick, which a frame then waits on: `hitch: frame N, a tick of
+16.7 ms took the game X ms`, a run of them in a row as one line, with what load_profile timed
+in it (reads, PNGs, textures, model builds, meshes; these can hold one another, so they don't
+add up). Handing over isn't counted, since a renderer holding it up shows as frames held in
+Noktus's pacing line. What had caused them: Noktus waited on the GPU for each surface a menu
+made, the weapon and map menus rebuilt their models from glTF as they opened (now done as the
+game starts, see [MODEL_FRAMEWORK.md](MODEL_FRAMEWORK.md)), and Options asked the system for the
+monitor's display modes (now kept from the start, and asked again only after SDL reports a
+display change). Loading as a game starts or a map is entered still shows.
+
 Desktop startup leaves translation-template generation to the explicit
 `--export-text DIR` command. A fresh save root no longer scans every message
 container to create translator files before the game starts. Translation loading

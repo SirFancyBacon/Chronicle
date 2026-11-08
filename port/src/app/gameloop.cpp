@@ -22,6 +22,7 @@
 #include "battlemenu/main_ring.hpp"
 #include "btsysscript.hpp"
 #include "data/data_read.hpp"
+#include "data/model_gltf.hpp"
 #include "dataread.hpp"
 #include "dataset.hpp"
 #include "dngstatusdata.hpp"
@@ -936,6 +937,9 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
     main_select_menu_no = 0;
     SetMainSelectParam("e01");
     InitCDFile();
+    // The menus' models, rebuilt from their glTF on a thread of their own: the first opening of the weapon menu otherwise waited while all of a
+    // character's weapons were rebuilt.
+    data::model_gltf::PrepareAhead({"commenu/"});
     // The items read their documents from the data as well as the packs, so they load once it is indexed.
     datapacks::Load(PathsDataRoot());
     // The packs' strings join the game's own.

@@ -16,6 +16,7 @@ enum class Kind {
     Texture,
     Visual,
     Mesh,
+    Read, /**< A file read as the game waits for it. */
     Count
 };
 

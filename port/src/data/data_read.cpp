@@ -377,6 +377,8 @@ std::string IndexedPath(const IndexedFile &file) {
 } // namespace
 
 void DataReadIndex() {
+    // Its thread reads through the index this clears.
+    model_gltf::StopPreparing();
     data_generation.fetch_add(1, std::memory_order_relaxed);
     ResetMetadataSnapshots();
     const fs::path &root = PathsDataRoot();
