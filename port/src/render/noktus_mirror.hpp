@@ -21,6 +21,7 @@ enum class Pass : std::uint8_t;
 // DC_NOKTUS_PAINT_WINDOW=1 paints the window magenta in place of the picture, and DC_NOKTUS_TARGET_TIMES=0 paces frames by watching them arrive.
 // DC_NOKTUS_CUSHION=<ticks> sets how far behind the newest tick it stands, and DC_NOKTUS_INTERPOLATE=0 shows each tick as it ended. How the frames went is printed at exit.
 // DC_NOKTUS_DEPTH_PROBE=1 asks for the depth at the middle of the frame every tick, to exercise depth reads whatever the scene does. Beside Kazarov's renderer, how the two compared is printed at exit.
+// DC_NOKTUS_CLASS_VIEW=1 draws each draw in its class's colour (noktus::DrawClass), for checking classes by eye.
 // DC_NOKTUS_WORKERS=<n> sets the threads sharing the work, and DC_NOKTUS_PARALLEL_FROM=<draws> how many mesh draws a tick needs before they're shared.
 
 /** What's sent to a display in HDR. */
@@ -104,6 +105,15 @@ struct MirrorPassStretch {
 
 /** The passes of the last tick Noktus was given, in order. Empty when Noktus isn't drawing. */
 std::vector<MirrorPassStretch> MirrorTickPasses();
+
+/** How many draws Noktus put in each class since the last call, by pass and by the rule that classed them. */
+struct MirrorClassTally {
+    Pass          pass;
+    const char   *draw_class = ""; /**< Lives as long as the program, as rule does. */
+    const char   *rule = "";
+    std::uint64_t draws = 0;
+};
+std::vector<MirrorClassTally> MirrorTakeClassTally();
 
 /** What the window is being sent: Off without HDR, a window or Noktus drawing it, or when HDR asked for fell back to SDR. */
 HdrOutput MirrorHdrShown();

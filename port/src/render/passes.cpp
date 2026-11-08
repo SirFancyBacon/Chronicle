@@ -7,6 +7,7 @@
 #include <fstream>
 #include <map>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "render/noktus_adapter.hpp"
@@ -85,6 +86,7 @@ std::uint64_t                g_drawn = 0;
 std::uint64_t                g_mismatched_ticks = 0;
 std::uint64_t                g_noktus_checked = 0;   // ticks whose passes were checked against what Noktus recorded
 std::uint64_t                g_noktus_differing = 0;
+std::map<std::tuple<std::string, std::string, std::string>, std::uint64_t> g_classes; // pass, class, rule: Noktus's draws
 std::uint64_t                g_unnamed = 0;
 std::uint64_t                g_outside = 0;
 std::map<std::string, std::uint64_t> g_kinds;
@@ -120,7 +122,14 @@ void WriteTrace() {
         out << (first ? "" : ", ") << "\"" << key << "\": " << count;
         first = false;
     }
-    out << "}\n}\n";
+    out << "},\n \"classes\": [";
+    first = true;
+    for (const auto &[key, draws] : g_classes) {
+        out << (first ? "\n" : ",\n") << "  {\"pass\": \"" << std::get<0>(key) << "\", \"class\": \"" << std::get<1>(key) << "\", \"rule\": \"" << std::get<2>(key)
+            << "\", \"draws\": " << draws << "}";
+        first = false;
+    }
+    out << "\n ]\n}\n";
 }
 
 } // namespace
@@ -351,6 +360,9 @@ void PassTraceTick(std::uint32_t drawn, bool list_has_draws) {
             same = same && recorded[i].pass == g_spans[i].pass && recorded[i].draws == g_spans[i].draws && recorded[i].copies == g_spans[i].copies;
         }
         g_noktus_checked++;
+        for (const MirrorClassTally &counted : MirrorTakeClassTally()) {
+            g_classes[{PassName(counted.pass), counted.draw_class, counted.rule}] += counted.draws;
+        }
         if (!same) {
             std::string ours;
             for (const Span &span : g_spans) {

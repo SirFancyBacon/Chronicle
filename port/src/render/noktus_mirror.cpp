@@ -394,6 +394,9 @@ void Start(Mirror &mirror) {
     host.anisotropy = g_settings.anisotropy;
     // Beside config.json, so that it goes wherever the player's settings do.
     host.pipeline_cache = PathsSaveRoot() / "noktus_pipelines.cache";
+    if (const char *view = std::getenv("DC_NOKTUS_CLASS_VIEW")) {
+        host.class_view = std::string_view(view) == "1";
+    }
     if (const char *workers = std::getenv("DC_NOKTUS_WORKERS")) {
         host.workers = static_cast<int>(std::strtol(workers, nullptr, 10));
     }
@@ -617,6 +620,51 @@ void MirrorSetPass(Pass pass) {
     if (mirror.renderer) {
         mirror.renderer->SetPass(*named);
     }
+}
+
+std::vector<MirrorClassTally> MirrorTakeClassTally() {
+    std::vector<MirrorClassTally> tally;
+    if (!MirrorOn()) {
+        return tally;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (!mirror.renderer) {
+        return tally;
+    }
+    for (const noktus::ClassTally &counted : noktus::TakeClassTally(*mirror.renderer)) {
+        const char *name = "";
+        switch (counted.draw_class) {
+            case noktus::DrawClass::Opaque:
+                name = "Opaque";
+                break;
+            case noktus::DrawClass::Cutout:
+                name = "Cutout";
+                break;
+            case noktus::DrawClass::Transparent:
+                name = "Transparent";
+                break;
+            case noktus::DrawClass::Decal:
+                name = "Decal";
+                break;
+            case noktus::DrawClass::Effect:
+                name = "Effect";
+                break;
+            case noktus::DrawClass::ShadowVolume:
+                name = "ShadowVolume";
+                break;
+            case noktus::DrawClass::Screen:
+                name = "Screen";
+                break;
+            case noktus::DrawClass::Interface:
+                name = "Interface";
+                break;
+            case noktus::DrawClass::Count:
+                break;
+        }
+        tally.push_back({.pass = FromNoktusPass(counted.pass), .draw_class = name, .rule = counted.rule, .draws = counted.draws});
+    }
+    return tally;
 }
 
 std::vector<MirrorPassStretch> MirrorTickPasses() {
