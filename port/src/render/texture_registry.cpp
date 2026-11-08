@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "data/data_read.hpp"
+#include "ktx2.hpp"
 #include "platform/load_work_profile.hpp"
 #include "platform/png_image.hpp"
 #include "render/gs_state.hpp"
@@ -558,7 +559,7 @@ bool PortLoadBakedTexture(std::string_view document, std::string_view name, unsi
         const std::string         png_path = parent + relative;
         const auto                png_read_start = trace ? BakedLoadClock::now() : BakedLoadClock::time_point{};
         if (!DataReadReadFile(png_path, png_bytes)) {
-            error = "missing baked PNG " + png_path;
+            error = "missing baked picture " + png_path;
             return false;
         }
         if (trace) {
@@ -571,7 +572,18 @@ bool PortLoadBakedTexture(std::string_view document, std::string_view name, unsi
         std::vector<std::uint8_t> rgba;
         const auto                png_decode_start = trace ? BakedLoadClock::now() : BakedLoadClock::time_point{};
         bool                      png_cache_hit = false;
-        if (!PngDecodeRgba(png_bytes, decoded_width, decoded_height, rgba, &png_cache_hit)) {
+        // dcdata bakes KTX2, which unpacks about six times faster than a PNG decodes; data baked before it is PNG.
+        if (dcdata::ktx2::IsKtx2(png_bytes)) {
+            std::uint32_t ktx2_width = 0;
+            std::uint32_t ktx2_height = 0;
+            std::string   why;
+            if (!dcdata::ktx2::Decode(png_bytes, ktx2_width, ktx2_height, rgba, &why)) {
+                error = "invalid baked KTX2 " + png_path + ": " + why;
+                return false;
+            }
+            decoded_width = static_cast<int>(ktx2_width);
+            decoded_height = static_cast<int>(ktx2_height);
+        } else if (!PngDecodeRgba(png_bytes, decoded_width, decoded_height, rgba, &png_cache_hit)) {
             error = "invalid baked PNG " + png_path;
             return false;
         }
@@ -588,7 +600,7 @@ bool PortLoadBakedTexture(std::string_view document, std::string_view name, unsi
         const unsigned expected_width = std::max(1u, out.width >> level);
         const unsigned expected_height = std::max(1u, out.height >> level);
         if (std::cmp_not_equal(decoded_width, expected_width) || std::cmp_not_equal(decoded_height, expected_height)) {
-            error = "baked PNG dimensions differ for " + png_path;
+            error = "baked picture dimensions differ for " + png_path;
             return false;
         }
         out.levels.push_back(std::move(rgba));

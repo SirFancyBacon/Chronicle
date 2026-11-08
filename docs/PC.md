@@ -1978,6 +1978,20 @@ retail records from them as it reads a file. `convert-models <raw> <out>`
 writes that conversion to a folder of its own, `bake-assets <raw> <data>`
 publishes it into extracted data, and `strip-models <data>` empties the
 converted originals (`docs/MODEL_FRAMEWORK.md`).
+Baked textures are KTX2 (`tools/dcdata/ktx2.hpp`): each picture level is
+RGBA8 in sRGB, compressed with Zstandard, which loses nothing. Kazarov's
+converter writes PNGs; `dcdata` packs each one a texture document names into
+a KTX2 beside it, checks it gives back the same pixels, points the document at
+it and removes the PNG. The game reads either, so data baked before still
+loads. With the game's own decoders, the menus' 2,321 textures took 4.5 s to
+decode as PNG (stb_image) and 0.73 s to unpack as KTX2, and went from 365 MB to
+167 MB; every baked picture together went from 1,130 MB to 549 MB. Baking again over data baked as PNG replaces
+those PNGs, each once it's found to be the very picture it bakes in its place,
+and their documents; anything else, or a picture edited since, it refuses and
+keeps, as before. `export-png <data> <out>` writes the textures back as PNG, their
+documents pointing at those, with the models' glTF bundles, whose images then
+open: the files to mod from. The glTF bundles in the data itself point at PNGs
+that aren't there, since the game never reads a glTF's images.
 The game's own first run extracts the files itself, for its progress screen,
 then runs the `dcdata` beside it with `extract` to do the rest, so its data is
 the same as a shell's (`platform/firstrun.cpp`). Where there's no `dcdata`, as

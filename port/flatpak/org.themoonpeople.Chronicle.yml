@@ -166,6 +166,7 @@ modules:
       # names goes to flatpak-deps/<name>, which port/CMakeLists.txt hands FetchContent, and a single
       # file _kz_port_vendor takes goes to a KZ_PORT_VENDOR_DIRS directory. A Kazarov pin that adds or
       # bumps one needs it here too; scripts/port/flatpak_sources.py (CI) checks, and prints the entry.
+      # Chronicle's own cmake/ChronicleFormats.cmake downloads the same ways (zstd, stb_image_write), and is checked too.
       # cargo-sources.json is every crate tools/kazarov/Cargo.lock names (port/flatpak/cargo_sources.py writes it).
       - cargo-sources.json
       - type: archive
@@ -201,4 +202,12 @@ modules:
       - type: file
         url: https://raw.githubusercontent.com/nothings/stb/2c980bb59875b0d32144a71867fbdebb2f77cd20/stb_image.h
         sha256: 594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3
+        dest: stb_truetype
+      - type: archive
+        url: https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz
+        sha256: eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3
+        dest: flatpak-deps/zstd
+      - type: file
+        url: https://raw.githubusercontent.com/nothings/stb/2c980bb59875b0d32144a71867fbdebb2f77cd20/stb_image_write.h
+        sha256: cbd5f0ad7a9cf4468affb36354a1d2338034f2c12473cf1a8e32053cb6914a05
         dest: stb_truetype

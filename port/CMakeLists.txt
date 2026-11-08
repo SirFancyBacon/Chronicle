@@ -53,6 +53,8 @@ foreach(staged IN LISTS staged_dependencies)
         set(FETCHCONTENT_SOURCE_DIR_${dependency_upper} "${staged}")
     endif()
 endforeach()
+# After the staged copies are named: it fetches as it's included.
+include(${CMAKE_SOURCE_DIR}/cmake/ChronicleFormats.cmake)
 kz_port_host_library(dc_host)
 # Noktus draws the game, and Kazarov's renderer is only there for DC_RENDERER=kazarov. Both define the gfx calls, so its sources are built with
 # other names for them: port/src/render/gfx_host.cpp answers to the real names, and passes a call on when Kazarov's renderer is drawing.
@@ -178,7 +180,7 @@ add_library(dc_port OBJECT ${PORT_LIB_SOURCES} ${DC_SCE_SOURCES})
 if(NINTENDO_SWITCH)
     dc_switch_port(dc_port)
 endif()
-target_link_libraries(dc_port PRIVATE dc_options SDL3::SDL3 Vulkan::Vulkan nlohmann_json::nlohmann_json fastgltf::fastgltf kz_port_headers)
+target_link_libraries(dc_port PRIVATE dc_options SDL3::SDL3 Vulkan::Vulkan nlohmann_json::nlohmann_json fastgltf::fastgltf kz_port_headers chronicle_zstd)
 # port/src, the generated headers, dcdata's header-only core and the stb directories: captionfont.cpp
 # rasterizes with stb_truetype and platform/png_image.cpp decodes with stb_image, which Kazarov stages
 # (or fetches) for dc_host.
@@ -223,7 +225,8 @@ endif()
 
 function(dc_link_game target)
     target_sources(${target} PRIVATE $<TARGET_OBJECTS:dc_port> $<TARGET_OBJECTS:dc_ps2>)
-    target_link_libraries(${target} PRIVATE noktus_vulkan dc_options dc_host kz_port_headers SDL3::SDL3 Vulkan::Vulkan fastgltf::fastgltf nlohmann_json::nlohmann_json)
+    target_link_libraries(${target} PRIVATE noktus_vulkan dc_options dc_host kz_port_headers SDL3::SDL3 Vulkan::Vulkan fastgltf::fastgltf nlohmann_json::nlohmann_json
+        chronicle_zstd)
     target_include_directories(${target} PRIVATE ${PORT_DIR} ${CMAKE_SOURCE_DIR}/tools/dcdata)
     target_compile_options(${target} PRIVATE -Wall -Wno-mismatched-tags -Wno-unused-label
         -Wno-overloaded-virtual -Wno-unused-function)

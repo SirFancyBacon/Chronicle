@@ -192,11 +192,11 @@ new rendering baseline without checking simulation state.
    ordering, CRC/error handling, cancellation and source registration, and avoid
    publishing partially filled native buffers. The existing ring animation can
    overlap real I/O; it must not be shortened to hide a stall.
-4. First-use PNG decoding remains substantial. Prior console profiling measured
-   about 357 ms for 141 unique scene PNGs. Benchmark faster lossless decoding or
-   an optional efficiently decoded baked representation across platforms, with
-   integrity, alpha, dimensions and fallback coverage. A larger decoded cache
-   cannot eliminate first-use inflation.
+4. First-use PNG decoding was substantial: console profiling measured about
+   357 ms for 141 unique scene PNGs. `dcdata` now bakes KTX2 with Zstandard
+   instead (`docs/PC.md`), which unpacks about six times faster and loses
+   nothing; PNG still loads, for data baked before. The PNG cache below only
+   helps that older data.
 5. Reprofile remaining model/texture construction after the source-index fix.
    Warm PNG work and metadata were small in the optimized character test; retain
    the quiet spans rather than assuming future pauses are storage or GPU stalls.

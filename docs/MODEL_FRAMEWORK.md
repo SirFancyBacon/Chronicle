@@ -114,7 +114,9 @@ across yet, all from Dark Cloud's character `.cfg`:
 profile** saying how Dark Cloud's data differs:
 
 - **Kazarov** (`models_convert_dc1`) converts the textures and then every model, motion, weight
-  and bind pose into one tree, so each glTF points at the PNGs beside it. The profile carries:
+  and bind pose into one tree, so each glTF points at the PNGs beside it. `dcdata` then packs the
+  textures as KTX2 for the game (`docs/PC.md`), and `dcdata export-png` writes the PNGs back, with
+  the glTF beside them, for opening a model elsewhere. The profile carries:
   - **the game's configuration reader.** Chronicle hands Kazarov a reader (`ProfileReader`) that
     turns a `.cfg` or `.clo` into typed commands; Kazarov doesn't know Dark Cloud's syntax.
   - **absolute frames.** Actions and `KEY` commands keep their source frames.
@@ -145,7 +147,7 @@ Dark Cloud's data needed a few things the converter now handles for any game:
 | a character pack, `chara/c01d.chr` | `chara/c01d.gltf` (+ `.gltf.bin`) and `c01d.game.json`, the sidecar, which also holds its configuration as typed commands |
 | a loose model, `dun/item/main_data/<name>.mds` | `<name>.gltf` and a minimal `.game.json` |
 | a cloth file | its typed commands in the character's sidecar (section 8) |
-| textures a model uses | the PNGs the texture bake already writes, referenced from the glTF |
+| textures a model uses | the PNGs the texture bake writes, referenced from the glTF; the game's copies are KTX2, and `export-png` gives the PNGs back |
 
 **Actions keep their frames.** Each `KEY` becomes one named glTF action, and the sidecar records its
 original start and end frame. The runtime places each action back at those frames, so retail code

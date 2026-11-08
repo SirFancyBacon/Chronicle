@@ -77,9 +77,9 @@ std::shared_ptr<const std::vector<std::uint8_t>> DataReadResolvedMetadataSnapsho
  */
 struct DataTextureReadStats {
     std::uint64_t            archived_json = 0; /**< Texture .json files read from the archive. */
-    std::uint64_t            archived_png = 0;  /**< Texture .png files read from the archive. */
+    std::uint64_t            archived_png = 0;  /**< Baked texture pictures, .png or .ktx2, read from the archive. */
     std::uint64_t            loose_json = 0;    /**< Texture .json files read from loose files. */
-    std::uint64_t            loose_png = 0;     /**< Texture .png files read from loose files. */
+    std::uint64_t            loose_png = 0;     /**< Baked texture pictures, .png or .ktx2, read from loose files. */
     std::vector<std::string> archived_sources;  /**< The first few archive sources textures came from. */
     std::vector<std::string> loose_sources;     /**< The first few loose sources textures came from. */
 };

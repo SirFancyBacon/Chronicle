@@ -23,6 +23,8 @@
 
 #include "character_profile.hpp"
 #include "dcdata.hpp"
+#include "ktx2.hpp"
+#include "texture_formats.hpp"
 #include "sound_data.hpp"
 
 #ifdef _WIN32
@@ -107,6 +109,18 @@ std::vector<unsigned char> ReadBytes(const fs::path &path) {
     return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
 }
 
+// Two KTX2 files that unpack to the same picture: a zstd other than the one that wrote the first may pack it differently.
+bool SamePixels(const fs::path &a, const fs::path &b) {
+    if (a.extension() != ".ktx2" || b.extension() != ".ktx2") {
+        return false;
+    }
+    std::uint32_t             width[2] = {};
+    std::uint32_t             height[2] = {};
+    std::vector<std::uint8_t> rgba[2];
+    return dcdata::ktx2::Decode(ReadBytes(a), width[0], height[0], rgba[0]) && dcdata::ktx2::Decode(ReadBytes(b), width[1], height[1], rgba[1]) &&
+           width[0] == width[1] && height[0] == height[1] && rgba[0] == rgba[1];
+}
+
 void MergeTextureAssets(const fs::path &stage, const fs::path &data) {
     const fs::path staged_textures = stage / "data" / "textures";
     const fs::path target_textures = data / "textures";
@@ -152,9 +166,10 @@ void MergeTextureAssets(const fs::path &stage, const fs::path &data) {
         fs::path source;
         fs::path relative;
         std::string folded;
+        bool replaces = false;
     };
     std::vector<PendingTexture> pending;
-    std::unordered_map<std::string, bool> planned;
+    std::unordered_map<std::string, fs::path> planned; // and where this conversion staged it
     for (fs::recursive_directory_iterator it(staged_textures), end; it != end; ++it) {
         if (it->is_symlink(error) || error) {
             throw std::runtime_error("converted texture tree contains a symbolic link");
@@ -172,30 +187,50 @@ void MergeTextureAssets(const fs::path &stage, const fs::path &data) {
         const auto utf8 = relative.generic_u8string();
         const std::string name(utf8.begin(), utf8.end());
         const std::string folded = dcdata::FoldPath(name);
-        if (!dcdata::IsSafeRelative(name) || (!folded.ends_with(".png") && !folded.ends_with(".json"))) {
+        if (!dcdata::IsSafeRelative(name) ||
+            (!folded.ends_with(".png") && !folded.ends_with(".ktx2") && !folded.ends_with(".json"))) {
             throw std::runtime_error("unsafe converted texture path: " + name);
         }
-        planned.emplace(folded, true);
+        planned.emplace(folded, it->path());
         const auto collision = existing.find(folded);
         if (collision != existing.end()) {
-            if (ReadBytes(it->path()) != ReadBytes(collision->second)) {
-                throw std::runtime_error("converted texture collides with existing data: " + name);
+            if (ReadBytes(it->path()) == ReadBytes(collision->second) || SamePixels(it->path(), collision->second)) {
+                continue;
             }
-            continue;
+            // A document baked when textures were PNG, which this conversion's KTX2 replaces.
+            if (folded.ends_with(".json") && dcdata::IsPngFormOf(collision->second, it->path())) {
+                pending.push_back({it->path(), relative, folded, true});
+                continue;
+            }
+            throw std::runtime_error("converted texture collides with existing data: " + name);
         }
         pending.push_back({it->path(), relative, folded});
     }
+    std::vector<std::pair<fs::path, fs::path>> superseded;
     for (const auto &[name, path] : existing) {
-        if (!planned.contains(name)) {
-            throw std::runtime_error("existing texture is not part of this DC1 conversion; preserving it: " +
-                                     path.string());
+        if (planned.contains(name)) {
+            continue;
         }
+        // A level baked as PNG before, which this conversion bakes as KTX2, so long as it's the same picture.
+        if (const auto ktx2 = name.ends_with(".png") ? planned.find(name.substr(0, name.size() - 4) + ".ktx2") : planned.end();
+            ktx2 != planned.end()) {
+            superseded.emplace_back(path, ktx2->second);
+            continue;
+        }
+        throw std::runtime_error("existing texture is not part of this DC1 conversion; preserving it: " + path.string());
     }
+    dcdata::RequireSamePictures(superseded, WorkerCount());
     for (const PendingTexture &texture : pending) {
         const fs::path target = target_textures / texture.relative;
         fs::create_directories(target.parent_path());
-        fs::copy_file(texture.source, target, fs::copy_options::none);
+        fs::copy_file(texture.source, target, texture.replaces ? fs::copy_options::overwrite_existing : fs::copy_options::none);
         existing.emplace(texture.folded, target);
+    }
+    for (const auto &[path, ktx2] : superseded) {
+        fs::remove(path);
+    }
+    if (!superseded.empty()) {
+        dcdata::Log(stdout, "replaced {} textures baked as PNG with KTX2\n", superseded.size());
     }
 }
 
@@ -204,8 +239,9 @@ void BakeTextures(const fs::path &raw, const fs::path &data) {
     const unsigned jobs = WorkerCount();
     const auto textures = kazarov::textures_convert_dc1(Utf8Path(raw), Utf8Path(stage.root), jobs);
     kazarov::textures_verify(Utf8Path(stage.root / "data" / "textures"));
+    const std::size_t packed = dcdata::PackTexturesAsKtx2(stage.root / "data" / "textures", jobs);
     MergeTextureAssets(stage.root, data);
-    dcdata::Log(stdout, "baked {} texture sources into {} PNGs\n", textures.sources, textures.pngs);
+    dcdata::Log(stdout, "baked {} texture sources into {} KTX2 textures\n", textures.sources, packed);
 }
 
 // Converts the raw tree's textures and models into `output`, the models as glTF with Dark Cloud's
@@ -261,6 +297,9 @@ void MergeModelAssets(const fs::path &stage, const fs::path &data) {
 void BakeAssets(const fs::path &raw, const fs::path &data) {
     TextureStage stage;
     ConvertInto(raw, stage.root);
+    // After the models: their glTF are checked against the PNGs, which only export-png gives back.
+    const std::size_t packed = dcdata::PackTexturesAsKtx2(stage.root / "data" / "textures", WorkerCount());
+    dcdata::Log(stdout, "packed {} texture levels as KTX2\n", packed);
     MergeTextureAssets(stage.root, data);
     MergeModelAssets(stage.root, data);
 }
@@ -459,6 +498,7 @@ int Usage() {
                "       dcdata convert-models <raw-directory> <output-directory>\n"
                "       dcdata bake-assets <raw-directory> <data-directory>\n"
                "       dcdata strip-models <data-directory>\n"
+               "       dcdata export-png <data-directory> <output-directory>\n"
                "       dcdata pack <data-directory> [output.zip]\n"
                "       dcdata list <iso-or-directory>\n",
                stderr);
@@ -586,6 +626,10 @@ int main(int argc, char **argv) {
         }
         if (argc == 4 && std::strcmp(argv[1], "convert-models") == 0) {
             ConvertModels(paths[2], paths[3]);
+            return 0;
+        }
+        if (argc == 4 && std::strcmp(argv[1], "export-png") == 0) {
+            dcdata::ExportPng(paths[2], paths[3], WorkerCount());
             return 0;
         }
         if (argc == 4 && std::strcmp(argv[1], "texture-map") == 0) {

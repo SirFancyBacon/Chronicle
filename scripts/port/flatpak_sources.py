@@ -34,7 +34,7 @@ import sys
 import tomllib
 
 FETCH = re.compile(r"FetchContent_Declare\(\s*(\w+)(.*?)\)", re.S)
-VENDOR = re.compile(r"_kz_port_vendor\(\s*\w+\s+(\S+)\s+(\S+)\s+([0-9a-f]{64})\s*\)")
+VENDOR = re.compile(r"(?:_kz_port_vendor|chronicle_vendor)\(\s*\w+\s+(\S+)\s+(\S+)\s+([0-9a-f]{64})\s*\)")
 INCLUDE = re.compile(r"include\(\s*\"?\$\{CMAKE_CURRENT(?:_FUNCTION)?_LIST_DIR\}/([\w.]+\.cmake)\"?\s*\)")
 PROJECT_INCLUDE = re.compile(r"include\(\s*\"?\$\{(?:KAZAROV_SOURCE_DIR|KZ_ROOT)\}/cmake/([\w.]+\.cmake)\"?\s*\)")
 REGISTRY = "registry+https://github.com/rust-lang/crates.io-index"
@@ -149,6 +149,8 @@ def main():
     parser.add_argument("--manifest", default="port/flatpak/org.themoonpeople.Chronicle.yml")
     parser.add_argument("--cmake", default="port/CMakeLists.txt")
     parser.add_argument("--includers", nargs="+", default=["port/CMakeLists.txt", "tools/dcdata/CMakeLists.txt"])
+    parser.add_argument("--own", nargs="+", default=["cmake/ChronicleFormats.cmake"],
+                        help="Chronicle's own CMake modules, which download the same ways Kazarov's do")
     options = parser.parse_args()
 
     cmake_dir = os.path.join(options.kazarov, "cmake")
@@ -156,6 +158,10 @@ def main():
         return "flatpak_sources.py: %s has no cmake/KazarovPort.cmake (git submodule update --init)" % options.kazarov
 
     fetches, vendored = kazarov_downloads(cmake_dir, included_modules(options.includers))
+    for own in options.own:
+        own_fetches, own_vendored = kazarov_downloads(os.path.dirname(own) or ".", [os.path.basename(own)])
+        fetches += own_fetches
+        vendored += own_vendored
     sources = manifest_sources(options.manifest)
     dirs = vendor_dirs(options.cmake)
     problems = []
@@ -186,8 +192,8 @@ def main():
         dest = source.get("dest", "")
         if dest.startswith("flatpak-deps/") or dest in dirs:
             if source.get("sha256", "").lower() not in declared:
-                problems.append("stale: %s in %s is not a download Kazarov declares at this hash; update or "
-                                "remove it" % (source.get("url", "?"), dest))
+                problems.append("stale: %s in %s is not a download Kazarov or Chronicle declares at this hash; "
+                                "update or remove it" % (source.get("url", "?"), dest))
 
     crates = 0
     lock = os.path.join(options.kazarov, "Cargo.lock")
@@ -209,7 +215,7 @@ def main():
         print("flatpak_sources.py: %d problem(s); the Flatpak build cannot configure offline until they are fixed"
               % len(problems))
         return 1
-    print("flatpak_sources.py: the manifest stages all %d of Kazarov's downloads and %d crates"
+    print("flatpak_sources.py: the manifest stages all %d of Kazarov's and Chronicle's downloads and %d crates"
           % (len(fetches) + len(vendored), crates))
     return 0
 

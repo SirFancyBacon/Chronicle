@@ -138,7 +138,7 @@ void TrackTextureRead(const IndexedFile &file) {
         return;
     }
     const bool is_json = path.ends_with(".json");
-    const bool is_png = path.ends_with(".png");
+    const bool is_png = path.ends_with(".png") || path.ends_with(".ktx2"); // a baked picture, in either form
     if (!is_json && !is_png) {
         return;
     }
