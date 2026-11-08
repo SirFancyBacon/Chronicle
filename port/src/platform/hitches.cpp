@@ -13,7 +13,7 @@ namespace dc::platform {
 namespace {
 
 constexpr std::array<const char *, static_cast<unsigned>(load_profile::Kind::Count)> kLoadNames = {
-    "background reads", "metadata", "PNGs", "textures", "model builds", "meshes", "reads",
+    "background reads", "metadata", "PNGs", "textures", "model builds", "meshes", "reads", "file reads", "sound", "glyphs", "GPU objects",
 };
 
 double Ms(double seconds) {
@@ -34,6 +34,7 @@ std::optional<std::string> HitchLog::Note(const TickWork &tick, std::int64_t fra
         for (std::size_t i = 0; i < sum_.loads.size(); i++) {
             sum_.loads[i] += tick.loads[i];
         }
+        sum_.files += tick.files;
         return std::nullopt;
     }
     return Flush();
@@ -51,6 +52,9 @@ std::optional<std::string> HitchLog::Flush() {
     for (std::size_t i = 0; i < sum_.loads.size(); i++) {
         if (sum_.loads[i] >= 0.00005) {
             loads += std::format("{}{} {:.1f}", loads.empty() ? "; of it " : ", ", kLoadNames[i], Ms(sum_.loads[i]));
+            if (static_cast<load_profile::Kind>(i) == load_profile::Kind::Files) {
+                loads += std::format(" ({} files)", sum_.files);
+            }
         }
     }
     line += loads;
@@ -102,6 +106,8 @@ void HitchTickWorkBegins() {
         for (unsigned i = 0; i < tick.loads.size(); i++) {
             tick.loads[i] = load_profile::MillisecondsSince(state.loads_at_wake, static_cast<load_profile::Kind>(i)) / 1000.0;
         }
+        const auto files = static_cast<unsigned>(load_profile::Kind::Files);
+        tick.files = load_profile::counters[files].calls - state.loads_at_wake[files].calls;
         state.log.SetTickLength(1.0 / ClockTickRate());
         if (const std::optional<std::string> line = state.log.Note(tick, app::GameFrameCount())) {
             std::fprintf(stderr, "%s\n", line->c_str());

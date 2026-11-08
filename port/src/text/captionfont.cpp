@@ -23,6 +23,7 @@
 #include "stb_truetype.h"
 
 #include "platform/paths.hpp"
+#include "platform/load_work_profile.hpp"
 
 namespace dc::text::capfont {
 
@@ -603,6 +604,7 @@ bool GetShapedGlyph(char32_t ch, int em_px, int outline_px, int stretch, bool sm
     if (g_atlas.missing.contains(key)) {
         return false;
     }
+    const platform::load_profile::Span profile(platform::load_profile::Kind::Glyphs); // only a glyph not yet drawn
     if (!EnsureAtlas()) {
         g_atlas.missing[key] = true;
         return false;

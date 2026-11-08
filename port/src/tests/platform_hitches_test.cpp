@@ -56,6 +56,17 @@ TEST(PlatformHitches, ARunOfLongTicksIsToldAsOne) {
     EXPECT_FALSE(log.Flush().has_value());
 }
 
+TEST(PlatformHitches, FileReadsSayHowManyFiles) {
+    HitchLog log(1.0 / 60.0);
+    TickWork slow = Took(0.040);
+    slow.loads[static_cast<unsigned>(load_profile::Kind::Files)] = 0.025;
+    slow.files = 37;
+    EXPECT_FALSE(log.Note(slow, 5).has_value());
+    const std::optional<std::string> line = log.Flush();
+    ASSERT_TRUE(line.has_value());
+    EXPECT_NE(line->find("file reads 25.0 (37 files)"), std::string::npos) << *line;
+}
+
 TEST(PlatformHitches, TheTickLengthFollowsTheTickRate) {
     HitchLog log(1.0 / 60.0);
     log.SetTickLength(1.0 / 30.0);

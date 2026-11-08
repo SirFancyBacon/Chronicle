@@ -15,6 +15,7 @@ struct TickWork {
     double handing = 0.0; /**< Handing it over, up to waiting for the next tick. */
     /** Of the whole, each kind of loading work load_profile times. Kinds can hold one another (a model's build its textures), so they don't add up. */
     std::array<double, static_cast<unsigned>(load_profile::Kind::Count)> loads{};
+    std::uint64_t files = 0; /**< Files the data gave. */
 };
 
 /**

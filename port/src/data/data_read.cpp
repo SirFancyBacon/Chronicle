@@ -315,6 +315,7 @@ const IndexedFile *ResolveSource(std::string_view key) {
 }
 
 bool ReadResolved(const IndexedFile *resolved, std::vector<std::uint8_t> &bytes) {
+    const platform::load_profile::Span profile(platform::load_profile::Kind::Files);
     if (resolved == nullptr || resolved->size > std::numeric_limits<std::size_t>::max()) {
         bytes.clear();
         return false;
@@ -338,6 +339,7 @@ bool ReadResolved(const IndexedFile *resolved, std::vector<std::uint8_t> &bytes)
 // The drive wrote whole sectors, so up to 2047 bytes past the file were overwritten and callers
 // sized their buffers for that; the tail is zeroed rather than left as whatever was there.
 int ReadWhole(const IndexedFile &file, void *buffer, std::size_t *out_capacity = nullptr) {
+    const platform::load_profile::Span profile(platform::load_profile::Kind::Files);
     const std::uintmax_t size = file.size;
     if (size > std::numeric_limits<std::int32_t>::max() || buffer == nullptr) {
         std::println(stderr, "cannot read {}", PathsDisplay(file.path));
@@ -543,6 +545,7 @@ std::vector<std::string> DataReadListFiles() {
 }
 
 bool DataReadReadFile(std::string_view path, std::vector<std::uint8_t> &bytes) {
+    const platform::load_profile::Span profile(platform::load_profile::Kind::Files);
     const IndexedFile *file = Lookup(path);
     if (!file || file->size > std::numeric_limits<std::size_t>::max()) {
         bytes.clear();

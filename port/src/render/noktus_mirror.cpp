@@ -32,6 +32,7 @@
 #include "platform/paths.hpp"
 #include "render/noktus_adapter.hpp"
 #include "render/passes.hpp"
+#include "platform/load_work_profile.hpp"
 
 namespace dc::render {
 
@@ -919,6 +920,7 @@ void MirrorCutCameraMotion() {
 }
 
 void MirrorTexture(gfx::TextureHandle texture, const gfx::TextureDesc &desc) {
+    const platform::load_profile::Span profile(platform::load_profile::Kind::GpuObjects);
     if (!MirrorOn() || texture == gfx::kNullTexture || (desc.format != gfx::TextureFormat::Rgba8 && desc.format != gfx::TextureFormat::Index8)) {
         return;
     }
@@ -946,6 +948,7 @@ void MirrorTexture(gfx::TextureHandle texture, const gfx::TextureDesc &desc) {
 
 void MirrorTexturePixels(gfx::TextureHandle texture, std::uint32_t level, std::uint32_t x, std::uint32_t y, std::uint32_t width,
                          std::uint32_t height, const void *pixels) {
+    const platform::load_profile::Span profile(platform::load_profile::Kind::GpuObjects);
     if (!MirrorOn()) {
         return;
     }
@@ -1121,6 +1124,7 @@ void MirrorBlit(gfx::TextureHandle from, gfx::Rect from_rect, gfx::TextureHandle
 }
 
 void MirrorSurface(gfx::TextureHandle target, std::uint32_t width, std::uint32_t height, bool has_alpha, bool shares_depth, bool frame_target) {
+    const platform::load_profile::Span profile(platform::load_profile::Kind::GpuObjects);
     if (!MirrorOn()) {
         return;
     }
@@ -1204,6 +1208,7 @@ void MirrorClearStencil() {
 }
 
 void MirrorCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices) {
+    const platform::load_profile::Span profile(platform::load_profile::Kind::GpuObjects);
     if (!MirrorOn()) {
         return;
     }

@@ -17,6 +17,7 @@
 #include "kazarov/log.hpp"
 #include "platform/paths.hpp"
 #include "render/renderer_calls.hpp"
+#include "platform/load_work_profile.hpp"
 
 namespace dc::ttffont {
 
@@ -326,6 +327,7 @@ bool GetGlyph(char32_t ch, int em_px, Glyph &out) {
     if (g_atlas.missing.count(key) != 0) {
         return false;
     }
+    const platform::load_profile::Span profile(platform::load_profile::Kind::Glyphs); // only a glyph not yet drawn
     if (!EnsureAtlas()) {
         g_atlas.missing[key] = true;
         return false;

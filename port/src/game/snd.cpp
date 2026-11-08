@@ -35,6 +35,7 @@
 #include "text/glyph_draw.hpp"
 #include "texture.hpp"
 #include "ui/framework/buttons.hpp"
+#include "platform/load_work_profile.hpp"
 
 namespace dc::game {
 
@@ -2036,6 +2037,7 @@ SoundFileNames GetBGMFile(int set_no) {
  * Hands a loaded music set to the driver and applies its reverberation.
  */
 void SetBGMFile(int set_no, unsigned int *buffer, std::string config_name) {
+    const dc::platform::load_profile::Span profile(dc::platform::load_profile::Kind::Sound);
     SndBgmStop();
     CSnd.LoadSoundFileFromPack(config_name.data(), buffer);
     now_bgm_no = set_no;
@@ -2319,6 +2321,7 @@ SoundFileNames GetSoundFile(int set_no) {
  * applies its reverberation and table choices.
  */
 void SetSoundFile(int set_no, unsigned int *buffer, std::string config_name) {
+    const dc::platform::load_profile::Span profile(dc::platform::load_profile::Kind::Sound);
     CSnd.LoadSoundFileFromPack(config_name.data(), buffer);
     CSnd.SetVol(MIDI_PORT_SE_TITLE, 0x100);
     CSnd.SetVol(MIDI_PORT_SE_DEFAULT, 0x100);

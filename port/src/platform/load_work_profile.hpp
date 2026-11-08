@@ -17,6 +17,10 @@ enum class Kind {
     Visual,
     Mesh,
     Read, /**< A file read as the game waits for it. */
+    Files,      /**< Any file the data gives, under whatever else reads it: an open costs more on some systems than others. */
+    Sound,      /**< A sound set or music read in. */
+    Glyphs,     /**< A glyph of the TrueType fonts drawn into their atlas. */
+    GpuObjects, /**< A texture, surface or mesh handed to the renderer. */
     Count
 };
 
