@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include "text/captionfont.hpp"
+
 namespace dc::render {
 struct PortDecodedTexture;
 } // namespace dc::render
@@ -102,6 +104,17 @@ bool DrawTitle(std::string_view utf8, int x, int y, float left, float right, flo
  * instead of the dark one. False for a word it has no painting of (another language's), or no font.
  */
 bool DrawButtonWord(std::string_view word, float x, float y, int bright, int alpha, bool pressed = false);
+
+/**
+ * Paints every button word DrawButtonWord draws ahead, on other threads, for the screen as it is now and again whenever
+ * its size, the UI's scale or the fonts change: painting one as a menu first shows it would cost that frame. Cheap
+ * when nothing changed, so it's asked each tick.
+ */
+void PaintButtonWordsAhead();
+
+/** What PaintButtonWordsAhead paints for a mapping of the screen, and what a word DrawButtonWord draws there at x, y asks for: for tests. */
+std::vector<capfont::PaintJob> ButtonWordPaintJobs(const render::LogicalMapping &mapping);
+std::vector<capfont::PaintJob> ButtonWordPaintsAt(std::string_view word, float x, float y, bool pressed, const render::LogicalMapping &mapping);
 
 /**
  * A per-letter adjustment to a floor label drawn by DrawFloorLabel().

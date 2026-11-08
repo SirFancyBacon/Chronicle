@@ -33,6 +33,8 @@
 #include "render/screen.hpp"
 #include "render/types.hpp"
 #include "renderinfo.hpp"
+#include "text/caption_text.hpp"
+#include "ui/framework/buttons.hpp"
 #include "text/textwipe.hpp"
 #include "texture.hpp"
 #include "vu0_ops.hpp"
@@ -538,6 +540,8 @@ void MGEndFrame() {
     g_old_vcount = static_cast<int>(ClockTickCount());
     app::GamePresentTickEnd();
     platform::HitchTickWorkBegins();
+    text::caption::PaintButtonWordsAhead();
+    ui::MakeButtonSurfacesAhead();
 
     DBuffID = !DBuffID;
 }

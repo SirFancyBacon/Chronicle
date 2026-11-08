@@ -126,4 +126,10 @@ public:
                      const TextStyle &text_style = {});
 };
 
+/**
+ * Makes the plates' base surfaces on a thread of their own, once: a plate's first draw would otherwise make its
+ * preset's, some 40 ms on the game's thread. Asked each tick, it does nothing after the first.
+ */
+void MakeButtonSurfacesAhead();
+
 } // namespace dc::ui

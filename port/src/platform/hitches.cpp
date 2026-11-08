@@ -4,8 +4,10 @@
 #include <chrono>
 #include <cstdio>
 #include <format>
+#include <string_view>
 
 #include "app/gameloop.hpp"
+#include "platform/hitch_sampler.hpp"
 #include "platform/clock.hpp"
 
 namespace dc::platform {
@@ -82,6 +84,13 @@ GameThread &State() {
     return state;
 }
 
+// "frame 1545" or "frames 10 to 12", from a hitch line, to head its samples.
+std::string Label(const std::string &line) {
+    constexpr std::string_view kStart = "hitch: ";
+    const std::size_t          end = line.find(',');
+    return end == std::string::npos ? line : line.substr(kStart.size(), end - kStart.size());
+}
+
 double Seconds(Clock::duration duration) {
     return std::chrono::duration<double>(duration).count();
 }
@@ -90,6 +99,7 @@ double Seconds(Clock::duration duration) {
 
 void HitchTickWorkEnds() {
     State().work_ended = Clock::now();
+    HitchSamplerTickEnds();
 }
 
 void HitchHandedOver() {
@@ -111,19 +121,27 @@ void HitchTickWorkBegins() {
         state.log.SetTickLength(1.0 / ClockTickRate());
         if (const std::optional<std::string> line = state.log.Note(tick, app::GameFrameCount())) {
             std::fprintf(stderr, "%s\n", line->c_str());
+            HitchSamplerReport(Label(*line));
+        } else if (tick.work <= 1.0 / ClockTickRate()) {
+            HitchSamplerDiscard();
         }
+    } else {
+        HitchSamplerAttach(HitchSampleThreshold());
     }
     // Timing loads costs two clock reads each, so it stays on for the game's thread: a hitch can't be caught after it's happened.
     load_profile::active = true;
     state.started = true;
     state.woke = now;
     state.loads_at_wake = load_profile::counters;
+    HitchSamplerTickBegins();
 }
 
 void HitchFlush() {
     if (const std::optional<std::string> line = State().log.Flush()) {
         std::fprintf(stderr, "%s\n", line->c_str());
+        HitchSamplerReport(Label(*line));
     }
+    HitchSamplerStop();
 }
 
 } // namespace dc::platform

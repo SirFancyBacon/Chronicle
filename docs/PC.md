@@ -2081,7 +2081,19 @@ Noktus's pacing line. What had caused them: Noktus waited on the GPU for each su
 made, the weapon and map menus rebuilt their models from glTF as they opened (now done as the
 game starts, see [MODEL_FRAMEWORK.md](MODEL_FRAMEWORK.md)), and Options asked the system for the
 monitor's display modes (now kept from the start, and asked again only after SDL reports a
-display change). Loading as a game starts or a map is entered still shows.
+display change), and the weapon dialog painted its buttons' lettering and made their plates' surfaces as
+it opened (now painted ahead, see [UI_FRAMEWORK.md](UI_FRAMEWORK.md), "Painted"). Loading as a game
+starts or a map is entered still shows.
+
+For work no kind times, a second thread looks at where the game's thread is every millisecond once a
+tick has run `DC_HITCH_SAMPLE_MS` (25 by default on Windows; `off` for never), and the hitch line is
+followed by the stacks it was found in most and the functions found most anywhere on them. On Windows
+the thread is stopped for as long as its registers and stack take to copy, and unwound after; the
+game's own functions are named from the symbol table lld leaves in an unstripped executable, other
+modules' by their nearest export. On Linux it's a signal, which interrupts the thread's system calls and unwinds in its handler (which
+can hang the game should the thread be inside the loader or the unwinder already), so it's off unless
+the variable asks; the game's own functions show as `darkcloud+0x...`, for
+`addr2line -f -C -e darkcloud`. Elsewhere there's none.
 
 Desktop startup leaves translation-template generation to the explicit
 `--export-text DIR` command. A fresh save root no longer scans every message

@@ -4,8 +4,11 @@
 #include <cstdint>
 #include <filesystem>
 #include <map>
+#include <mutex>
 #include <numbers>
+#include <optional>
 #include <string_view>
+#include <thread>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -332,44 +335,10 @@ float BtnRoundedSdf(float px, float py, float cx, float cy, float half_w, float 
 }
 
 /**
- * Builds or returns the cached 256x256 base surface for the given button preset.
+ * Builds the 256x256 base surface a preset's spec makes. Reads nothing shared, so a thread of its own makes them ahead.
  */
-const ButtonBaseSurface &GetButtonBaseSurface(ButtonPreset preset) {
-    static std::array<ButtonBaseSurface, 4> surfaces;
-    size_t                                  idx = 0;
-    switch (preset) {
-        case ButtonPreset::AmberGold:
-            idx = 1;
-            break;
-        case ButtonPreset::StoneGreen:
-            idx = 2;
-            break;
-        case ButtonPreset::SlateBlue:
-            idx = 3;
-            break;
-        case ButtonPreset::Terracotta:
-        default:
-            break;
-    }
-    ButtonBaseSurface &out = surfaces[idx];
-
-    if (!out.rgba.empty()) {
-        return out;
-    }
-
-    const ButtonSurfaceSpec &spec = GetButtonSpec(preset);
-    std::filesystem::path    custom_png = LocalizeFindFile(spec.plate_path);
-    int                      png_w = 0;
-    int                      png_h = 0;
-    std::vector<uint8_t>     loaded;
-    if (!custom_png.empty() && PngLoadRgba(custom_png, png_w, png_h, loaded) &&
-        png_w == png_h && (png_w == 128 || png_w == 256 || png_w == 512)) {
-        out.size_mask = png_w - 1;
-        out.rgba = std::move(loaded);
-        out.height.assign(static_cast<size_t>(png_w) * png_h, 0.5f);
-        return out;
-    }
-
+ButtonBaseSurface MakeButtonBaseSurface(const ButtonSurfaceSpec &spec) {
+    ButtonBaseSurface out;
     constexpr int size = 256;
     constexpr int mask = size - 1;
     out.size_mask = mask;
@@ -459,6 +428,52 @@ const ButtonBaseSurface &GetButtonBaseSurface(ButtonPreset preset) {
 
     out.height = std::move(height_map);
     return out;
+}
+
+constexpr std::array<ButtonPreset, 4> kPresets = {ButtonPreset::Terracotta, ButtonPreset::AmberGold, ButtonPreset::StoneGreen, ButtonPreset::SlateBlue};
+
+std::size_t PresetIndex(ButtonPreset preset) {
+    const auto found = std::ranges::find(kPresets, preset);
+    return found == kPresets.end() ? 0 : static_cast<std::size_t>(found - kPresets.begin());
+}
+
+// The made surfaces: a plate's first draw would otherwise cost the frame some 40 ms each.
+struct MadeSurface {
+    std::once_flag    once;
+    ButtonBaseSurface surface;
+};
+
+std::array<MadeSurface, 4> g_made;
+std::jthread               g_making; // after g_made, so that at exit it's joined first
+
+const ButtonBaseSurface &MadeButtonBaseSurface(ButtonPreset preset) {
+    MadeSurface &made = g_made[PresetIndex(preset)];
+    std::call_once(made.once, [&] { made.surface = MakeButtonBaseSurface(GetButtonSpec(preset)); });
+    return made.surface;
+}
+
+/**
+ * The preset's base surface: its plate picture when the language or a pack gives one, otherwise the one it makes.
+ */
+const ButtonBaseSurface &GetButtonBaseSurface(ButtonPreset preset) {
+    static std::array<std::optional<ButtonBaseSurface>, 4> pictures;
+    static std::array<bool, 4>                             looked{};
+    const std::size_t                                      idx = PresetIndex(preset);
+    if (!looked[idx]) {
+        looked[idx] = true;
+        const std::filesystem::path custom_png = LocalizeFindFile(GetButtonSpec(preset).plate_path);
+        int                         png_w = 0;
+        int                         png_h = 0;
+        std::vector<uint8_t>        loaded;
+        if (!custom_png.empty() && PngLoadRgba(custom_png, png_w, png_h, loaded) && png_w == png_h &&
+            (png_w == 128 || png_w == 256 || png_w == 512)) {
+            ButtonBaseSurface &out = pictures[idx].emplace();
+            out.size_mask = png_w - 1;
+            out.rgba = std::move(loaded);
+            out.height.assign(static_cast<size_t>(png_w) * png_h, 0.5f);
+        }
+    }
+    return pictures[idx].has_value() ? *pictures[idx] : MadeButtonBaseSurface(preset);
 }
 
 /**
@@ -596,6 +611,16 @@ CTexture *GetProceduralButtonTex(int width_px, int height_px, ButtonPreset prese
 }
 
 } // namespace
+
+void MakeButtonSurfacesAhead() {
+    if (!g_making.joinable()) {
+        g_making = std::jthread([] {
+            for (const ButtonPreset preset : kPresets) {
+                MadeButtonBaseSurface(preset);
+            }
+        });
+    }
+}
 
 void BevelButton::Draw(const Rect &box, std::string_view text,
                        const ButtonStyle &style, int alpha) {

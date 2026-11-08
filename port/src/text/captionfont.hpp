@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <functional>
+#include <string>
 #include <vector>
 
 #include "render/types.hpp"
@@ -104,6 +106,29 @@ struct PlacedLetter {
  * are from the word's top left.
  */
 bool GetPaintedWord(const std::vector<PlacedLetter> &letters, const Paint &paint, Glyph &out);
+
+/** A word GetPaintedWord paints, or (word false) a letter GetPaintedGlyph does: letters[0], whole, in its box's w x h. */
+struct PaintJob {
+    bool                      word = true;
+    std::vector<PlacedLetter> letters;
+    Paint                     paint{};
+};
+
+/**
+ * Paints the pictures `plan` gives, on threads of their own (`plan` runs there too), so that GetPaintedWord and
+ * GetPaintedGlyph only copy each into the atlas the first time it's asked for. Painting one costs a frame or more of
+ * the game's thread. Stops the last call's and forgets its pictures; loading a font stops it too.
+ */
+void PaintAhead(std::function<std::vector<PaintJob>()> plan);
+
+/** The picture a job paints, as the atlas knows it: two jobs with the same paint the same. */
+std::string PaintJobKey(const PaintJob &job);
+
+/** Waits for PaintAhead's pictures: for tests. */
+void WaitForPaintingAhead();
+
+/** Counts fonts loaded, so that what was painted ahead from the last ones can be painted again. */
+unsigned FontGeneration();
 
 /**
  * The bounds of ch in the font in `slot` as GetPaintedGlyph stretches them, in font units (y up): left, bottom,

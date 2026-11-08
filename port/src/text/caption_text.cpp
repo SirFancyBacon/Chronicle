@@ -7,10 +7,14 @@
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <format>
+#include <functional>
 #include <map>
+#include <optional>
 #include <print>
 #include <span>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "editmenu.hpp"
@@ -673,20 +677,37 @@ constexpr ButtonLetter kButtonLetters[] = {
 
 } // namespace
 
-bool DrawButtonWord(std::string_view word, float x, float y, int bright, int alpha, bool pressed) {
-    if (!FontReady() || !capfont::VariantLoaded()) {
-        return false;
-    }
+namespace {
+
+// Where each letter's box starts, to the screen's pixel, and how big it is in pixels.
+struct ButtonLetterPlace {
+    char32_t ch;
+    float    left;
+    float    top;
+    float    w;
+    float    h;
+};
+
+// A button's word laid out at x, y for a mapping: its letters on the screen's pixels, the word's shadow and the
+// letters' faces. Drawing and painting ahead lay a word out alike, so that the pictures they ask for are the same.
+struct ButtonWordLayout {
+    std::vector<ButtonLetterPlace>     placed;
+    float                              origin_x = 0.0f;
+    float                              origin_y = 0.0f;
+    std::vector<capfont::PlacedLetter> together;
+    capfont::Paint                     shadow{};
+    capfont::Paint                     face{};
+};
+
+std::optional<ButtonWordLayout> LayButtonWord(std::string_view word, float x, float y, bool pressed, const render::LogicalMapping &mapping, float rows) {
     const auto *first = std::ranges::find(kButtonLetters, word, &ButtonLetter::word);
     if (first == std::end(kButtonLetters)) {
-        return false;
+        return std::nullopt;
     }
-    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
-    const float               rows = draw2d::RowScale();
-    const float               kx = mapping.scale_x;
-    const float               ky = mapping.scale_y * rows;
-    const float               k = std::sqrt(kx * ky);
-    capfont::Paint            paint{};
+    const float    kx = mapping.scale_x;
+    const float    ky = mapping.scale_y * rows;
+    const float    k = std::sqrt(kx * ky);
+    capfont::Paint paint{};
     for (unsigned char (*colour)[3] : {&paint.fill, &paint.body, &paint.ring}) {
         std::copy_n(kButtonFill, 3, *colour);
     }
@@ -712,11 +733,172 @@ bool DrawButtonWord(std::string_view word, float x, float y, int bright, int alp
     while (std::next(last) != std::end(kButtonLetters) && std::next(last)->word == word) {
         ++last;
     }
-    const float                middle = (first->left + first->right + last->left + last->right) / 4;
-    const auto                 tint = static_cast<u_char>(std::clamp(bright, 0, 255));
-    const auto                 opacity = static_cast<u_char>(std::clamp(alpha, 0, 0x80));
+    const float      middle = (first->left + first->right + last->left + last->right) / 4;
+    ButtonWordLayout layout;
+    for (const auto *letter = first; letter != std::end(kButtonLetters) && letter->word == word; ++letter) {
+        // The letter's outline stretched to the painted letter's box.
+        const float shift = (middle - (letter->left + letter->right) / 2) * (1.0f - kButtonTighten);
+        layout.placed.push_back({letter->ch, Snap(x + letter->left + shift, mapping.scale_x, mapping.offset_x),
+                                 Snap((y + letter->top) * rows, mapping.scale_y, mapping.offset_y), (letter->right - letter->left) * kx,
+                                 (letter->bottom - letter->top) * ky});
+    }
+    // The word's shadow as one, from all its letters together, so where they meet it does not darken twice; then the
+    // letters over it.
+    layout.origin_x = Snap(x, mapping.scale_x, mapping.offset_x);
+    layout.origin_y = Snap(y * rows, mapping.scale_y, mapping.offset_y);
+    layout.together.reserve(layout.placed.size());
+    for (const ButtonLetterPlace &letter : layout.placed) {
+        layout.together.push_back(
+            {letter.ch, (letter.left - layout.origin_x) * mapping.scale_x, (letter.top - layout.origin_y) * mapping.scale_y, letter.w, letter.h});
+    }
+    if (pressed && layout.together.size() > 1) {
+        paint.band_left = layout.together.front().x + layout.together.front().w / 2;
+        paint.band_right = layout.together.back().x + layout.together.back().w / 2;
+    }
+    layout.shadow = paint;
+    layout.shadow.shadow_only = true;
+    std::copy_n(paint.fill, 3, layout.face.fill);
+    std::copy_n(paint.body, 3, layout.face.body);
+    std::copy_n(paint.ring, 3, layout.face.ring);
+    layout.face.slot = paint.slot;
+    return layout;
+}
+
+// A layout's letters' places in the word, as a key: two places of a word on the screen giving the same are one picture.
+std::string LetterPlaces(const ButtonWordLayout &layout, bool across) {
+    std::string key;
+    for (const capfont::PlacedLetter &letter : layout.together) {
+        key += std::format("{},", std::lround((across ? letter.x : letter.y) * 64));
+    }
+    return key;
+}
+
+// The pictures every button word, plain and pressed, needs at whole logical pixels for a mapping of the screen. A
+// word's letters are put on the screen's pixels each, so where a word starts within a pixel changes its picture: each
+// way the letters can fall is painted, the ways most places give first, and every word's first ways before any
+// word's next.
+std::vector<capfont::PaintJob> ButtonWordJobs(const render::LogicalMapping &mapping) {
+    std::vector<std::string_view> words;
+    for (const ButtonLetter &letter : kButtonLetters) {
+        if (std::ranges::find(words, letter.word) == words.end()) {
+            words.push_back(letter.word);
+        }
+    }
+    std::vector<std::vector<capfont::PaintJob>> by_word;
+    for (const std::string_view word : words) {
+        for (const bool pressed : {false, true}) {
+            // How many whole places, across and down, give each way the letters fall, and one of them.
+            const auto ways = [&](bool across, int count) {
+                std::map<std::string, std::pair<int, int>> found;
+                for (int at = 0; at < count; at++) {
+                    const std::optional<ButtonWordLayout> layout = LayButtonWord(word, across ? static_cast<float>(at) : 0.0f, across ? 0.0f : static_cast<float>(at), pressed, mapping, 1.0f);
+                    if (layout.has_value()) {
+                        auto [way, added] = found.try_emplace(LetterPlaces(*layout, across), 0, at);
+                        way->second.first++;
+                    }
+                }
+                std::vector<std::pair<int, int>> sorted;
+                for (const auto &[key, way] : found) {
+                    sorted.push_back(way);
+                }
+                std::ranges::stable_sort(sorted, std::greater{}, &std::pair<int, int>::first);
+                return sorted;
+            };
+            const std::vector<std::pair<int, int>> across = ways(true, 640);
+            const std::vector<std::pair<int, int>> down = ways(false, 480);
+            std::vector<std::tuple<int, int, int>> pairs; // how many places, x, y
+            for (const auto &[count_x, x] : across) {
+                for (const auto &[count_y, y] : down) {
+                    pairs.emplace_back(count_x * count_y, x, y);
+                }
+            }
+            std::ranges::stable_sort(pairs, std::greater{}, [](const auto &pair) { return std::get<0>(pair); });
+            std::vector<capfont::PaintJob> jobs;
+            for (const auto &[count, x, y] : pairs) {
+                const std::optional<ButtonWordLayout> layout = LayButtonWord(word, static_cast<float>(x), static_cast<float>(y), pressed, mapping, 1.0f);
+                jobs.push_back({.word = true, .letters = layout->together, .paint = layout->shadow});
+                if (jobs.size() == 1) {
+                    // The faces are the same wherever the word is.
+                    for (const ButtonLetterPlace &letter : layout->placed) {
+                        jobs.push_back({.word = false, .letters = {{letter.ch, 0.0f, 0.0f, letter.w, letter.h}}, .paint = layout->face});
+                    }
+                }
+            }
+            by_word.push_back(std::move(jobs));
+        }
+    }
+    std::vector<capfont::PaintJob> jobs;
+    for (std::size_t rank = 0, added = 1; added != 0; rank++) {
+        added = 0;
+        for (std::vector<capfont::PaintJob> &word_jobs : by_word) {
+            if (rank < word_jobs.size()) {
+                jobs.push_back(std::move(word_jobs[rank]));
+                added++;
+            }
+        }
+    }
+    return jobs;
+}
+
+} // namespace
+
+std::vector<capfont::PaintJob> ButtonWordPaintJobs(const render::LogicalMapping &mapping) {
+    return ButtonWordJobs(mapping);
+}
+
+std::vector<capfont::PaintJob> ButtonWordPaintsAt(std::string_view word, float x, float y, bool pressed, const render::LogicalMapping &mapping) {
+    const std::optional<ButtonWordLayout> layout = LayButtonWord(word, x, y, pressed, mapping, 1.0f);
+    if (!layout.has_value()) {
+        return {};
+    }
+    std::vector<capfont::PaintJob> paints = {{.word = true, .letters = layout->together, .paint = layout->shadow}};
+    for (const ButtonLetterPlace &letter : layout->placed) {
+        paints.push_back({.word = false, .letters = {{letter.ch, 0.0f, 0.0f, letter.w, letter.h}}, .paint = layout->face});
+    }
+    return paints;
+}
+
+void PaintButtonWordsAhead() {
+    using For = std::tuple<float, float, float, float, unsigned>;
+    // A window being dragged to a new size changes it every tick: it's painted for once it has held still a while.
+    constexpr int            kStillTicks = 15;
+    static std::optional<For> painted_for;
+    static std::optional<For> changed_to;
+    static int                still = 0;
+    if (!FontReady() || !capfont::VariantLoaded()) {
+        return;
+    }
+    const render::LogicalMapping mapping = render::GetUiMapping(render::kMainTarget);
+    const For                    now = std::make_tuple(mapping.scale_x, mapping.scale_y, mapping.offset_x, mapping.offset_y, capfont::FontGeneration());
+    if (painted_for == now) {
+        changed_to.reset();
+        return;
+    }
+    if (painted_for.has_value()) {
+        still = changed_to == now ? still + 1 : 0;
+        changed_to = now;
+        if (still < kStillTicks) {
+            return;
+        }
+    }
+    painted_for = now;
+    changed_to.reset();
+    capfont::PaintAhead([mapping] { return ButtonWordJobs(mapping); });
+}
+
+bool DrawButtonWord(std::string_view word, float x, float y, int bright, int alpha, bool pressed) {
+    if (!FontReady() || !capfont::VariantLoaded()) {
+        return false;
+    }
+    const render::LogicalMapping          mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const std::optional<ButtonWordLayout> layout = LayButtonWord(word, x, y, pressed, mapping, draw2d::RowScale());
+    if (!layout.has_value()) {
+        return false;
+    }
+    const auto                    tint = static_cast<u_char>(std::clamp(bright, 0, 255));
+    const auto                    opacity = static_cast<u_char>(std::clamp(alpha, 0, 0x80));
     std::vector<render::Vertex2D> quads;
-    auto                       quad = [&](const capfont::Glyph &glyph, float left, float top) {
+    auto                          quad = [&](const capfont::Glyph &glyph, float left, float top) {
         const float right = left + glyph.width / mapping.scale_x;
         const float bottom = top + glyph.height / mapping.scale_y;
         quads.push_back(draw2d::Vertex(left, top, 0.0f, glyph.u0, glyph.v0, tint, tint, tint, opacity));
@@ -724,55 +906,17 @@ bool DrawButtonWord(std::string_view word, float x, float y, int bright, int alp
         quads.push_back(draw2d::Vertex(right, bottom, 0.0f, glyph.u1, glyph.v1, tint, tint, tint, opacity));
         quads.push_back(draw2d::Vertex(left, bottom, 0.0f, glyph.u0, glyph.v1, tint, tint, tint, opacity));
     };
-
-    // Where each letter's box starts, to the screen's pixel, and how big it is in pixels.
-    struct Placed {
-        char32_t ch;
-        float    left;
-        float    top;
-        float    w;
-        float    h;
-    };
-
-    std::vector<Placed> placed;
-    for (const auto *letter = first; letter != std::end(kButtonLetters) && letter->word == word; ++letter) {
-        // The letter's outline stretched to the painted letter's box.
-        const float shift = (middle - (letter->left + letter->right) / 2) * (1.0f - kButtonTighten);
-        placed.push_back({letter->ch, Snap(x + letter->left + shift, mapping.scale_x, mapping.offset_x),
-                          Snap((y + letter->top) * rows, mapping.scale_y, mapping.offset_y), (letter->right - letter->left) * kx,
-                          (letter->bottom - letter->top) * ky});
-    }
-    // The word's shadow as one, from all its letters together, so where they meet it does not darken twice; then the
-    // letters over it.
-    const float                        origin_x = Snap(x, mapping.scale_x, mapping.offset_x);
-    const float                        origin_y = Snap(y * rows, mapping.scale_y, mapping.offset_y);
-    std::vector<capfont::PlacedLetter> together;
-    together.reserve(placed.size());
-    for (const Placed &letter : placed) {
-        together.push_back({letter.ch, (letter.left - origin_x) * mapping.scale_x, (letter.top - origin_y) * mapping.scale_y, letter.w, letter.h});
-    }
-    if (pressed && together.size() > 1) {
-        paint.band_left = together.front().x + together.front().w / 2;
-        paint.band_right = together.back().x + together.back().w / 2;
-    }
-    capfont::Paint shadow = paint;
-    shadow.shadow_only = true;
-    capfont::Paint face{};
-    std::copy_n(paint.fill, 3, face.fill);
-    std::copy_n(paint.body, 3, face.body);
-    std::copy_n(paint.ring, 3, face.ring);
-    face.slot = paint.slot;
     // Made again, once, if the atlas started over while they were fetched (that would leave the first ones stale).
     for (int attempt = 0; attempt < 2; attempt++) {
         const unsigned generation = capfont::Generation();
         quads.clear();
         capfont::Glyph glyph;
-        if (!capfont::GetPaintedWord(together, shadow, glyph)) {
+        if (!capfont::GetPaintedWord(layout->together, layout->shadow, glyph)) {
             return false;
         }
-        quad(glyph, origin_x + glyph.x_offset / mapping.scale_x, origin_y + glyph.y_offset / mapping.scale_y);
-        for (const Placed &letter : placed) {
-            if (!capfont::GetPaintedGlyph(letter.ch, -1, letter.w, letter.h, face, glyph)) {
+        quad(glyph, layout->origin_x + glyph.x_offset / mapping.scale_x, layout->origin_y + glyph.y_offset / mapping.scale_y);
+        for (const ButtonLetterPlace &letter : layout->placed) {
+            if (!capfont::GetPaintedGlyph(letter.ch, -1, letter.w, letter.h, layout->face, glyph)) {
                 return false;
             }
             quad(glyph, letter.left + glyph.x_offset / mapping.scale_x, letter.top + glyph.y_offset / mapping.scale_y);

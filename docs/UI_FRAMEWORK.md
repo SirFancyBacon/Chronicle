@@ -212,7 +212,14 @@ alpha transparency instead, as retail's sprites fade (section 7).
 - **Painted** (`painted`): the weapon buttons' lettering, cream with no outline over a soft brown
   halo. With `ButtonStyle::Thin`, a word the game paints is drawn letter for letter as painted
   (`caption::DrawButtonWord`) and any other word gets the same lettering fitted to the plate: one
-  look, whatever the word or language.
+  look, whatever the word or language. Painting a word's halo costs more than a frame at 4K, so
+  `caption::PaintButtonWordsAhead` paints every word, plain and pressed, on other threads as the game
+  starts, and again when the window's size, the UI scale or the fonts have changed and held for a
+quarter of a second. A word is set on the
+  screen's pixels letter by letter, so where it starts within a pixel changes its picture: each way
+  a word at whole logical pixels can fall is painted (four at 4K). A word at another place, one
+  sliding in, is painted as it's first drawn. The plates' textured surfaces are made ahead the
+  same way (`ui::MakeButtonSurfacesAhead`).
 - **Kerning** (`kern`): the font's kerning, at the given strength (0, the default, for none).
 - **Ink spacing** (`ink_spacing`): letters set by their outlines rather than their pictures, measuring and drawing
   alike, so the spacing is the same at any window size. Off by default; the title rows use it, their spacing being

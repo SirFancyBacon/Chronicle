@@ -2,16 +2,24 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <format>
 #include <fstream>
 #include <limits>
 #include <map>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <print>
 #include <set>
 #include <span>
 #include <string>
+#include <thread>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -56,6 +64,9 @@ std::array<Font, kSlotCount> g_fonts;
 int                          g_variant = 0;
 Atlas                        g_atlas;
 unsigned                     g_generation = 0;
+unsigned                     g_font_generation = 0;
+
+void ForgetPaintingAhead(bool wait);
 
 void ResetAtlas() {
     if (g_atlas.texture != render::kNullTexture) {
@@ -476,6 +487,7 @@ bool InitFontSlotFromBytes(int slot, std::vector<unsigned char> &&bytes) {
     if (slot < 0 || slot >= kSlotCount || bytes.empty()) {
         return false;
     }
+    ForgetPaintingAhead(true); // it reads the fonts, and painted from these
     Font font;
     font.data = std::move(bytes);
     const int offset = stbtt_GetFontOffsetForIndex(font.data.data(), 0);
@@ -484,6 +496,7 @@ bool InitFontSlotFromBytes(int slot, std::vector<unsigned char> &&bytes) {
     }
     font.loaded = true;
     g_fonts[slot] = std::move(font);
+    g_font_generation++;
     stbtt_InitFont(&g_fonts[slot].info, g_fonts[slot].data.data(),
                    stbtt_GetFontOffsetForIndex(g_fonts[slot].data.data(), 0));
     return true;
@@ -825,8 +838,17 @@ std::string PaintKey(const Paint &paint) {
     return key;
 }
 
-// Contours in a box's pixels (y down) painted into the atlas; the glyph's offsets are from the box's top left.
-bool PaintContours(const std::vector<std::vector<Point>> &contours, float box_w, float box_h, const Paint &paint, Glyph &out) {
+// A painted picture, and where its top left lies from the box's.
+struct Painted {
+    std::vector<unsigned char> rgba;
+    int                        w = 0;
+    int                        h = 0;
+    int                        left = 0;
+    int                        top = 0;
+};
+
+// Contours in a box's pixels (y down) painted. Reads nothing shared, so threads painting ahead call it too.
+Painted PaintContours(const std::vector<std::vector<Point>> &contours, float box_w, float box_h, const Paint &paint) {
     float span_left = 1e9f;
     float span_right = -1e9f;
     for (const auto &contour : contours) {
@@ -863,7 +885,8 @@ bool PaintContours(const std::vector<std::vector<Point>> &contours, float box_w,
             segments.push_back({.a = contour[j], .b = contour[i]});
         }
     }
-    std::vector<float> distance(static_cast<size_t>(w) * h, band);
+    // Squared while the nearest is looked for: a root a pixel and segment would cost the most of painting.
+    std::vector<float> distance(static_cast<size_t>(w) * h, band * band);
     std::vector<int>   winding(static_cast<size_t>(w) * h, 0);
     for (const Segment &s : segments) {
         // Every pixel within the band of the segment learns how near it is.
@@ -880,7 +903,9 @@ bool PaintContours(const std::vector<std::vector<Point>> &contours, float box_w,
                 const float py = static_cast<float>(gy + top) + 0.5f;
                 const float t = length > 0 ? std::clamp(((px - s.a.x) * dx + (py - s.a.y) * dy) / length, 0.0f, 1.0f) : 0.0f;
                 float      &d = distance[static_cast<size_t>(gy) * w + gx];
-                d = std::min(d, std::hypot(px - (s.a.x + t * dx), py - (s.a.y + t * dy)));
+                const float ex = px - (s.a.x + t * dx);
+                const float ey = py - (s.a.y + t * dy);
+                d = std::min(d, ex * ex + ey * ey);
             }
         }
         // Which pixels it winds round: a crossing of each row's centre line counts for the pixels right of it.
@@ -901,9 +926,7 @@ bool PaintContours(const std::vector<std::vector<Point>> &contours, float box_w,
         }
     }
     for (size_t i = 0; i < distance.size(); i++) {
-        if (winding[i] != 0) {
-            distance[i] = -distance[i];
-        }
+        distance[i] = winding[i] != 0 ? -std::sqrt(distance[i]) : std::sqrt(distance[i]);
     }
     auto sample = [&](const std::vector<float> &field, float far, float px, float py) {
         // Bilinear between pixel centres; beyond the bitmap, outside.
@@ -975,40 +998,46 @@ bool PaintContours(const std::vector<std::vector<Point>> &contours, float box_w,
             rgba[texel + 3] = static_cast<unsigned char>(std::lround(alpha * 255));
         }
     }
+    return {.rgba = std::move(rgba), .w = w, .h = h, .left = left, .top = top};
+}
+
+bool Place(const Painted &painted, Glyph &out) {
     Glyph glyph;
-    if (!AddImage(rgba, w, h, glyph)) {
+    if (!AddImage(painted.rgba, painted.w, painted.h, glyph)) {
         return false;
     }
-    glyph.x_offset = static_cast<float>(left);
-    glyph.y_offset = static_cast<float>(top);
+    glyph.x_offset = static_cast<float>(painted.left);
+    glyph.y_offset = static_cast<float>(painted.top);
     out = glyph;
     return true;
 }
 
-} // namespace
+bool GlyphBoxUsable(float box_w, float box_h) {
+    return box_w >= 1 && box_h >= 1 && box_w <= 512 && box_h <= 512;
+}
 
-bool GetPaintedGlyph(char32_t ch, int part, float box_w, float box_h, const Paint &paint, Glyph &out) {
-    const Font &font = g_fonts[std::clamp(paint.slot, 0, kSlotCount - 1)];
-    if (!font.loaded || box_w < 1 || box_h < 1 || box_w > 512 || box_h > 512) {
-        return false;
+std::string GlyphKey(char32_t ch, int part, float box_w, float box_h, const Paint &paint) {
+    return std::format("g{}:{}:{},{}:{}", static_cast<unsigned>(ch), part, std::lround(box_w * 8), std::lround(box_h * 8), PaintKey(paint));
+}
+
+std::string WordKey(const std::vector<PlacedLetter> &letters, const Paint &paint) {
+    std::string key = "w";
+    for (const PlacedLetter &letter : letters) {
+        key += std::format("{}:", static_cast<unsigned>(letter.ch));
+        for (float value : {letter.x, letter.y, letter.w, letter.h}) {
+            key += std::format("{},", std::lround(value * 64));
+        }
     }
-    const std::string key = std::format("g{}:{}:{},{}:{}", static_cast<unsigned>(ch), part, std::lround(box_w * 8),
-                                        std::lround(box_h * 8), PaintKey(paint));
-    if (auto found = g_atlas.painted.find(key); found != g_atlas.painted.end()) {
-        out = found->second;
-        return true;
-    }
-    if (g_atlas.painted_missing.contains(key)) {
-        return false;
-    }
+    return key + PaintKey(paint);
+}
+
+// The letter's outline stretched to the box, in its pixels with y down; or none.
+std::optional<Painted> PaintGlyph(const Font &font, char32_t ch, int part, float box_w, float box_h, const Paint &paint) {
     const int                       index = stbtt_FindGlyphIndex(&font.info, static_cast<int>(ch));
     std::vector<std::vector<Point>> contours = Piece(index != 0 ? Contours(font.info, index) : std::vector<std::vector<Point>>{}, part);
     if (contours.empty()) {
-        g_atlas.painted_missing.insert(key);
-        return false;
+        return std::nullopt;
     }
-
-    // The outline in the box's pixels, y down.
     float x0 = 1e9f;
     float y0 = 1e9f;
     float x1 = -1e9f;
@@ -1028,38 +1057,11 @@ bool GetPaintedGlyph(char32_t ch, int part, float box_w, float box_h, const Pain
             point = {.x = (point.x - x0) * sx, .y = (y1 - point.y) * sy};
         }
     }
-
-    Glyph glyph;
-    if (!PaintContours(contours, box_w, box_h, paint, glyph)) {
-        g_atlas.painted_missing.insert(key);
-        return false;
-    }
-    g_atlas.painted[key] = glyph;
-    out = glyph;
-    return true;
+    return PaintContours(contours, box_w, box_h, paint);
 }
 
-bool GetPaintedWord(const std::vector<PlacedLetter> &letters, const Paint &paint, Glyph &out) {
-    const Font &font = g_fonts[std::clamp(paint.slot, 0, kSlotCount - 1)];
-    if (!font.loaded || letters.empty()) {
-        return false;
-    }
-    std::string key = "w";
-    for (const PlacedLetter &letter : letters) {
-        key += std::format("{}:", static_cast<unsigned>(letter.ch));
-        for (float value : {letter.x, letter.y, letter.w, letter.h}) {
-            key += std::format("{},", std::lround(value * 64));
-        }
-    }
-    key += PaintKey(paint);
-    if (auto found = g_atlas.painted.find(key); found != g_atlas.painted.end()) {
-        out = found->second;
-        return true;
-    }
-    if (g_atlas.painted_missing.contains(key)) {
-        return false;
-    }
-    // Every letter's outline stretched to its box, together in the word's pixels.
+// Every letter's outline stretched to its box, together in the word's pixels, painted; or none.
+std::optional<Painted> PaintWord(const Font &font, const std::vector<PlacedLetter> &letters, const Paint &paint) {
     std::vector<std::vector<Point>> contours;
     float                           box_w = 1.0f;
     float                           box_h = 1.0f;
@@ -1092,14 +1094,192 @@ bool GetPaintedWord(const std::vector<PlacedLetter> &letters, const Paint &paint
         box_w = std::max(box_w, letter.x + letter.w);
         box_h = std::max(box_h, letter.y + letter.h);
     }
+    if (contours.empty() || box_w > 1024 || box_h > 512) {
+        return std::nullopt;
+    }
+    return PaintContours(contours, box_w, box_h, paint);
+}
+
+// Pictures painted ahead, by key; none for one that couldn't be painted. Taken as they're first asked for.
+struct Ahead {
+    std::mutex                                              lock;
+    std::unordered_map<std::string, std::optional<Painted>> ready;
+};
+
+Ahead        g_ahead;
+// A painter and whether it has finished; one stopped is left to finish its picture, unless a font goes.
+struct Painter {
+    std::jthread                       thread;
+    std::shared_ptr<std::atomic<bool>> done;
+};
+
+std::vector<Painter> g_painters; // after the fonts, so that at exit they're stopped before the fonts go
+
+// Ahead's picture for the key, if it painted one (or found it couldn't).
+std::optional<std::optional<Painted>> TakeAhead(const std::string &key) {
+    const std::scoped_lock hold(g_ahead.lock);
+    const auto             found = g_ahead.ready.find(key);
+    if (found == g_ahead.ready.end()) {
+        return std::nullopt;
+    }
+    std::optional<Painted> painted = std::move(found->second);
+    g_ahead.ready.erase(found);
+    return painted;
+}
+
+// Stops painting ahead and forgets what it painted. Stopped painters finish the picture they're on, unless asked to
+// wait for them (a font they read is going): waiting would cost the game's thread a picture's painting.
+void ForgetPaintingAhead(bool wait) {
+    {
+        // Under the lock pictures are kept by, so that a stopped painter keeps none after this.
+        const std::scoped_lock hold(g_ahead.lock);
+        for (Painter &painter : g_painters) {
+            painter.thread.request_stop();
+        }
+        g_ahead.ready.clear();
+    }
+    std::erase_if(g_painters, [&](Painter &painter) {
+        if (wait || painter.done->load()) {
+            painter.thread.join();
+            return true;
+        }
+        return false;
+    });
+}
+
+
+} // namespace
+
+bool GetPaintedGlyph(char32_t ch, int part, float box_w, float box_h, const Paint &paint, Glyph &out) {
+    const Font &font = g_fonts[std::clamp(paint.slot, 0, kSlotCount - 1)];
+    if (!font.loaded || !GlyphBoxUsable(box_w, box_h)) {
+        return false;
+    }
+    const std::string key = GlyphKey(ch, part, box_w, box_h, paint);
+    if (auto found = g_atlas.painted.find(key); found != g_atlas.painted.end()) {
+        out = found->second;
+        return true;
+    }
+    if (g_atlas.painted_missing.contains(key)) {
+        return false;
+    }
+    std::optional<std::optional<Painted>> ahead = TakeAhead(key);
+    if (!ahead.has_value()) {
+        const platform::load_profile::Span profile(platform::load_profile::Kind::Glyphs); // one not painted ahead
+        ahead = PaintGlyph(font, ch, part, box_w, box_h, paint);
+    }
     Glyph glyph;
-    if (contours.empty() || box_w > 1024 || box_h > 512 || !PaintContours(contours, box_w, box_h, paint, glyph)) {
+    if (!ahead->has_value() || !Place(**ahead, glyph)) {
         g_atlas.painted_missing.insert(key);
         return false;
     }
     g_atlas.painted[key] = glyph;
     out = glyph;
     return true;
+}
+
+bool GetPaintedWord(const std::vector<PlacedLetter> &letters, const Paint &paint, Glyph &out) {
+    const Font &font = g_fonts[std::clamp(paint.slot, 0, kSlotCount - 1)];
+    if (!font.loaded || letters.empty()) {
+        return false;
+    }
+    const std::string key = WordKey(letters, paint);
+    if (auto found = g_atlas.painted.find(key); found != g_atlas.painted.end()) {
+        out = found->second;
+        return true;
+    }
+    if (g_atlas.painted_missing.contains(key)) {
+        return false;
+    }
+    std::optional<std::optional<Painted>> ahead = TakeAhead(key);
+    if (!ahead.has_value()) {
+        const platform::load_profile::Span profile(platform::load_profile::Kind::Glyphs); // one not painted ahead
+        ahead = PaintWord(font, letters, paint);
+    }
+    Glyph glyph;
+    if (!ahead->has_value() || !Place(**ahead, glyph)) {
+        g_atlas.painted_missing.insert(key);
+        return false;
+    }
+    g_atlas.painted[key] = glyph;
+    out = glyph;
+    return true;
+}
+
+void PaintAhead(std::function<std::vector<PaintJob>()> plan) {
+    ForgetPaintingAhead(false);
+    auto done = std::make_shared<std::atomic<bool>>(false);
+    g_painters.push_back({.thread = std::jthread([plan = std::move(plan), done](const std::stop_token &stop) {
+        const auto                  started = std::chrono::steady_clock::now();
+        const std::vector<PaintJob> jobs = plan();
+        std::vector<std::pair<std::string, const PaintJob *>> unique;
+        std::unordered_set<std::string>                       seen;
+        for (const PaintJob &job : jobs) {
+            if (job.letters.empty() || (!job.word && !GlyphBoxUsable(job.letters[0].w, job.letters[0].h))) {
+                continue;
+            }
+            std::string key = PaintJobKey(job);
+            if (seen.insert(key).second) {
+                unique.emplace_back(std::move(key), &job);
+            }
+        }
+        // Held in memory until asked for: a window of an odd size gives each word many placements on its pixels.
+        constexpr std::size_t    kMostBytes = 96u << 20;
+        std::atomic<std::size_t> next = 0;
+        std::atomic<std::size_t> bytes = 0;
+        std::atomic<std::size_t> painted = 0;
+        const auto               work = [&] {
+            for (std::size_t i = next++; i < unique.size() && !stop.stop_requested() && bytes < kMostBytes; i = next++) {
+                const PaintJob        &job = *unique[i].second;
+                const Font            &font = g_fonts[std::clamp(job.paint.slot, 0, kSlotCount - 1)];
+                std::optional<Painted> picture;
+                if (font.loaded) {
+                    picture = job.word ? PaintWord(font, job.letters, job.paint)
+                                       : PaintGlyph(font, job.letters[0].ch, -1, job.letters[0].w, job.letters[0].h, job.paint);
+                }
+                bytes += picture.has_value() ? picture->rgba.size() : 0;
+                painted++;
+                const std::scoped_lock hold(g_ahead.lock);
+                if (!stop.stop_requested()) {
+                    g_ahead.ready.emplace(unique[i].first, std::move(picture));
+                }
+            }
+        };
+        const unsigned           helpers = std::clamp(std::thread::hardware_concurrency() / 2, 1u, 4u) - 1;
+        std::vector<std::thread> threads;
+        for (unsigned i = 0; i < helpers; i++) {
+            threads.emplace_back(work);
+        }
+        work();
+        for (std::thread &thread : threads) {
+            thread.join();
+        }
+        if (!stop.stop_requested()) {
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+            std::println(stderr, "font: {} of {} pictures painted ahead in {:.0f} ms on {} threads, {:.1f} MB", painted.load(), unique.size(), ms,
+                         helpers + 1, static_cast<double>(bytes.load()) / 1048576.0);
+        }
+        done->store(true);
+    }),
+                          .done = done});
+}
+
+std::string PaintJobKey(const PaintJob &job) {
+    if (job.letters.empty()) {
+        return {};
+    }
+    return job.word ? WordKey(job.letters, job.paint) : GlyphKey(job.letters[0].ch, -1, job.letters[0].w, job.letters[0].h, job.paint);
+}
+
+void WaitForPaintingAhead() {
+    for (Painter &painter : g_painters) {
+        painter.thread.join();
+    }
+    g_painters.clear();
+}
+
+unsigned FontGeneration() {
+    return g_font_generation;
 }
 
 bool GetGlyphBounds(char32_t ch, float (&bounds)[4], int slot) {
