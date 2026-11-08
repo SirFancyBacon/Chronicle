@@ -917,7 +917,9 @@ change as the game runs. Calibrate HDR, under HDR, sets the last two by eye, and
 draws through `MirrorHdrPatches`; then Paper White, in steps of 10 from 80 to 500, never past the peak. Circle on the first step puts both back as they were.
 
 Noktus makes all of its pipelines when it starts, and keeps them in `<save>/noktus_pipelines.cache` for the next start. A cache another GPU or driver
-made is left unused and replaced. The pacing line's `late pipelines` counts any made while drawing, which should always be 0. The depth picks behind the lens flare are read from Noktus, whose answers come a few ticks later.
+made is left unused and replaced. The pacing line's `late pipelines` counts any made while drawing, which should always be 0. Under it, `noktus gpu`
+gives the GPU's time on a drawn frame, mean and worst, and the mean of each pass that took any, in the game's pass order, then `finishing`: the
+interface laid over the picture, the picture kept for the next tick and for showing again, and the output to the window. The depth picks behind the lens flare are read from Noktus, whose answers come a few ticks later.
 
 Noktus decides where 2D reaches past the frame from the layer it's told. A screen can name one; a draw left in the
 interface layer, where retail's 2D falls when nothing names it, takes the answer of Kazarov's rule for its shape and

@@ -10,6 +10,7 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <format>
 #include <limits>
 #include <map>
 #include <memory>
@@ -146,12 +147,28 @@ void DropWindow(Mirror &mirror) {
     mirror.window = nullptr;
 }
 
+Pass FromNoktusPass(noktus::Pass pass);
+
 void ReportPace(Mirror &mirror) {
     const noktus::PaceReport pace = noktus::TakePace(*mirror.renderer);
     std::fprintf(stderr, "noktus pacing: %llu frames, %llu ticks, mean %.2f ms, slowest 1%% %.2f ms, worst %.2f ms, held %llu, missed %llu, %d ahead, display timing %s, %s, target lead %.1f ms, work: frame %.3f ms, of it waiting %.3f ms, tick %.3f ms, link %.3f ms, %d workers, late pipelines %llu\n",
                  static_cast<unsigned long long>(pace.frames), static_cast<unsigned long long>(pace.ticks), pace.mean_interval, pace.slowest_1_percent, pace.worst_interval,
                  static_cast<unsigned long long>(pace.held), static_cast<unsigned long long>(pace.missed), pace.frames_ahead, pace.display_timing ? "yes" : "no", pace.variable ? "variable" : "fixed", pace.lead,
                  pace.mean_frame_work, pace.mean_frame_wait, pace.mean_tick_work, pace.mean_link_work, pace.workers, static_cast<unsigned long long>(pace.late_pipelines));
+    const noktus::GpuTimes &gpu = pace.gpu;
+    if (!gpu.measured) {
+        std::fprintf(stderr, "noktus gpu: not timed, as this GPU can't time its work\n");
+        return;
+    }
+    // Passes in the order the game draws them, so that one report reads against the next.
+    std::string passes;
+    for (std::size_t i = 0; i < gpu.mean_pass.size(); i++) {
+        if (gpu.mean_pass[i] >= 0.0005) {
+            passes += std::format(", {} {:.3f}", PassName(FromNoktusPass(static_cast<noktus::Pass>(i))), gpu.mean_pass[i]);
+        }
+    }
+    std::fprintf(stderr, "noktus gpu: %llu frames, mean %.3f ms, worst %.3f ms; by pass%s, finishing %.3f\n", static_cast<unsigned long long>(gpu.frames), gpu.mean_frame,
+                 gpu.worst_frame, passes.c_str(), gpu.mean_finish);
 }
 
 void WriteLastPicture() {
