@@ -1356,4 +1356,44 @@ TEST(DataRead, MetadataSnapshotsPreserveImgOrdinalsInsidePackMembers) {
     EXPECT_EQ(DataReadResolvedMetadataSnapshot("img.pak").get(), parent.get());
 }
 
+// A pack holding two members of one name: the first keeps its name plain and the second is "#entry:<index>", as the converter names them, so
+// each finds its own converted document.
+TEST(DataRead, RepeatedPackNamesAreNumberedAfterTheFirst) {
+    fs::path dir = TempDir("pack_repeated_names");
+    Bytes    pack;
+    const auto entry = [&pack](const char *name, std::uint8_t fill) {
+        std::array<unsigned char, 76> header{};
+        std::memcpy(header.data(), name, std::strlen(name));
+        const std::int32_t fields[3] = {76, 4, 80}; // data after the header, four bytes of it, the next entry after that
+        std::memcpy(header.data() + 64, fields, sizeof(fields));
+        pack.insert(pack.end(), header.begin(), header.end());
+        pack.insert(pack.end(), 4, fill);
+    };
+    entry("same.img", 1);
+    entry("same.img", 2);
+    pack.insert(pack.end(), 80, 0); // a first byte of zero ends the table
+    WriteBytes(dir / "data" / "two.pac", pack);
+    PathsSetDataRoot(dir / "data");
+    PathsSetSaveRoot(dir / "save");
+    InitCDFile();
+    int size = -1;
+    Clear();
+    ASSERT_EQ(LoadFile2(Mutable("two.pac"), buffer, &size, 0), 1);
+    auto *loaded = reinterpret_cast<u_int *>(buffer);
+    int   member_size = 0;
+    u_int *first = GetPackFile(loaded, Mutable("same.img"), &member_size);
+    ASSERT_TRUE(first != nullptr && *reinterpret_cast<unsigned char *>(first) == 1);
+    dc::data::DataReadSource first_source;
+    ASSERT_TRUE(dc::data::DataReadSourceRange(first, 4, first_source));
+    EXPECT_EQ(first_source.member, "same.img");
+    char  *name = nullptr;
+    u_int *second = GetPackFile(loaded, 1, &name, &member_size);
+    ASSERT_TRUE(second != nullptr && *reinterpret_cast<unsigned char *>(second) == 2);
+    dc::data::DataReadSource second_source;
+    ASSERT_TRUE(dc::data::DataReadSourceRange(second, 4, second_source));
+    EXPECT_EQ(second_source.member, "same.img#entry:1");
+    fs::remove_all(dir);
+}
+
 } // namespace dc::test
+

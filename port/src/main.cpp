@@ -797,6 +797,7 @@ int Run(int argc, const char **argv) {
     ConfigAddChangeHook(LocalizeConfigChanged);
 
     int status = RunGame(argc, const_cast<char **>(argv));
+    ConfigFlush(); // settings Options applied but hadn't written yet, when the game is closed with it open
     if (render::KazarovDraws()) {
         dc::app::kazarov::GameStopPresentation();
     }

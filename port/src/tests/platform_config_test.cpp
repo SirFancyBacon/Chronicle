@@ -130,6 +130,31 @@ TEST(PlatformConfig, LoadsFromSaveRoot) {
     std::filesystem::remove_all(root);
 }
 
+// A screen changing settings a step at a time applies each at once, and writes the file once, when it closes.
+TEST(PlatformConfig, ChangesSavedLaterAreWrittenByTheNextSave) {
+    std::filesystem::path root = std::filesystem::temp_directory_path() / ("dc_config_later_" + std::to_string(dc::test::ProcessId()));
+    std::filesystem::create_directories(root);
+    PathsSetSaveRoot(root);
+    ConfigLoad();
+    const auto read = [&] {
+        std::ifstream file(root / "config.json");
+        return ConfigParse(std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()));
+    };
+    Config changed = ConfigGet();
+    changed.tick_rate = 50.0;
+    ASSERT_TRUE(ConfigChange(changed, Saving::Later));
+    ASSERT_TRUE(ConfigGet().tick_rate == 50.0);
+    ASSERT_TRUE(read().tick_rate == 60.0);
+    ASSERT_TRUE(ConfigChange(ConfigGet()));
+    ASSERT_TRUE(read().tick_rate == 50.0);
+    // And at the end of the run, for a screen closed with the game.
+    changed.tick_rate = 40.0;
+    ASSERT_TRUE(ConfigChange(changed, Saving::Later));
+    ASSERT_TRUE(ConfigFlush());
+    ASSERT_TRUE(read().tick_rate == 40.0);
+    std::filesystem::remove_all(root);
+}
+
 TEST(PlatformConfig, ParsesMouseSettingsAndBindings) {
     Config defaults = ConfigParse("");
     ASSERT_TRUE(defaults.mouse_sensitivity == 0.1f && !defaults.mouse_invert_y && defaults.mouse_capture);

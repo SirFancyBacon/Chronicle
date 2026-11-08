@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <array>
 #include <cctype>
 #include <cmath>
@@ -842,11 +843,14 @@ std::string ConfigSerialize(const Config &config) {
 }
 
 bool ConfigSave() {
+    const auto            started = std::chrono::steady_clock::now();
     std::filesystem::path path = PathsSaveRoot() / "config.json";
     std::error_code       error;
     std::filesystem::create_directories(path.parent_path(), error);
     g_saved = WriteReplacing(path, ConfigSerialize(g_config));
-    std::println(stderr, "config: {} {}", g_saved ? "saved" : "could not save", PathsDisplay(path));
+    // How long it took, since on some systems writing a file costs the game's thread a visible hitch.
+    std::println(stderr, "config: {} {} ({:.1f} ms)", g_saved ? "saved" : "could not save", PathsDisplay(path),
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count());
     return g_saved;
 }
 
@@ -884,7 +888,7 @@ void ConfigDisplayChanged(const Config &before, const Config &after) {
     DisplayChanged(before, after);
 }
 
-bool ConfigChange(const Config &config) {
+bool ConfigChange(const Config &config, Saving saving) {
     if (g_changing) {
         std::println(stderr, "config: ignoring a change made while one is being applied");
         return false;
@@ -898,15 +902,23 @@ bool ConfigChange(const Config &config) {
 
     Config after = ConfigParse(ConfigSerialize(config));
     if (after == g_config) {
-        return g_saved || ConfigSave();
+        return saving == Saving::Later || g_saved || ConfigSave();
     }
     Config before = std::exchange(g_config, std::move(after));
-    ConfigSave();
+    if (saving == Saving::Now) {
+        ConfigSave();
+    } else {
+        g_saved = false;
+    }
     const std::vector<ConfigChangeHook> hooks = g_change_hooks;
     for (ConfigChangeHook hook : hooks) {
         hook(before, g_config);
     }
-    return g_saved;
+    return saving == Saving::Later || g_saved;
+}
+
+bool ConfigFlush() {
+    return g_saved || ConfigSave();
 }
 
 bool ConfigAppliesOnRestart(std::string_view key) {

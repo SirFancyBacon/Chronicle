@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -190,9 +191,14 @@ void ConfigDisplayChanged(const Config &before, const Config &after);
  * were added; ConfigAppliesOnRestart names the settings that wait for the next start instead. Settings
  * equal to the current ones change nothing, but are saved if the last save failed. Returns whether the
  * settings are saved. A call from a change hook is refused and returns false. Main thread only, as are
- * the hooks.
+ * the hooks. With Saving::Later they apply but aren't written: the next ConfigChange that saves writes
+ * them, which a screen changing settings step by step does once, as it closes. Returns true then.
  */
-bool ConfigChange(const Config &config);
+enum class Saving : std::uint8_t { Now, Later };
+bool ConfigChange(const Config &config, Saving saving = Saving::Now);
+
+/** Writes the settings if a change hasn't been written yet. Returns whether they're saved. */
+bool ConfigFlush();
 
 /**
  * Whether a change to the setting, by its config.json name ("game.debug_mode"), reaches the running

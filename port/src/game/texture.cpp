@@ -16,6 +16,7 @@
 #include <optional>
 #include <print>
 #include <span>
+#include <set>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -547,7 +548,6 @@ void Enter(CTextureManager &manager, EnterMode mode, int block, char *name, u_ch
     unsigned           cbp = 0;
     bool               baked = false;
     bool               canvas_backing = false;
-    bool               unsourced = false;
     PortDecodedTexture decoded;
     if (image != nullptr && !PortLegacyTexturePath()) {
         if (indexed) {
@@ -559,29 +559,25 @@ void Enter(CTextureManager &manager, EnterMode mode, int block, char *name, u_ch
         if (image_size > 0 && DataReadSourceRange(image, static_cast<std::size_t>(image_size), source)) {
             document = PortTextureDocumentFromSource(source);
             if (!document) {
-                StopBakedTexture(name, "unsupported source identity " + source.path +
-                                           (source.member.empty() ? std::string{} : "/" + source.member));
-            }
-            const std::optional<unsigned> entry_index = PortTextureEntryIndexFromSource(source);
-            baked = PortLoadBakedTexture(*document, name, 0, static_cast<unsigned>(width),
-                                         static_cast<unsigned>(height), 0, clut,
-                                         clut == nullptr ? 0 : static_cast<std::size_t>(clut_bytes), decoded,
-                                         resolution_error, entry_index, bpp);
-            canvas_backing = !baked && resolution_error == "canvas texture keeps its runtime backing";
-            if (!baked && !canvas_backing) {
-                StopBakedTexture(name, resolution_error);
+                resolution_error = "unsupported source identity " + source.path + (source.member.empty() ? std::string{} : "/" + source.member);
+            } else {
+                const std::optional<unsigned> entry_index = PortTextureEntryIndexFromSource(source);
+                baked = PortLoadBakedTexture(*document, name, 0, static_cast<unsigned>(width),
+                                             static_cast<unsigned>(height), 0, clut,
+                                             clut == nullptr ? 0 : static_cast<std::size_t>(clut_bytes), decoded,
+                                             resolution_error, entry_index, bpp);
+                canvas_backing = !baked && resolution_error == "canvas texture keeps its runtime backing";
             }
         } else {
             // Pixels outside any data source (a synthetic or runtime image) have no baked document
             // and decode from the bytes given.
             resolution_error = "texture pixels have no validated source range";
-            unsourced = true;
         }
-        if (!baked && indexed && !canvas_backing && !unsourced) {
-            StopBakedTexture(name, resolution_error);
-        }
-        if (!baked && !canvas_backing && !resolution_error.empty()) {
-            std::println(stderr, "texture: using source decoder for non-indexed {}: {}", name, resolution_error);
+        // The disc's own picture is still in the data, so a converted one that's missing or unusable costs its improvements, not the game: a conversion
+        // that missed it shows here, rather than as a crash in the middle of play.
+        static std::set<std::string> told; // once a texture, as a scene can enter the same one many times
+        if (!baked && !canvas_backing && !resolution_error.empty() && told.insert(name).second) {
+            std::println(stderr, "texture: decoding {} from the disc's picture: {}", name, resolution_error);
         }
     }
     if (image == nullptr) {
@@ -807,9 +803,15 @@ void CTextureManager::EnterFixTextureZ(u_char *buffer) {
         EnterRawFixTextureZ(*this, buffer);
         return;
     }
+    // As EnterIMGFile does, a converted sheet that can't be used costs its improvements, not the game: the disc's own is still in the data.
+    const auto from_disc = [&](std::string_view why) {
+        std::println(stderr, "texture: decoding the fixed-Z sheet from the disc's picture: {}", why);
+        EnterRawFixTextureZ(*this, buffer);
+    };
     DataReadSource source;
     if (!DataReadSourceRange(buffer, 64, source)) {
-        StopBakedTexture("<unknown>", "fixed-Z texture header has no validated source range");
+        from_disc("its header has no validated source range");
+        return;
     }
     char             *name = reinterpret_cast<char *>(buffer + 16);
     const std::size_t name_size = std::string_view(name, 32).find('\0');
@@ -818,15 +820,18 @@ void CTextureManager::EnterFixTextureZ(u_char *buffer) {
     }
     const std::optional<std::string> document = PortTextureDocumentFromSource(source);
     if (!document) {
-        StopBakedTexture(name, "fixed-Z source has no deterministic baked document path");
+        from_disc("its source has no deterministic baked document path");
+        return;
     }
     PortDecodedTexture decoded;
     std::string        error;
     if (!PortLoadBakedTexture(*document, name, 0, 640, 0, 0, nullptr, 0, decoded, error)) {
-        StopBakedTexture(name, error);
+        from_disc(error);
+        return;
     }
     if (decoded.height > SCREEN_HALF_HEIGHT) {
-        StopBakedTexture(name, "fixed-Z baked texture exceeds the logical height limit");
+        from_disc("the baked sheet exceeds the logical height limit");
+        return;
     }
     CTexture *tex = SearchTexture(name);
     if (tex == nullptr) {

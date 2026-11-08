@@ -1,5 +1,7 @@
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstdio>
 
 #include "clsmes.hpp"
 #include "gameutil.hpp"
@@ -313,6 +315,23 @@ void DrawHelp(int alpha) {
 } // namespace
 
 void Draw() {
+    const auto drawing = std::chrono::steady_clock::now();
+    struct FirstDrawing {
+        std::chrono::steady_clock::time_point started;
+        ~FirstDrawing() {
+            // How long opening took the game's thread, when it's long enough to show: the parts say whether it was loading or drawing.
+            if (!g_screen.texture_ready || g_screen.drawn_once) {
+                return;
+            }
+            g_screen.drawn_once = true;
+            g_screen.opening_ms[2] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+            const double total = g_screen.opening_ms[0] + g_screen.opening_ms[1] + g_screen.opening_ms[2];
+            if (total > 16.0) {
+                std::fprintf(stderr, "options: opening cost the game %.1f ms (opening %.1f, textures and messages %.1f, first drawing %.1f)\n", total, g_screen.opening_ms[0],
+                             g_screen.opening_ms[1], g_screen.opening_ms[2]);
+            }
+        }
+    } first_drawing{drawing};
     const textwipe::MessageContext fit(textwipe::Kind::Options);
     setbilinear(0);
 

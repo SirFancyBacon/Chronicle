@@ -106,6 +106,8 @@ struct Screen {
     Calibration         calibration = Calibration::Off;
     platform::Config    before_calibration; /**< Put back if calibrating is backed out of. */
     int                 patches_in = 0;     /**< Ticks until the peak step's patches show. */
+    std::array<double, 3> opening_ms = {};  /**< The game thread's time opening: Open, its textures, the first drawing. Logged when it's more than a frame's worth. */
+    bool                drawn_once = false;
 };
 
 extern Screen g_screen;

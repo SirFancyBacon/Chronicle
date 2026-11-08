@@ -66,13 +66,15 @@ PackEntry *PackEntryAt(u_int *pack, std::size_t capacity, int wanted) {
     return nullptr;
 }
 
+// Whether an earlier entry has this one's name, which is when the converter numbers a member "#entry:<index>": the first of a name keeps it
+// plain (packs.rs and textures.rs). Compared exactly, as the converter compares them.
 bool PackNameDuplicated(u_int *pack, std::size_t capacity, const PackEntry *entry) {
     for (int index = 0;; index++) {
         PackEntry *candidate = PackEntryAt(pack, capacity, index);
-        if (candidate == nullptr) {
+        if (candidate == nullptr || candidate == entry) {
             return false;
         }
-        if (candidate != entry && SameName(candidate->name, entry->name)) {
+        if (std::strncmp(candidate->name, entry->name, sizeof(entry->name)) == 0) {
             return true;
         }
     }

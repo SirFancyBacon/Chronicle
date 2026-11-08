@@ -612,6 +612,44 @@ TEST(Texture, DuplicateTextureNamesUseExactSourceImgOrdinal) {
     fs::remove_all(dir, ignored);
 }
 
+// A converted document that's missing costs the texture its improvements, not the game: it's decoded from the disc's picture, palette and all.
+TEST(Texture, MissingBakedDocumentDecodesTheDiscsPicture) {
+    namespace fs = std::filesystem;
+    TexEnv env;
+    if (OnParavirtualGpu()) {
+        GTEST_SKIP() << "the CI runner's virtual GPU misreads palette index 1";
+    }
+    const fs::path dir = datafix::TempDir("texture_missing_document");
+    const fs::path data = dir / "data";
+    const Bytes    indices(size_t{16} * 16, 1);
+    const Bytes    img = Img({
+        {"miss", Tim2({.type = TIM2_IDTEX8, .width = 16, .height = 16, .levels = {indices}, .clut = Clut256({{1, Gs(255, 0, 0)}}), .clut_colors = 256})}
+    });
+    datafix::WriteBytes(data / "miss.img", img);
+    // Another texture's document, so that the data counts as converted and miss.img's is looked for.
+    const std::string other = R"({"schema_version":3,"groups":[0],"entries":[]})";
+    datafix::WriteBytes(data / "textures" / "other_img.json", datafix::Bytes(other.begin(), other.end()));
+    PathsReset();
+    PathsConfigure({.app_dir = "chronicle", .env_data = "DC_DATA", .env_save = "DC_SAVE"});
+    PathsSetDataRoot(data);
+    InitCDFile();
+    std::vector<std::uint8_t> loaded(img.size() + 2048);
+    char                      path[] = "miss.img";
+    int                       loaded_size = 0;
+    ASSERT_EQ(LoadFile2(path, loaded.data(), &loaded_size, 0), 1);
+    TexManager.BeginEnterTextureBlock(0);
+    TexManager.EnterIMGFile(loaded.data(), 0, 0, 0);
+    TexManager.EndEnterTextureBlock(0);
+    PortTextureRef ref = Resolve("miss");
+    ASSERT_TRUE(ref.valid && ref.width == 16 && ref.height == 16);
+    env.gfx.Frame({0, 0, 0, 0x80}, [&] { env.Draw(ref, 0, 0, 160, 160, 0, 0, 16, 16); });
+    EXPECT_TRUE(env.gfx.PixelNear(80, 80, 255, 0, 0));
+    DataReadReset();
+    PathsReset();
+    std::error_code ignored;
+    fs::remove_all(dir, ignored);
+}
+
 TEST(Texture, BakedDocumentPathMapMatchesRustDc1Plan) {
     const char *map_path = std::getenv("CHRONICLE_TEXTURE_LAYOUT_MAP");
     if (map_path == nullptr) {

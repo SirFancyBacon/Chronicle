@@ -1,6 +1,7 @@
 #include "options/screen.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <format>
 #include <memory>
 #include <optional>
@@ -142,7 +143,8 @@ void ShowPageTab() {
 }
 
 void Apply(const Config &config) {
-    g_screen.save_failed = !DisplayApply([&] { return ConfigChange(config); });
+    // Written once, as the screen closes: a step at a time, writing the file each step could cost a hitch each.
+    g_screen.save_failed = !DisplayApply([&] { return ConfigChange(config, Saving::Later); });
     ListResolutions();
 }
 
@@ -799,6 +801,7 @@ int R1X() {
 }
 
 int Open(int mode, int block_no, u_long128 *buffer) {
+    const auto opening = std::chrono::steady_clock::now();
     if (buffer == nullptr) {
         buffer = reinterpret_cast<u_long128 *>(read_buffer);
     }
@@ -829,6 +832,7 @@ int Open(int mode, int block_no, u_long128 *buffer) {
     g_screen.cursor_y = RowTop(0);
     g_screen.opened = ConfigGet();
     DisplayTakePumpSave();
+    g_screen.opening_ms[0] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - opening).count();
     return 1;
 }
 
@@ -842,6 +846,7 @@ int Run() {
                 ReadBG();
 
                 if (ReadBGSync() == 0) {
+                    const auto loading = std::chrono::steady_clock::now();
                     auto textures = std::make_unique<LOADTEXTURE_INFO2[]>(3);
                     textures[0] = {.name = const_cast<char *>("#frame_image_option#640#" SCREEN_HEIGHT_STR "#4"),
                                    .block_no = g_screen.block_no,
@@ -863,6 +868,7 @@ int Run() {
                     g_screen.game_messages = CommonMenuMes2.buff;
                     ShowHelp();
                     g_screen.texture_ready = true;
+                    g_screen.opening_ms[1] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loading).count();
                 }
             }
 
