@@ -374,6 +374,16 @@ bool Find(Button button, Image &out) {
     return FindNamed(style, glyph, out);
 }
 
+void Preload() {
+    if (CurrentStyle().empty()) {
+        return;
+    }
+    Index();
+    for (auto &[name, style] : Get().styles) {
+        Load(style);
+    }
+}
+
 void Reset() {
     State &state = Get();
     for (auto &[name, style] : state.styles) {

@@ -100,4 +100,9 @@ bool FindNamed(const char *style, const char *name, Image &out);
 // Forgets what was loaded (and frees the atlases), so the next Find reads glyphs/ again.
 void Reset();
 
+// Decodes every style's atlas and makes its texture now, at a load, rather than in the first menu that shows a symbol. Every style, since on Auto
+// the device isn't known until input is first read, and changing device later must not cost a tick. Nothing, when the game's own art is used: turning
+// the symbols on later loads its style when it's first drawn.
+void Preload();
+
 } // namespace dc::glyphs

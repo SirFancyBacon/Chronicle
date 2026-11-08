@@ -69,6 +69,7 @@
 #include "snd.hpp"
 #include "title/opening.hpp"
 #include "title/rushmovi.hpp"
+#include "text/glyphs.hpp"
 
 namespace fs = std::filesystem;
 
@@ -767,6 +768,8 @@ int Run(int argc, const char **argv) {
 #else
     ClockSetTickRate(config.tick_rate);
 #endif
+    // Its first texture starts Noktus, which takes the tick rate as it then stands.
+    glyphs::Preload();
     const char *bounded_headless = std::getenv("DC_HEADLESS_BOUNDED");
     ClockSetUnbounded(options.headless && (bounded_headless == nullptr || std::string_view(bounded_headless) != "1"));
     ClockAddPumpHook(PumpHost);
