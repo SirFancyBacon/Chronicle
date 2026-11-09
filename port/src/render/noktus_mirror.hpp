@@ -26,6 +26,7 @@ enum class Step : std::uint8_t;
 // DC_NOKTUS_MOTION=1 writes motion and reactive beside the scene (noktus::ReadMotion). With DC_NOKTUS_MOTION_OUT=<prefix> too, at exit the last tick drawn halfway
 // and at its end (<prefix>.first.png, .second.png) and the second's motion and reactive (.motion.f32, .reactive.f32, .motion.json), for the harness's motion check.
 // Unpaced (offscreen) runs only: paced, frames drawn to be read don't count as frames shown, so the second's motion isn't from the first.
+// DC_NOKTUS_MOTION_VIEW=1 shows the motion in place of the picture, screenshots included: direction as hue, length as brightness, reactive in magenta.
 // DC_NOKTUS_WORKERS=<n> sets the threads sharing the work, and DC_NOKTUS_PARALLEL_FROM=<draws> how many mesh draws a tick needs before they're shared.
 
 /** What's sent to a display in HDR. */

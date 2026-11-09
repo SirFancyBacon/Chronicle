@@ -444,6 +444,9 @@ void Start(Mirror &mirror) {
     if (const char *motion = std::getenv("DC_NOKTUS_MOTION")) {
         host.motion = std::string_view(motion) == "1";
     }
+    if (const char *view = std::getenv("DC_NOKTUS_MOTION_VIEW"); view != nullptr && std::string_view(view) == "1") {
+        host.motion = host.motion_view = true;
+    }
     if (const char *workers = std::getenv("DC_NOKTUS_WORKERS")) {
         host.workers = static_cast<int>(std::strtol(workers, nullptr, 10));
     }
