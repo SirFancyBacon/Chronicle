@@ -50,8 +50,36 @@ enum class Layer2D : std::uint8_t {
     Count,
 };
 
+/**
+ * A step a frame takes partway through that reads what's been drawn so far, which the renderer keeps as one node of the frame and learns what it reads and writes.
+ * Naming one draws nothing and changes nothing. Steps don't hold one another.
+ */
+enum class Step : std::uint8_t {
+    Water,        /**< The frame copied for water to show, and the water drawn from it where it follows at once. */
+    DepthOfField, /**< The frame blurred and laid back beyond a depth. */
+    Haze,         /**< Depth of field's wobbling kind, the towns' heat haze. */
+    DepthReads,   /**< The frame's depth read at points: the lens flare's and the depth probe's. */
+    Count,
+};
+
 /** The pass's name, for a trace. */
 const char *PassName(Pass pass);
+
+/** The step's name, for a trace. */
+const char *StepName(Step step);
+
+/** What's drawn from now until EndStep is this step. Beginning one ends any open. */
+void BeginStep(Step step);
+void EndStep();
+
+/** A step for as long as it lives. */
+class StepScope {
+public:
+    explicit StepScope(Step step) { BeginStep(step); }
+    ~StepScope() { EndStep(); }
+    StepScope(const StepScope &) = delete;
+    StepScope &operator=(const StepScope &) = delete;
+};
 
 /** The pass drawing belongs to from now on. */
 void SetPass(Pass pass);

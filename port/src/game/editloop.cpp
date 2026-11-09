@@ -2455,11 +2455,12 @@ void EditMainDraw() {
                 case ED_MODE_MENU_INIT:
                 case ED_MODE_GEORAMA_MENU_INIT:
                 case ED_MODE_RETURN_MENU_GEORAMA: {
-                    sceGsTex0 frame;
-                    CRect_i_  screen;
-                    sceGsTex0 water;
-                    float     ref[4];
-                    sceGsZbuf zbuf;
+                    render::StepScope step(render::Step::Water);
+                    sceGsTex0         frame;
+                    CRect_i_          screen;
+                    sceGsTex0         water;
+                    float             ref[4];
+                    sceGsZbuf         zbuf;
 
                     MGGetFBuffTex(&frame);
                     screen.x = 0;

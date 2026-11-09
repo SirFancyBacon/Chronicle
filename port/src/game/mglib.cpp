@@ -468,6 +468,7 @@ void MGEndFrame() {
             mgPickZBuff[15].x = 320;
             mgPickZBuff[15].y = SCREEN_HEIGHT / 2;
         }
+        bool reading = false; // a step only once there's depth to read: most frames read none
         for (int i = 0; i < 16; i++) {
             g_pick_pending[i].reset();
             if (!mgPickZBuff[i].enable) {
@@ -478,11 +479,18 @@ void MGEndFrame() {
                 mgPickZBuff[i].z = -1;
                 continue;
             }
+            if (!reading) {
+                render::BeginStep(render::Step::DepthReads);
+                reading = true;
+            }
             // Retail reads 8x8 of the field buffer, which is 8x16 of the frame.
             render::ReadDepth(static_cast<uint32_t>(i), static_cast<float>(mgPickZBuff[i].x - 4),
                            static_cast<float>(mgPickZBuff[i].y - 8), 8.0f, 16.0f);
             g_pick_pending[i] = i;
             ++depth_picks;
+        }
+        if (reading) {
+            render::EndStep();
         }
 
         render::SetRenderTarget(render::kMainTarget);

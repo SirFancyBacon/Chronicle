@@ -116,7 +116,7 @@ a language the data lacks, and its English button reads as the disc's art does.
 | `--screenshot-fps` | with `--screenshot`: fail if the FPS counter is off |
 
 Environment: `DC_DATA` and `DC_SAVE` (above), `DC_INPUT` (above), `DC_AUDIO=off` (no audio
-device), `DC_AUDIO_WAV` and `DC_AUDIO_TRACE` (see "Audio"), `DC_PASS_TRACE=<path>` (write each shape of frame seen, its render passes in order with their draws and copies, as JSON at exit;
+device), `DC_AUDIO_WAV` and `DC_AUDIO_TRACE` (see "Audio"), `DC_PASS_TRACE=<path>` (write each shape of frame seen, its render passes in order with their draws and copies, and its steps (water, depth of field, haze, depth reads) with what Noktus found each reads and writes, as JSON at exit;
 `port/src/render/passes.hpp`), `DC_FISHING_TRACE=1` (print a fishing session's steps and each fish's actions about the
 bait, docs/FISHING_FRAMEWORK.md), and SDL's own variables.
 

@@ -33,6 +33,7 @@
 #include "mglib.hpp"
 #include "objanime.hpp"
 #include "objectframe.hpp"
+#include "render/passes.hpp"
 #include "renderinfo.hpp"
 #include "sound.hpp"
 #include "texture.hpp"
@@ -2925,7 +2926,9 @@ void WaterProcess() {
     CRect<int> rect(0, 0, 640, SCREEN_HALF_HEIGHT);
     auto       surface = std::bit_cast<sceGsTex0>(TexManager.GetTexture("water_buff", -1)->tex0);
 
+    render::BeginStep(render::Step::Water); // the copy alone: the water is drawn among the opening's picture
     MGMoveImage(&frame_tex, rect, &surface, 0, 0, 0);
+    render::EndStep();
 
     sceVu0FVECTOR ref;
 

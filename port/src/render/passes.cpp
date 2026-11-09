@@ -90,6 +90,13 @@ std::map<std::tuple<std::string, std::string, std::string>, std::uint64_t> g_cla
 std::uint64_t                g_unnamed = 0;
 std::uint64_t                g_outside = 0;
 std::map<std::string, std::uint64_t> g_kinds;
+std::vector<Step>            g_tick_steps;             // the steps begun this tick, in order
+std::uint64_t                g_steps_checked = 0;      // ticks whose steps were checked against what Noktus recorded
+std::uint64_t                g_steps_differing = 0;
+std::map<std::string, std::uint64_t> g_step_uses;    // a step's name and what Noktus found it reads and writes: how many times
+bool                         g_step_open = false;
+
+constexpr std::array<const char *, static_cast<std::size_t>(Step::Count)> kStepNames = {"Water", "DepthOfField", "Haze", "DepthReads"};
 
 Span &Current() {
     if (g_spans.empty() || g_spans.back().pass != g_pass) {
@@ -129,7 +136,27 @@ void WriteTrace() {
             << "\", \"draws\": " << draws << "}";
         first = false;
     }
+    out << "\n ],\n \"steps_checked\": " << g_steps_checked << ",\n \"steps_differing\": " << g_steps_differing << ",\n \"steps\": [";
+    first = true;
+    for (const auto &[key, count] : g_step_uses) {
+        const std::size_t colon = key.find(':');
+        out << (first ? "\n" : ",\n") << "  {\"step\": \"" << key.substr(0, colon) << "\", \"uses\": \"" << key.substr(colon + 2) << "\", \"ticks\": " << count << "}";
+        first = false;
+    }
     out << "\n ]\n}\n";
+}
+
+// What Noktus found a step reads and writes, in words.
+std::string StepUses(const MirrorStepReport &step) {
+    const auto side = [](bool screen, bool depth, std::uint32_t textures) {
+        std::string out = screen && depth ? "the screen's colour and depth" : screen ? "the screen's colour" : depth ? "the screen's depth" : "";
+        if (textures != 0) {
+            out += (out.empty() ? "" : ", ") + std::to_string(textures) + (textures == 1 ? " texture" : " textures");
+        }
+        return out.empty() ? std::string("nothing") : out;
+    };
+    return "reads " + side(step.reads_screen, step.reads_screen_depth, step.textures_read) + "; writes " +
+           side(step.writes_screen, step.writes_screen_depth, step.textures_written);
 }
 
 } // namespace
@@ -155,6 +182,25 @@ const char *PassName(Pass pass) {
 void SetPass(Pass pass) {
     g_pass = pass;
     MirrorSetPass(pass);
+}
+
+const char *StepName(Step step) {
+    return step < Step::Count ? kStepNames[static_cast<std::size_t>(step)] : "?";
+}
+
+void BeginStep(Step step) {
+    if (g_tracing) {
+        g_tick_steps.push_back(step);
+    }
+    g_step_open = true;
+    MirrorBeginStep(step);
+}
+
+void EndStep() {
+    if (g_step_open) {
+        g_step_open = false;
+        MirrorEndStep();
+    }
 }
 
 Pass CurrentPass() {
@@ -322,6 +368,7 @@ void PassTraceBeginTick() {
         g_outside += span.draws;
     }
     g_spans.clear();
+    g_tick_steps.clear(); // a step begun outside a tick never reaches Noktus
 }
 
 void PassTraceTick(std::uint32_t drawn, bool list_has_draws) {
@@ -371,7 +418,17 @@ void PassTraceTick(std::uint32_t drawn, bool list_has_draws) {
             g_noktus_differing++;
             g_kinds["noktus passes " + ours + "| " + theirs]++;
         }
+        // And the same steps, in order, each of which it says what it reads and writes.
+        const std::vector<MirrorStepReport> steps = MirrorTickSteps();
+        bool                                steps_same = steps.size() == g_tick_steps.size();
+        for (std::size_t i = 0; i < steps.size(); i++) {
+            steps_same = steps_same && steps[i].step == g_tick_steps[i];
+            g_step_uses[std::string(StepName(steps[i].step)) + ": " + StepUses(steps[i])]++;
+        }
+        g_steps_checked++;
+        g_steps_differing += steps_same ? 0 : 1;
     }
+    g_tick_steps.clear();
     g_spans.clear();
 }
 

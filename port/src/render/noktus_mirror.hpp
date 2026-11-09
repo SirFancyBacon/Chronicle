@@ -13,6 +13,7 @@ struct SDL_Window;
 namespace dc::render {
 
 enum class Pass : std::uint8_t;
+enum class Step : std::uint8_t;
 
 // DC_RENDERER=kazarov: Kazarov's renderer draws the game, for telling which renderer a bug is in. Noktus draws by default, and Kazarov's renderer doesn't start.
 // DC_NOKTUS_MIRROR=<path>: writes the last picture to path at exit. With DC_RENDERER=kazarov, Noktus also draws everything alongside, with no window, to compare.
@@ -95,6 +96,24 @@ void MirrorApply(const MirrorSettings &settings);
 
 /** Names the pass Noktus records drawing in from now on. */
 void MirrorSetPass(Pass pass);
+
+/** Steps reach Noktus as they're begun and ended. */
+void MirrorBeginStep(Step step);
+void MirrorEndStep();
+
+/** A step of the tick Noktus last ended, and what it found it reads and writes. */
+struct MirrorStepReport {
+    Step          step{};
+    std::uint32_t commands = 0;
+    bool          reads_screen = false;
+    bool          reads_screen_depth = false;
+    bool          writes_screen = false;
+    bool          writes_screen_depth = false;
+    std::uint32_t textures_read = 0;
+    std::uint32_t textures_written = 0;
+};
+
+std::vector<MirrorStepReport> MirrorTickSteps();
 
 /** A run of the last tick's draws and blits in one pass, as Noktus recorded them. */
 struct MirrorPassStretch {

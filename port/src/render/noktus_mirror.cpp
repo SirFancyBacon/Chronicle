@@ -640,6 +640,86 @@ void MirrorSetPass(Pass pass) {
     }
 }
 
+namespace {
+
+noktus::Step ToNoktusStep(Step step) {
+    switch (step) {
+        case Step::Water:
+            return noktus::Step::Water;
+        case Step::DepthOfField:
+            return noktus::Step::DepthOfField;
+        case Step::Haze:
+            return noktus::Step::Haze;
+        case Step::DepthReads:
+            return noktus::Step::DepthReads;
+        case Step::Count:
+            break;
+    }
+    return noktus::Step::Count;
+}
+
+Step FromNoktusStep(noktus::Step step) {
+    switch (step) {
+        case noktus::Step::Water:
+            return Step::Water;
+        case noktus::Step::DepthOfField:
+            return Step::DepthOfField;
+        case noktus::Step::Haze:
+            return Step::Haze;
+        case noktus::Step::DepthReads:
+            return Step::DepthReads;
+        case noktus::Step::Count:
+            break;
+    }
+    return Step::Count;
+}
+
+} // namespace
+
+void MirrorBeginStep(Step step) {
+    if (!MirrorOn()) {
+        return;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.renderer) {
+        mirror.renderer->BeginStep(ToNoktusStep(step));
+    }
+}
+
+void MirrorEndStep() {
+    if (!MirrorOn()) {
+        return;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.renderer) {
+        mirror.renderer->EndStep();
+    }
+}
+
+std::vector<MirrorStepReport> MirrorTickSteps() {
+    std::vector<MirrorStepReport> steps;
+    if (!MirrorOn()) {
+        return steps;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.renderer) {
+        for (const noktus::StepReport &report : noktus::TickSteps(*mirror.renderer)) {
+            steps.push_back({.step = FromNoktusStep(report.step),
+                             .commands = report.commands,
+                             .reads_screen = report.reads_screen,
+                             .reads_screen_depth = report.reads_screen_depth,
+                             .writes_screen = report.writes_screen,
+                             .writes_screen_depth = report.writes_screen_depth,
+                             .textures_read = report.textures_read,
+                             .textures_written = report.textures_written});
+        }
+    }
+    return steps;
+}
+
 std::vector<MirrorClassTally> MirrorTakeClassTally() {
     std::vector<MirrorClassTally> tally;
     if (!MirrorOn()) {

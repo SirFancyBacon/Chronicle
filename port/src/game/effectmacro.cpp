@@ -448,6 +448,7 @@ LowHaze PrepareLowHaze(render::TextureHandle snapshot, const render::LogicalRect
 // gradually. The two outermost columns do not wander past the edges of the image.
 void DepthOfField(float *focus, int level, int alpha, int blur) {
     render::PassScope pass(render::Pass::DepthOfField);
+    render::StepScope step(blur > 0 ? render::Step::Haze : render::Step::DepthOfField);
     render::TextureHandle target = render::CurrentRenderTarget();
     bool               haze = blur > 0;
     const HazeRange    range = HazeRangeOf(focus);

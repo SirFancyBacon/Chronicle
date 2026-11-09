@@ -951,6 +951,7 @@ void MainDraw() {
     CRect_i_  screen;
     sceGsTex0 water_tex;
     render::SetPass(render::Pass::Water);
+    render::BeginStep(render::Step::Water);
     MGGetFBuffTex(&frame_tex);
     screen.x = 0;
     screen.y = 0;
@@ -965,6 +966,7 @@ void MainDraw() {
     MGSetGsZBUF(&zbuf);
     DrawWaterSurface(EdIn_NowCamera);
     MGSetGsZBUF(&mgZBuffer);
+    render::EndStep();
 
     render::SetPass(render::Pass::Overlay);
     if (GameMode == EdInMode::EVENT) {

@@ -1082,7 +1082,9 @@ void WaterProcess() {
     CRect<int> rect(0, 0, 640, SCREEN_HALF_HEIGHT);
 
     water_tex = std::bit_cast<sceGsTex0>(TexManager.GetTexture("water_buff", -1)->tex0);
+    render::BeginStep(render::Step::Water); // the copy alone: the water is drawn among the movie's picture
     MGMoveImage(&frame_tex, rect, &water_tex, 0, 0, 0);
+    render::EndStep();
 
     zbuf = mgZBuffer;
     zbuf.bits.zmsk = 1;

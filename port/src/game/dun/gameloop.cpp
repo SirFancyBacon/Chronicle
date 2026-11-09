@@ -2325,6 +2325,7 @@ void DunMainDraw() {
         sceVu0FVECTOR water_pos;
 
         TexManager.ReloadTexture(Vif1Packet, 0xD);
+        render::StepScope step(render::Step::Water);
         MGGetFBuffTex(&frame_tex);
         area.x = 0;
         area.y = 0;
