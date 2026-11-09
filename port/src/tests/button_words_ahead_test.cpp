@@ -3,6 +3,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "render/types.hpp"
@@ -37,6 +38,33 @@ TEST(ButtonWordsAhead, CoverEveryWholePlaceOnTheScreen) {
                 }
             }
         }
+    }
+}
+
+// Every key of the name entry's alphabet, as the screen draws it (22 pixels square from a cell 22 or 23 texels tall, or
+// 21 tall from 23), asks only for pictures painted ahead.
+TEST(ButtonWordsAhead, CoverEveryKeyOfTheNameAlphabet) {
+    constexpr int kCell = 22;
+    for (const render::LogicalMapping mapping : {render::LogicalMapping{4.5f, 4.5f, 480.0f, 0.0f, 3840, 2160},
+                                                 render::LogicalMapping{2.25f, 2.25f, 240.0f, 0.0f, 1920, 1080},
+                                                 render::LogicalMapping{6.0f, 5.0f, 0.0f, 0.0f, 3840, 2400}}) {
+        std::set<std::string> ahead;
+        for (const capfont::PaintJob &job : caption::AlphabetPaintJobs(mapping)) {
+            ahead.insert(capfont::PaintJobKey(job));
+        }
+        int keys = 0;
+        for (const auto [height, texel_height] : {std::pair{22.0f, 22}, std::pair{22.0f, 23}, std::pair{21.0f, 23}}) {
+            for (int row = 0; row < 10; row++) {
+                for (int col = 0; col < 10; col++) {
+                    const std::vector<capfont::PaintJob> paints = caption::AlphabetCellPaints(col * kCell, row * kCell, kCell, texel_height, 22.0f, height, 1.0f, mapping);
+                    keys += paints.empty() ? 0 : 1;
+                    for (const capfont::PaintJob &paint : paints) {
+                        ASSERT_TRUE(ahead.contains(capfont::PaintJobKey(paint))) << "row " << row << " col " << col << ", scale " << mapping.scale_x;
+                    }
+                }
+            }
+        }
+        EXPECT_GT(keys, 3 * 60);
     }
 }
 

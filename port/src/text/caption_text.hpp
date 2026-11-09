@@ -106,15 +106,20 @@ bool DrawTitle(std::string_view utf8, int x, int y, float left, float right, flo
 bool DrawButtonWord(std::string_view word, float x, float y, int bright, int alpha, bool pressed = false);
 
 /**
- * Paints every button word DrawButtonWord draws ahead, on other threads, for the screen as it is now and again whenever
- * its size, the UI's scale or the fonts change: painting one as a menu first shows it would cost that frame. Cheap
- * when nothing changed, so it's asked each tick.
+ * Paints every button word DrawButtonWord draws, and every character of the name entry's alphabet as DrawAlphabetCell
+ * draws its keys, ahead, on other threads, for the screen as it is now and again whenever its size, the UI's scale or the
+ * fonts change: painting them as a screen first shows them would cost that frame, the alphabet a tenth of a second at 4K.
+ * Cheap when nothing changed, so it's asked each tick.
  */
 void PaintButtonWordsAhead();
 
 /** What PaintButtonWordsAhead paints for a mapping of the screen, and what a word DrawButtonWord draws there at x, y asks for: for tests. */
 std::vector<capfont::PaintJob> ButtonWordPaintJobs(const render::LogicalMapping &mapping);
 std::vector<capfont::PaintJob> ButtonWordPaintsAt(std::string_view word, float x, float y, bool pressed, const render::LogicalMapping &mapping);
+/** What PaintButtonWordsAhead paints of the alphabet, and what a key DrawAlphabetCell draws asks for (DrawAlphabetCell's own): for tests. */
+std::vector<capfont::PaintJob> AlphabetPaintJobs(const render::LogicalMapping &mapping);
+std::vector<capfont::PaintJob> AlphabetCellPaints(int u, int v, int texel_width, int texel_height, float width, float height, float rows,
+                                                  const render::LogicalMapping &mapping);
 
 /**
  * A per-letter adjustment to a floor label drawn by DrawFloorLabel().

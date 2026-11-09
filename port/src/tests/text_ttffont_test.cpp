@@ -98,3 +98,42 @@ TEST(TextTtfFont, WhatItCannotBuildIsLeftToTheBitmap) {
     EXPECT_FALSE(dc::ttffont::RenderGlyph(U'ß', 40, out.alpha, out.w, out.h, out.x0, out.y0));
     EXPECT_FALSE(dc::ttffont::RenderGlyph(U'~' + 0x1000, 40, out.alpha, out.w, out.h, out.x0, out.y0));
 }
+
+// A shadow of taps painted as one is what the taps' quads laid in order would leave: a tap on whole pixels is the glyph
+// moved, one half a pixel off is the filter's average of two, and taps over one another let through what each doesn't cover.
+TEST(TtfFontShadow, TapsLaidAsOneAreTheTapsInOrder) {
+    // A 2x1 glyph: one solid pixel, one half covered.
+    const std::vector<unsigned char> glyph = {255, 128};
+    int                              left = 0;
+    int                              top = 0;
+    int                              width = 0;
+    int                              height = 0;
+    const auto                       at = [&](const std::vector<unsigned char> &shadow, int x, int y) {
+        return static_cast<int>(shadow[static_cast<size_t>(y - top) * width + (x - left)]);
+    };
+
+    const std::vector<dc::ttffont::ShadowTap> moved = {{.dx = 2.0f, .dy = 1.0f, .alpha = 1.0f}};
+    const std::vector<unsigned char>          one = dc::ttffont::ShadowCoverage(glyph, 2, 1, moved, left, top, width, height);
+    ASSERT_EQ(one.size(), static_cast<size_t>(width) * height);
+    EXPECT_LE(left, 0);
+    EXPECT_LE(top, 0);
+    EXPECT_GE(left + width, 4);
+    EXPECT_GE(top + height, 2);
+    EXPECT_EQ(at(one, 2, 1), 255);
+    EXPECT_EQ(at(one, 3, 1), 128);
+    EXPECT_EQ(at(one, 0, 0), 0);
+    EXPECT_EQ(at(one, 1, 1), 0);
+
+    const std::vector<dc::ttffont::ShadowTap> half = {{.dx = 0.5f, .dy = 0.0f, .alpha = 1.0f}};
+    const std::vector<unsigned char>          averaged = dc::ttffont::ShadowCoverage(glyph, 2, 1, half, left, top, width, height);
+    EXPECT_EQ(at(averaged, 0, 0), 128);       // half the solid pixel
+    EXPECT_NEAR(at(averaged, 1, 0), 191, 1);  // between the two
+    EXPECT_NEAR(at(averaged, 2, 0), 64, 1);   // half the half-covered one
+
+    // Two taps of a quarter each over the solid pixel: 1 - (3/4)^2 of it is shadow.
+    const std::vector<dc::ttffont::ShadowTap> stacked = {{.dx = 0.0f, .dy = 0.0f, .alpha = 0.25f}, {.dx = 0.0f, .dy = 0.0f, .alpha = 0.25f}};
+    const std::vector<unsigned char>          two = dc::ttffont::ShadowCoverage(glyph, 2, 1, stacked, left, top, width, height);
+    EXPECT_NEAR(at(two, 0, 0), 112, 1);
+
+    EXPECT_TRUE(dc::ttffont::ShadowCoverage(glyph, 2, 1, {}, left, top, width, height).empty());
+}

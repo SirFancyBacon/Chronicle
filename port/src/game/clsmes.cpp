@@ -29,6 +29,7 @@
 #include "main.hpp"
 #include "mglib.hpp"
 #include "platform/config.hpp"
+#include "platform/load_work_profile.hpp"
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
@@ -2176,18 +2177,43 @@ constexpr int kCellH = 20;
 constexpr int kLettersU = 128; // the letters' left edge in gaiji.img
 constexpr int kLettersW = 256; // both sets
 
-// A letter DrawMesWin draws: the part of its cell (in gaiji.img's texels), where (logical), and its tint.
+// A letter DrawMesWin draws: the part of its cell (in gaiji.img's texels), where (logical), and its tint. With taps, the
+// letter's copies at those offsets (logical, before the row scale) and opacities laid one over another instead, as one
+// picture: a pass of an edge (LetterFuchi's), black.
 struct PendingLetter {
-    CRect_i_ texel;
-    float    x, y, width, height;
-    u_char   r, g, b, a;
+    CRect_i_                        texel;
+    float                           x, y, width, height;
+    u_char                          r, g, b, a;
+    std::vector<ttffont::ShadowTap> taps;
 };
 
 std::vector<PendingLetter> *g_letters = nullptr; // where DrawMesWin's letters go while it draws them
 
-// The cells drawn so far, by set, letter and height in screen pixels, while the atlas they are in lasts.
-std::map<std::tuple<int, int, int>, capfont::Glyph> g_cells;
-unsigned                                            g_cells_generation = 0;
+// A cell drawn into the atlas, and its opacity (w x h), which its edges' pictures are painted from.
+struct Cell {
+    capfont::Glyph             glyph;
+    std::vector<unsigned char> alpha;
+    int                        w = 0, h = 0;
+};
+
+// An edge pass painted as one picture, and where its top-left is from the part of the cell it was painted from, in pixels.
+struct PassPicture {
+    capfont::Glyph glyph;
+    int            left = 0, top = 0;
+};
+
+// The cells drawn so far, by set, letter and height in screen pixels, and their edges, while the atlas they are in lasts.
+std::map<std::tuple<int, int, int>, Cell> g_cells;
+std::map<std::string, PassPicture>        g_passes;
+unsigned                                  g_cells_generation = 0;
+
+void ForgetCellsIfTheAtlasRestarted() {
+    if (g_cells_generation != capfont::Generation()) {
+        g_cells.clear();
+        g_passes.clear();
+        g_cells_generation = capfont::Generation();
+    }
+}
 
 // The drop shadow the game's narrower letters carry in their own texels (the bold ones have none): the letter's
 // coverage moved down and right, blurred a little and thickened, at most half dark. Its shape was measured on the
@@ -2255,15 +2281,11 @@ bool LettersReady() {
 
 // Letter `index` of `set` drawn into its cell `size` screen pixels high, in the atlas: the white letter over its black
 // shadow.
-bool CellGlyph(int set, int index, int size, capfont::Glyph &out) {
-    if (g_cells_generation != capfont::Generation()) {
-        g_cells.clear();
-        g_cells_generation = capfont::Generation();
-    }
+const Cell *CellGlyph(int set, int index, int size) {
+    ForgetCellsIfTheAtlasRestarted();
     const auto key = std::make_tuple(set, index, size);
     if (const auto found = g_cells.find(key); found != g_cells.end()) {
-        out = found->second;
-        return true;
+        return &found->second;
     }
     const float                scale = static_cast<float>(size) / kCellH;
     const int                  width = static_cast<int>(std::lround(kCellW * scale));
@@ -2276,7 +2298,7 @@ bool CellGlyph(int set, int index, int size, capfont::Glyph &out) {
     int                        y0 = 0;
     if (!capfont::RenderGlyphScaled(static_cast<unsigned char>(kLetterOrder[static_cast<size_t>(index)]), set, scale / 50.0f,
                                     alpha, w, h, x0, y0)) {
-        return false;
+        return nullptr;
     }
     std::vector<float> cov(static_cast<size_t>(width) * height, 0.0f);
     for (int y = 0; y < h; y++) {
@@ -2290,23 +2312,60 @@ bool CellGlyph(int set, int index, int size, capfont::Glyph &out) {
     }
     const std::vector<float>   shadow = set == 1 ? BakedShadow(cov, width, height, scale) : std::vector<float>(cov.size(), 0.0f);
     std::vector<unsigned char> rgba(cov.size() * 4);
+    Cell                       cell{.alpha = std::vector<unsigned char>(cov.size()), .w = width, .h = height};
     for (size_t k = 0; k < cov.size(); k++) {
         const float a = cov[k] + (1 - cov[k]) * shadow[k];
         rgba[k * 4] = rgba[k * 4 + 1] = rgba[k * 4 + 2] = static_cast<unsigned char>(a > 0 ? std::lround(255 * cov[k] / a) : 255);
-        rgba[k * 4 + 3] = static_cast<unsigned char>(std::lround(a * 255));
+        rgba[k * 4 + 3] = cell.alpha[k] = static_cast<unsigned char>(std::lround(a * 255));
     }
-    capfont::Glyph glyph;
-    if (!capfont::AddImage(rgba, width, height, glyph)) {
-        return false;
+    if (!capfont::AddImage(rgba, width, height, cell.glyph)) {
+        return nullptr;
     }
     // Adding it may have started the atlas again.
-    if (g_cells_generation != capfont::Generation()) {
-        g_cells.clear();
-        g_cells_generation = capfont::Generation();
+    ForgetCellsIfTheAtlasRestarted();
+    return &(g_cells[key] = std::move(cell));
+}
+
+// The taps of an edge pass over the part of a cell from crop_x0, crop_y0 to crop_x1, crop_y1 (its pixels), in those
+// pixels, laid as one picture: what the black taps' quads of the same letter would leave, as near as the filter lets
+// them be (ttffont::ShadowCoverage). Painted when first asked for, while `budget` lasts (null when it's spent); the
+// taps are rounded to a quarter of a pixel.
+const PassPicture *PassGlyph(const Cell &cell, int set, int index, int size, int crop_x0, int crop_y0, int crop_x1, int crop_y1,
+                             std::vector<ttffont::ShadowTap> taps, int &budget) {
+    std::string key = std::format("{}:{}:{}:{},{},{},{}", set, index, size, crop_x0, crop_y0, crop_x1, crop_y1);
+    for (ttffont::ShadowTap &tap : taps) {
+        tap.dx = std::round(tap.dx * 4) / 4;
+        tap.dy = std::round(tap.dy * 4) / 4;
+        tap.alpha = std::round(tap.alpha * 1024) / 1024;
+        key += std::format(";{},{},{}", std::lround(tap.dx * 4), std::lround(tap.dy * 4), std::lround(tap.alpha * 1024));
     }
-    g_cells[key] = glyph;
-    out = glyph;
-    return true;
+    if (const auto found = g_passes.find(key); found != g_passes.end()) {
+        return &found->second;
+    }
+    if (budget <= 0) {
+        return nullptr;
+    }
+    budget--;
+    const int                  w = crop_x1 - crop_x0;
+    const int                  h = crop_y1 - crop_y0;
+    std::vector<unsigned char> crop(static_cast<size_t>(w) * h);
+    for (int y = 0; y < h; y++) {
+        std::copy_n(&cell.alpha[static_cast<size_t>(crop_y0 + y) * cell.w + crop_x0], w, &crop[static_cast<size_t>(y) * w]);
+    }
+    const platform::load_profile::Span profile(platform::load_profile::Kind::Glyphs);
+    PassPicture                        picture;
+    int                                width = 0;
+    int                                height = 0;
+    const std::vector<unsigned char>   coverage = ttffont::ShadowCoverage(crop, w, h, taps, picture.left, picture.top, width, height);
+    std::vector<unsigned char>         rgba(coverage.size() * 4, 255);
+    for (size_t k = 0; k < coverage.size(); k++) {
+        rgba[k * 4 + 3] = coverage[k];
+    }
+    if (coverage.empty() || !capfont::AddImage(rgba, width, height, picture.glyph)) {
+        return nullptr;
+    }
+    ForgetCellsIfTheAtlasRestarted();
+    return &(g_passes[key] = picture);
 }
 
 // Whether a texel rect of gaiji.img lies in one of the letters' cells.
@@ -2336,6 +2395,12 @@ void LetterQuad(const CRect_i_ &texel, float x, float y, float width, float heig
                           .a = clamp(alpha)});
 }
 
+// The letter at texel's black edge pass, its copies at taps, to be drawn at x, y (logical) as one picture.
+void LetterPass(const CRect_i_ &texel, float x, float y, float width, float height, std::vector<ttffont::ShadowTap> taps) {
+    g_letters->push_back(
+        {.texel = texel, .x = x, .y = y, .width = width, .height = height, .r = 0, .g = 0, .b = 0, .a = 0x80, .taps = std::move(taps)});
+}
+
 // The window's letters, each from its cell drawn at the screen's height for a cell.
 void DrawLetters(const std::vector<PendingLetter> &letters) {
     if (letters.empty()) {
@@ -2345,6 +2410,9 @@ void DrawLetters(const std::vector<PendingLetter> &letters) {
     const float                rows = draw2d::RowScale();
     const int                  size = std::clamp(static_cast<int>(std::lround(kCellH * mapping.scale_y * rows)), kCellH, 512);
     std::vector<render::Vertex2D> quads;
+    // Edge pictures a window paints a frame, at most: letters shown by a part of their cell that changed every frame
+    // would otherwise paint anew each time and fill the atlas. Those past it are laid tap by tap meanwhile.
+    int budget = 32;
     // Made again, once, if the atlas started over while the cells were drawn into it (that would leave the first ones
     // stale).
     for (int attempt = 0; attempt < 2; attempt++) {
@@ -2356,24 +2424,68 @@ void DrawLetters(const std::vector<PendingLetter> &letters) {
             const int      in_set = across % 128;
             const int      cell_u = kLettersU + set * 128 + in_set / kCellW * kCellW;
             const int      cell_v = letter.texel.y / kCellH * kCellH;
-            capfont::Glyph cell;
-            if (!CellGlyph(set, (letter.texel.y / kCellH) * 9 + in_set / kCellW, size, cell)) {
+            const int   index = (letter.texel.y / kCellH) * 9 + in_set / kCellW;
+            const Cell *found = CellGlyph(set, index, size);
+            if (found == nullptr) {
                 continue;
             }
-            const float du = (cell.u1 - cell.u0) / kCellW;
-            const float dv = (cell.v1 - cell.v0) / kCellH;
-            const float u0 = cell.u0 + static_cast<float>(letter.texel.x - cell_u) * du;
-            const float u1 = u0 + static_cast<float>(letter.texel.width) * du;
-            const float v0 = cell.v0 + static_cast<float>(letter.texel.y - cell_v) * dv;
-            const float v1 = v0 + static_cast<float>(letter.texel.height) * dv;
-            const float x0 = letter.x;
-            const float x1 = letter.x + letter.width;
-            const float y0 = letter.y * rows;
-            const float y1 = (letter.y + letter.height) * rows;
-            quads.push_back(draw2d::Vertex(x0, y0, 0.0f, u0, v0, letter.r, letter.g, letter.b, letter.a));
-            quads.push_back(draw2d::Vertex(x1, y0, 0.0f, u1, v0, letter.r, letter.g, letter.b, letter.a));
-            quads.push_back(draw2d::Vertex(x1, y1, 0.0f, u1, v1, letter.r, letter.g, letter.b, letter.a));
-            quads.push_back(draw2d::Vertex(x0, y1, 0.0f, u0, v1, letter.r, letter.g, letter.b, letter.a));
+            // The letter's part of its cell, at dx, dy (logical) from where it's drawn, tinted as it is but at alpha.
+            const auto plain = [&](float dx, float dy, u_char alpha) {
+                const capfont::Glyph &cell = found->glyph;
+                const float           du = (cell.u1 - cell.u0) / kCellW;
+                const float           dv = (cell.v1 - cell.v0) / kCellH;
+                const float           u0 = cell.u0 + static_cast<float>(letter.texel.x - cell_u) * du;
+                const float           u1 = u0 + static_cast<float>(letter.texel.width) * du;
+                const float           v0 = cell.v0 + static_cast<float>(letter.texel.y - cell_v) * dv;
+                const float           v1 = v0 + static_cast<float>(letter.texel.height) * dv;
+                const float           x0 = letter.x + dx;
+                const float           x1 = x0 + letter.width;
+                const float           y0 = (letter.y + dy) * rows;
+                const float           y1 = (letter.y + dy + letter.height) * rows;
+                quads.push_back(draw2d::Vertex(x0, y0, 0.0f, u0, v0, letter.r, letter.g, letter.b, alpha));
+                quads.push_back(draw2d::Vertex(x1, y0, 0.0f, u1, v0, letter.r, letter.g, letter.b, alpha));
+                quads.push_back(draw2d::Vertex(x1, y1, 0.0f, u1, v1, letter.r, letter.g, letter.b, alpha));
+                quads.push_back(draw2d::Vertex(x0, y1, 0.0f, u0, v1, letter.r, letter.g, letter.b, alpha));
+            };
+            if (!letter.taps.empty()) {
+                // The part of the cell the letter shows, in its pixels, and its pixels to a logical unit.
+                const float per_texel_x = static_cast<float>(found->w) / kCellW;
+                const float per_texel_y = static_cast<float>(found->h) / kCellH;
+                const int   crop_x0 = std::clamp(static_cast<int>(std::lround((letter.texel.x - cell_u) * per_texel_x)), 0, found->w);
+                const int   crop_y0 = std::clamp(static_cast<int>(std::lround((letter.texel.y - cell_v) * per_texel_y)), 0, found->h);
+                const int   crop_x1 =
+                    std::clamp(static_cast<int>(std::lround((letter.texel.x + letter.texel.width - cell_u) * per_texel_x)), crop_x0, found->w);
+                const int crop_y1 =
+                    std::clamp(static_cast<int>(std::lround((letter.texel.y + letter.texel.height - cell_v) * per_texel_y)), crop_y0, found->h);
+                if (crop_x1 == crop_x0 || crop_y1 == crop_y0 || letter.width <= 0 || letter.height <= 0) {
+                    continue;
+                }
+                const float per_x = static_cast<float>(crop_x1 - crop_x0) / letter.width;
+                const float per_y = static_cast<float>(crop_y1 - crop_y0) / (letter.height * rows);
+                std::vector<ttffont::ShadowTap> taps = letter.taps;
+                for (ttffont::ShadowTap &tap : taps) {
+                    tap.dx *= per_x;
+                    tap.dy *= rows * per_y;
+                }
+                const PassPicture *pass = PassGlyph(*found, set, index, size, crop_x0, crop_y0, crop_x1, crop_y1, std::move(taps), budget);
+                if (pass == nullptr) {
+                    for (const ttffont::ShadowTap &tap : letter.taps) {
+                        plain(tap.dx, tap.dy, static_cast<u_char>(std::lround(tap.alpha * 128.0f)));
+                    }
+                    continue;
+                }
+                const float x0 = letter.x + static_cast<float>(pass->left) / per_x;
+                const float y0 = letter.y * rows + static_cast<float>(pass->top) / per_y;
+                const float x1 = x0 + (pass->glyph.u1 - pass->glyph.u0) / per_x;
+                const float y1 = y0 + (pass->glyph.v1 - pass->glyph.v0) / per_y;
+                const capfont::Glyph &picture = pass->glyph;
+                quads.push_back(draw2d::Vertex(x0, y0, 0.0f, picture.u0, picture.v0, letter.r, letter.g, letter.b, letter.a));
+                quads.push_back(draw2d::Vertex(x1, y0, 0.0f, picture.u1, picture.v0, letter.r, letter.g, letter.b, letter.a));
+                quads.push_back(draw2d::Vertex(x1, y1, 0.0f, picture.u1, picture.v1, letter.r, letter.g, letter.b, letter.a));
+                quads.push_back(draw2d::Vertex(x0, y1, 0.0f, picture.u0, picture.v1, letter.r, letter.g, letter.b, letter.a));
+                continue;
+            }
+            plain(0.0f, 0.0f, letter.a);
         }
         if (generation == capfont::Generation()) {
             break;
@@ -2396,26 +2508,46 @@ bool LetterFuchi(const ClsMes &mes, const CRect_i_ &screen, const CRect_i_ &texe
     constexpr int steps = 4;
     float         spread = 1.0f;
     float         weaken = 1.0f;
-    auto          pass = [&](float dx, float dy, int r, int g, int b, int alpha) {
+    const int     cap = mes.edge_alpha;
+    // Black passes at their full strength, one after another, are one picture: a score or more of quads a letter would
+    // cost a small GPU milliseconds a page at 4K. A window fading caps them anew each frame, and a grey or white pass
+    // tints with the letter's own texels, so those are laid tap by tap.
+    std::vector<ttffont::ShadowTap> black;
+    const auto                      lay_black = [&] {
+        if (!black.empty()) {
+            LetterPass(texel, static_cast<float>(screen.x), static_cast<float>(screen.y), static_cast<float>(screen.width),
+                       static_cast<float>(screen.height), std::move(black));
+            black.clear();
+        }
+    };
+    auto pass = [&](float dx, float dy, int r, int g, int b, int full) {
+        const int   alpha = std::min(cap, full);
         const float strength = weaken * static_cast<float>(std::min(alpha, 0x80)) / 128.0f;
         const float each = 1.0f - std::pow(1.0f - std::min(strength, 0.999f), 1.0f / (steps * steps));
         const int   tap_alpha = static_cast<int>(std::lround(each * 128.0f));
+        const bool  as_one = r == 0 && g == 0 && b == 0 && alpha == full;
+        if (!as_one) {
+            lay_black();
+        }
         for (int i = 0; i < steps; i++) {
             for (int j = 0; j < steps; j++) {
                 const float sx = ((static_cast<float>(i) + 0.5f) / steps - 0.5f) * spread;
                 const float sy = ((static_cast<float>(j) + 0.5f) / steps - 0.5f) * spread;
-                LetterQuad(texel, static_cast<float>(screen.x) + dx + sx, static_cast<float>(screen.y) + dy + sy,
-                           static_cast<float>(screen.width), static_cast<float>(screen.height), r, g, b, tap_alpha);
+                if (as_one) {
+                    black.push_back({.dx = dx + sx, .dy = dy + sy, .alpha = static_cast<float>(tap_alpha) / 128.0f});
+                } else {
+                    LetterQuad(texel, static_cast<float>(screen.x) + dx + sx, static_cast<float>(screen.y) + dy + sy,
+                               static_cast<float>(screen.width), static_cast<float>(screen.height), r, g, b, tap_alpha);
+                }
             }
         }
     };
-    const int cap = mes.edge_alpha;
     switch (mes.style) {
         case MES_EDGE_WHITE:
-            pass(1, 1, 0xFF, 0xFF, 0xFF, std::min(cap, 0x40));
+            pass(1, 1, 0xFF, 0xFF, 0xFF, 0x40);
             break;
         case MES_EDGE_BLACK:
-            pass(1, 1, 0, 0, 0, std::min(cap, 0x40));
+            pass(1, 1, 0, 0, 0, 0x40);
             break;
         case MES_EDGE_TABLE:
             // The outline the table makes (a weapon's name), two pixels out each way in the game: the game's soft letters
@@ -2426,16 +2558,17 @@ bool LetterFuchi(const ClsMes &mes, const CRect_i_ &screen, const CRect_i_ &texe
             for (int i = 0; FuchiTbl_E[i].alpha > 0; i++) {
                 constexpr float reach = 0.8f;
                 pass(static_cast<float>(FuchiTbl_E[i].x) * reach, static_cast<float>(FuchiTbl_E[i].y) * reach, FuchiTbl_E[i].r,
-                     FuchiTbl_E[i].g, FuchiTbl_E[i].b, std::min(cap, FuchiTbl_E[i].alpha));
+                     FuchiTbl_E[i].g, FuchiTbl_E[i].b, FuchiTbl_E[i].alpha);
             }
             break;
         case MES_EDGE_DOUBLE:
-            pass(1, 1, 0x40, 0x40, 0x40, std::min(cap, 0x80));
-            pass(2, 2, 0, 0, 0, std::min(cap, 0x80));
+            pass(1, 1, 0x40, 0x40, 0x40, 0x80);
+            pass(2, 2, 0, 0, 0, 0x80);
             break;
         default:
             break;
     }
+    lay_black();
     return true;
 }
 
@@ -2646,6 +2779,7 @@ bool QueueTtfGlyph(ClsMes &mes, int index, int dark, int offset_x, int offset_y,
     if (!ttffont::GetGlyph(ch, em_px, glyph)) {
         return false;
     }
+    const unsigned generation = ttffont::Generation();
 
     // The window's origin for this row, as the bitmap characters take it.
     const int row = line.y / mes.char_height;
@@ -2695,6 +2829,24 @@ bool QueueTtfGlyph(ClsMes &mes, int index, int dark, int offset_x, int offset_y,
     auto cast = [&] {
         // Retail's shadow falls off softly because its bitmaps are soft. A crisp glyph stacked at two
         // offsets reads as a hard outline instead, so it is laid in as taps the texture filter blends.
+        // Black taps all at their own opacity are one picture, painted once and drawn as one quad: a
+        // score of quads a letter would cost a small GPU milliseconds a page at 4K. A window fading caps
+        // them anew each frame, and the deep shadow's are grey, so those are drawn tap by tap.
+        const float                             per_x = width / glyph.width;  // logical units a glyph pixel
+        const float                             per_y = height / glyph.height;
+        std::vector<ttffont::ShadowTap>         taps;
+        bool                                    one = true;
+        TextShadowEach(ConfigGet().text_shadow, [&](const TextShadowTap &tap) {
+            const int alpha = static_cast<int>(static_cast<float>(tap.alpha) * tune.shadow);
+            one = one && tap.grey == 0 && alpha <= cap;
+            taps.push_back({.dx = tap.dx / per_x, .dy = tap.dy * rows / per_y, .alpha = static_cast<float>(alpha) / 128.0f});
+        });
+        ttffont::Glyph shadow{};
+        if (one && !taps.empty() && glyph.width > 0 && glyph.height > 0 && ttffont::GetShadow(ch, em_px, taps, shadow)) {
+            TtfQuad(edges, shadow, x + shadow.x_offset * per_x, y + shadow.y_offset * per_y, shadow.width * per_x, shadow.height * per_y, 0, 0,
+                    0, 0x80);
+            return;
+        }
         TextShadowEach(ConfigGet().text_shadow, [&](const TextShadowTap &tap) {
             TtfQuad(edges, glyph, x + tap.dx, y + tap.dy * rows, width, height, tap.grey, tap.grey, tap.grey,
                     std::min(cap, static_cast<int>(static_cast<float>(tap.alpha) * tune.shadow)));
@@ -2711,6 +2863,10 @@ bool QueueTtfGlyph(ClsMes &mes, int index, int dark, int offset_x, int offset_y,
             break;
         default:
             break;
+    }
+    // Painting the shadow can have started the atlas again: the face is got again, where it is now.
+    if (generation != ttffont::Generation() && !ttffont::GetGlyph(ch, em_px, glyph)) {
+        return true;
     }
     if (tune.weight > 0.0f) {
         const float                               half = tune.weight / 2;

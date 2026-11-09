@@ -4,8 +4,12 @@
 #include "text/ttffont.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <format>
 #include <fstream>
 #include <map>
+#include <span>
+#include <string>
 #include <vector>
 
 #include "render/types.hpp"
@@ -40,10 +44,12 @@ struct Atlas {
     int                                       row_height = 0;
     std::map<std::pair<char32_t, int>, Glyph> glyphs;
     std::map<std::pair<char32_t, int>, bool>  missing;
+    std::map<std::string, Glyph>              shadows; // GetShadow's, by ShadowKey
 };
 
-Font  g_font;
-Atlas g_atlas;
+Font     g_font;
+Atlas    g_atlas;
+unsigned g_generation = 0; // counts the atlas's restarts
 
 void ResetAtlas() {
     if (g_atlas.texture != render::kNullTexture) {
@@ -315,6 +321,82 @@ bool Loaded() {
     return g_font.loaded;
 }
 
+namespace {
+
+// The glyph's coverage at an em of em_px pixels, from the font or built from its parts. False where it has none.
+bool Coverage(char32_t ch, int em_px, Bitmap &bitmap) {
+    // An em of em_px pixels: stb scales by the font's units per em.
+    const float scale = stbtt_ScaleForMappingEmToPixels(&g_font.info, static_cast<float>(em_px));
+    if (const int index = DrawnGlyph(ch); index != 0) {
+        bitmap = Raster(index, scale, scale);
+        return true;
+    }
+    return Compose(ch, scale, em_px, bitmap);
+}
+
+// White with the coverage (width x height, 0 to 255) as alpha, so the draw's vertex colour tints it, put in the atlas at
+// glyph's u and v. When the atlas is full it starts again, forgetting what it held: glyphs queued this frame keep their
+// old coordinates, which then show whatever lands there; one frame of it, and the next fills the atlas afresh.
+void Put(const std::vector<unsigned char> &coverage, int width, int height, Glyph &glyph) {
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+    if (g_atlas.x + width + 2 * kPad > kAtlasSize) {
+        g_atlas.x = 0;
+        g_atlas.y += g_atlas.row_height;
+        g_atlas.row_height = 0;
+    }
+    if (g_atlas.y + height + 2 * kPad > kAtlasSize) {
+        kz::Log(kz::LogLevel::Info, "font", "atlas full, starting again");
+        render::TextureHandle keep = g_atlas.texture;
+        g_atlas = {};
+        g_atlas.texture = keep;
+        g_generation++;
+        std::vector<unsigned char> blank(static_cast<size_t>(kAtlasSize) * kAtlasSize * 4, 0);
+        render::UpdateTextureNow(keep, 0, 0, 0, kAtlasSize, kAtlasSize, blank.data());
+    }
+    const int                  w = width + 2 * kPad;
+    const int                  h = height + 2 * kPad;
+    std::vector<unsigned char> pixels(static_cast<size_t>(w) * h * 4, 0);
+    for (int row = 0; row < height; row++) {
+        for (int col = 0; col < width; col++) {
+            unsigned char *texel = &pixels[(static_cast<size_t>(row + kPad) * w + col + kPad) * 4];
+            texel[0] = texel[1] = texel[2] = 255;
+            texel[3] = coverage[static_cast<size_t>(row) * width + col];
+        }
+    }
+    render::UpdateTextureNow(g_atlas.texture, 0, static_cast<uint32_t>(g_atlas.x), static_cast<uint32_t>(g_atlas.y), static_cast<uint32_t>(w),
+                             static_cast<uint32_t>(h), pixels.data());
+    glyph.u0 = static_cast<float>(g_atlas.x + kPad);
+    glyph.v0 = static_cast<float>(g_atlas.y + kPad);
+    glyph.u1 = static_cast<float>(g_atlas.x + kPad + width);
+    glyph.v1 = static_cast<float>(g_atlas.y + kPad + height);
+    g_atlas.x += w;
+    g_atlas.row_height = std::max(g_atlas.row_height, h);
+}
+
+// A shadow's taps to a quarter of a pixel and a 1024th of their opacity, as they're painted and told apart: finer, a
+// line's letters each squeezed their own amount would each be a picture of their own, and fill the atlas.
+std::vector<ShadowTap> Rounded(std::span<const ShadowTap> taps) {
+    std::vector<ShadowTap> rounded(taps.begin(), taps.end());
+    for (ShadowTap &tap : rounded) {
+        tap.dx = std::round(tap.dx * 4) / 4;
+        tap.dy = std::round(tap.dy * 4) / 4;
+        tap.alpha = std::round(tap.alpha * 1024) / 1024;
+    }
+    return rounded;
+}
+
+std::string ShadowKey(char32_t ch, int em_px, std::span<const ShadowTap> taps) {
+    std::string key = std::format("{}:{}", static_cast<unsigned>(ch), em_px);
+    for (const ShadowTap &tap : taps) {
+        key += std::format(";{},{},{}", std::lround(tap.dx * 4), std::lround(tap.dy * 4), std::lround(tap.alpha * 1024));
+    }
+    return key;
+}
+
+} // namespace
+
 bool GetGlyph(char32_t ch, int em_px, Glyph &out) {
     if (!g_font.loaded || em_px < 4 || em_px > 512) {
         return false;
@@ -328,71 +410,100 @@ bool GetGlyph(char32_t ch, int em_px, Glyph &out) {
         return false;
     }
     const platform::load_profile::Span profile(platform::load_profile::Kind::Glyphs); // only a glyph not yet drawn
-    if (!EnsureAtlas()) {
+    Bitmap                             bitmap;
+    if (!EnsureAtlas() || !Coverage(ch, em_px, bitmap)) {
         g_atlas.missing[key] = true;
         return false;
     }
-
-    // An em of em_px pixels: stb scales by the font's units per em.
-    const float scale = stbtt_ScaleForMappingEmToPixels(&g_font.info, static_cast<float>(em_px));
-    Bitmap      bitmap;
-    if (const int index = DrawnGlyph(ch); index != 0) {
-        bitmap = Raster(index, scale, scale);
-    } else if (!Compose(ch, scale, em_px, bitmap)) {
-        g_atlas.missing[key] = true;
-        return false;
-    }
-    const int width = bitmap.w;
-    const int height = bitmap.h;
-
-    if (width > 0 && height > 0) {
-        if (g_atlas.x + width + 2 * kPad > kAtlasSize) {
-            g_atlas.x = 0;
-            g_atlas.y += g_atlas.row_height;
-            g_atlas.row_height = 0;
-        }
-        if (g_atlas.y + height + 2 * kPad > kAtlasSize) {
-            // Full: start again. Glyphs queued this frame keep their old coordinates, which now
-            // show whatever lands there; one frame of it, and the next fills the atlas afresh.
-            kz::Log(kz::LogLevel::Info, "font", "atlas full, starting again");
-            render::TextureHandle keep = g_atlas.texture;
-            g_atlas = {};
-            g_atlas.texture = keep;
-            std::vector<unsigned char> blank(static_cast<size_t>(kAtlasSize) * kAtlasSize * 4, 0);
-            render::UpdateTextureNow(keep, 0, 0, 0, kAtlasSize, kAtlasSize, blank.data());
-        }
-    }
-
     Glyph glyph = {};
     glyph.x_offset = static_cast<float>(bitmap.x0);
     glyph.y_offset = static_cast<float>(bitmap.y0);
-    glyph.width = static_cast<float>(width);
-    glyph.height = static_cast<float>(height);
-
-    if (width > 0 && height > 0) {
-        // White with the coverage as alpha, so the draw's vertex colour tints it.
-        const int                  w = width + 2 * kPad;
-        const int                  h = height + 2 * kPad;
-        std::vector<unsigned char> pixels(static_cast<size_t>(w) * h * 4, 0);
-        for (int row = 0; row < height; row++) {
-            for (int col = 0; col < width; col++) {
-                unsigned char *texel = &pixels[(static_cast<size_t>(row + kPad) * w + col + kPad) * 4];
-                texel[0] = texel[1] = texel[2] = 255;
-                texel[3] = bitmap.alpha[static_cast<size_t>(row) * width + col];
-            }
-        }
-        render::UpdateTextureNow(g_atlas.texture, 0, static_cast<uint32_t>(g_atlas.x), static_cast<uint32_t>(g_atlas.y),
-                                 static_cast<uint32_t>(w), static_cast<uint32_t>(h), pixels.data());
-        glyph.u0 = static_cast<float>(g_atlas.x + kPad);
-        glyph.v0 = static_cast<float>(g_atlas.y + kPad);
-        glyph.u1 = static_cast<float>(g_atlas.x + kPad + width);
-        glyph.v1 = static_cast<float>(g_atlas.y + kPad + height);
-        g_atlas.x += w;
-        g_atlas.row_height = std::max(g_atlas.row_height, h);
-    }
-
+    glyph.width = static_cast<float>(bitmap.w);
+    glyph.height = static_cast<float>(bitmap.h);
+    Put(bitmap.alpha, bitmap.w, bitmap.h, glyph);
     g_atlas.glyphs[key] = glyph;
     out = glyph;
+    return true;
+}
+
+std::vector<unsigned char> ShadowCoverage(const std::vector<unsigned char> &alpha, int w, int h, std::span<const ShadowTap> taps, int &left,
+                                          int &top, int &width, int &height) {
+    float low_x = 0.0f;
+    float low_y = 0.0f;
+    float high_x = 0.0f;
+    float high_y = 0.0f;
+    for (const ShadowTap &tap : taps) {
+        low_x = std::min(low_x, tap.dx);
+        low_y = std::min(low_y, tap.dy);
+        high_x = std::max(high_x, tap.dx);
+        high_y = std::max(high_y, tap.dy);
+    }
+    // A pixel more each way: a tap off the pixel grid reaches into the next by the filter.
+    left = static_cast<int>(std::floor(low_x)) - 1;
+    top = static_cast<int>(std::floor(low_y)) - 1;
+    width = w + static_cast<int>(std::ceil(high_x)) + 1 - left;
+    height = h + static_cast<int>(std::ceil(high_y)) + 1 - top;
+    if (w <= 0 || h <= 0 || taps.empty()) {
+        width = height = 0;
+        return {};
+    }
+    // The bitmap as a linear filter reads it (texel centres on the half pixel), transparent beyond it.
+    const auto sample = [&](float x, float y) {
+        const float fx = x - 0.5f;
+        const float fy = y - 0.5f;
+        const int   ix = static_cast<int>(std::floor(fx));
+        const int   iy = static_cast<int>(std::floor(fy));
+        const float tx = fx - static_cast<float>(ix);
+        const float ty = fy - static_cast<float>(iy);
+        const auto  get = [&](int gx, int gy) {
+            return gx < 0 || gy < 0 || gx >= w || gy >= h ? 0.0f : static_cast<float>(alpha[static_cast<size_t>(gy) * w + gx]) / 255.0f;
+        };
+        return (get(ix, iy) * (1 - tx) + get(ix + 1, iy) * tx) * (1 - ty) + (get(ix, iy + 1) * (1 - tx) + get(ix + 1, iy + 1) * tx) * ty;
+    };
+    std::vector<unsigned char> out(static_cast<size_t>(width) * height);
+    for (int row = 0; row < height; row++) {
+        for (int col = 0; col < width; col++) {
+            const float x = static_cast<float>(col + left) + 0.5f;
+            const float y = static_cast<float>(row + top) + 0.5f;
+            // Each tap over the ones before it lets through what it doesn't cover.
+            float through = 1.0f;
+            for (const ShadowTap &tap : taps) {
+                through *= 1.0f - std::clamp(tap.alpha, 0.0f, 1.0f) * sample(x - tap.dx, y - tap.dy);
+            }
+            out[static_cast<size_t>(row) * width + col] = static_cast<unsigned char>(std::lround((1.0f - through) * 255.0f));
+        }
+    }
+    return out;
+}
+
+bool GetShadow(char32_t ch, int em_px, std::span<const ShadowTap> taps, Glyph &out) {
+    if (!g_font.loaded || em_px < 4 || em_px > 512 || taps.empty()) {
+        return false;
+    }
+    const std::vector<ShadowTap> rounded = Rounded(taps);
+    const std::string            key = ShadowKey(ch, em_px, rounded);
+    if (auto found = g_atlas.shadows.find(key); found != g_atlas.shadows.end()) {
+        out = found->second;
+        return true;
+    }
+    const platform::load_profile::Span profile(platform::load_profile::Kind::Glyphs);
+    Bitmap                             bitmap;
+    if (!EnsureAtlas() || !Coverage(ch, em_px, bitmap)) {
+        return false;
+    }
+    int                              left = 0;
+    int                              top = 0;
+    int                              width = 0;
+    int                              height = 0;
+    const std::vector<unsigned char> coverage = ShadowCoverage(bitmap.alpha, bitmap.w, bitmap.h, rounded, left, top, width, height);
+    Glyph                            shadow = {};
+    shadow.x_offset = static_cast<float>(left);
+    shadow.y_offset = static_cast<float>(top);
+    shadow.width = static_cast<float>(width);
+    shadow.height = static_cast<float>(height);
+    Put(coverage, width, height, shadow);
+    g_atlas.shadows[key] = shadow;
+    out = shadow;
     return true;
 }
 
@@ -400,11 +511,8 @@ bool RenderGlyph(char32_t ch, int em_px, std::vector<unsigned char> &alpha, int 
     if (!g_font.loaded || em_px < 4 || em_px > 512) {
         return false;
     }
-    const float scale = stbtt_ScaleForMappingEmToPixels(&g_font.info, static_cast<float>(em_px));
-    Bitmap      bitmap;
-    if (const int index = DrawnGlyph(ch); index != 0) {
-        bitmap = Raster(index, scale, scale);
-    } else if (!Compose(ch, scale, em_px, bitmap)) {
+    Bitmap bitmap;
+    if (!Coverage(ch, em_px, bitmap)) {
         return false;
     }
     alpha = std::move(bitmap.alpha);
@@ -413,6 +521,10 @@ bool RenderGlyph(char32_t ch, int em_px, std::vector<unsigned char> &alpha, int 
     x0 = bitmap.x0;
     y0 = bitmap.y0;
     return true;
+}
+
+unsigned Generation() {
+    return g_generation;
 }
 
 render::TextureBinding Binding() {

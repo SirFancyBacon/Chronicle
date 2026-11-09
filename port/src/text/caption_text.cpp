@@ -566,6 +566,48 @@ constexpr AlphaPlace kAlphabet[] = {
     {9, 6, U'$',  -1, 1.345f, 1.614f,  18.155f, 17.636f},
 };
 
+// The alphabet's look for cells kx and ky screen pixels to a cell pixel, across and down.
+capfont::Paint AlphaPaint(float kx, float ky) {
+    const float    k = std::sqrt(kx * ky);
+    capfont::Paint paint{.depth_x = kAlphaDepthX * kx,
+                         .depth_y = kAlphaDepthY * ky,
+                         .stroke = kAlphaStroke * k,
+                         .strokes = kAlphaStrokes,
+                         .outline = kAlphaOutline * k,
+                         .fill = {},
+                         .body = {},
+                         .ring = {}};
+    std::copy_n(kAlphaFill, 3, paint.fill);
+    std::copy_n(kAlphaBody, 3, paint.body);
+    std::copy_n(kAlphaRing, 3, paint.ring);
+    return paint;
+}
+
+// What a key asks for of one of its characters, kx and ky screen pixels to a cell pixel across and down.
+capfont::PaintJob AlphaJob(const AlphaPlace &place, float kx, float ky) {
+    return {.word = false, .letters = {{place.ch, 0.0f, 0.0f, place.w * kx, place.h * ky}}, .paint = AlphaPaint(kx, ky), .part = place.part};
+}
+
+// The first of a cell's characters (a character in pieces has a place for each), or the alphabet's end.
+const AlphaPlace *AlphaCell(int row, int col) {
+    return std::ranges::find_if(kAlphabet, [&](const AlphaPlace &place) { return place.row == row && place.col == col; });
+}
+
+// Every character of the name entry's alphabet, as its keys draw it in the main target: 22 pixels square from a cell 22
+// or 23 texels tall, or 21 pixels tall from 23 (the name shown above them). A key's first painting costs the game's thread
+// most of a frame at 4K, and the screen shows them all at once.
+std::vector<capfont::PaintJob> AlphabetJobs(const render::LogicalMapping &mapping) {
+    constexpr std::array<std::pair<float, float>, 3> kDrawn = {{{22.0f, 22.0f}, {22.0f, 23.0f}, {21.0f, 23.0f}}}; // height, texel height
+    std::vector<capfont::PaintJob>                   jobs;
+    const float                                      kx = mapping.scale_x;
+    for (const auto &[height, texel_height] : kDrawn) {
+        for (const AlphaPlace &place : kAlphabet) {
+            jobs.push_back(AlphaJob(place, kx, mapping.scale_y * height / texel_height));
+        }
+    }
+    return jobs;
+}
+
 // The dungeon-entry list's floor labels ("Floor", "Territory"...), painted as the game paints them: the bold letters in
 // warm yellow, a navy outline round the word swept down and right for depth, the letters nearly touching (a gap of
 // kFloorLabelGap font units, a space kFloorLabelSpace) and the word stretched to the painted one's box.
@@ -858,6 +900,24 @@ std::vector<capfont::PaintJob> ButtonWordPaintsAt(std::string_view word, float x
     return paints;
 }
 
+std::vector<capfont::PaintJob> AlphabetPaintJobs(const render::LogicalMapping &mapping) {
+    return AlphabetJobs(mapping);
+}
+
+std::vector<capfont::PaintJob> AlphabetCellPaints(int u, int v, int texel_width, int texel_height, float width, float height, float rows,
+                                                  const render::LogicalMapping &mapping) {
+    std::vector<capfont::PaintJob> jobs;
+    // Screen pixels to a cell pixel, across and down.
+    const float kx = mapping.scale_x * width / static_cast<float>(texel_width);
+    const float ky = mapping.scale_y * rows * height / static_cast<float>(texel_height);
+    const int   row = v / kAlphaCell;
+    const int   col = u / kAlphaCell;
+    for (const AlphaPlace *place = AlphaCell(row, col); place != std::end(kAlphabet) && place->row == row && place->col == col; ++place) {
+        jobs.push_back(AlphaJob(*place, kx, ky));
+    }
+    return jobs;
+}
+
 void PaintButtonWordsAhead() {
     using For = std::tuple<float, float, float, float, unsigned>;
     // A window being dragged to a new size changes it every tick: it's painted for once it has held still a while.
@@ -883,7 +943,11 @@ void PaintButtonWordsAhead() {
     }
     painted_for = now;
     changed_to.reset();
-    capfont::PaintAhead([mapping] { return ButtonWordJobs(mapping); });
+    capfont::PaintAhead([mapping] {
+        std::vector<capfont::PaintJob> jobs = ButtonWordJobs(mapping);
+        std::ranges::move(AlphabetJobs(mapping), std::back_inserter(jobs));
+        return jobs;
+    });
 }
 
 bool DrawButtonWord(std::string_view word, float x, float y, int bright, int alpha, bool pressed) {
@@ -1074,27 +1138,13 @@ bool DrawAlphabetCell(int u, int v, int texel_width, int texel_height, float x, 
     }
     const int   row = v / kAlphaCell;
     const int   col = u / kAlphaCell;
-    const auto *cell = std::ranges::find_if(kAlphabet, [&](const AlphaPlace &place) { return place.row == row && place.col == col; });
+    const AlphaPlace *cell = AlphaCell(row, col);
     if (cell == std::end(kAlphabet)) {
         return false;
     }
-    const render::LogicalMapping mapping = render::GetUiMapping(render::CurrentRenderTarget());
-    const float               rows = draw2d::RowScale();
-    // Screen pixels to a cell pixel, across and down.
-    const float    kx = mapping.scale_x * width / static_cast<float>(texel_width);
-    const float    ky = mapping.scale_y * rows * height / static_cast<float>(texel_height);
-    const float    k = std::sqrt(kx * ky);
-    capfont::Paint paint{.depth_x = kAlphaDepthX * kx,
-                         .depth_y = kAlphaDepthY * ky,
-                         .stroke = kAlphaStroke * k,
-                         .strokes = kAlphaStrokes,
-                         .outline = kAlphaOutline * k,
-                         .fill = {},
-                         .body = {},
-                         .ring = {}};
-    std::copy_n(kAlphaFill, 3, paint.fill);
-    std::copy_n(kAlphaBody, 3, paint.body);
-    std::copy_n(kAlphaRing, 3, paint.ring);
+    const render::LogicalMapping         mapping = render::GetUiMapping(render::CurrentRenderTarget());
+    const float                          rows = draw2d::RowScale();
+    const std::vector<capfont::PaintJob> jobs = AlphabetCellPaints(u, v, texel_width, texel_height, width, height, rows, mapping);
     const auto                 red = static_cast<u_char>(std::clamp(r, 0, 255));
     const auto                 green = static_cast<u_char>(std::clamp(g, 0, 255));
     const auto                 blue = static_cast<u_char>(std::clamp(b, 0, 255));
@@ -1104,9 +1154,11 @@ bool DrawAlphabetCell(int u, int v, int texel_width, int texel_height, float x, 
     for (int attempt = 0; attempt < 2; attempt++) {
         const unsigned generation = capfont::Generation();
         quads.clear();
-        for (const auto *place = cell; place != std::end(kAlphabet) && place->row == row && place->col == col; ++place) {
-            capfont::Glyph glyph;
-            if (!capfont::GetPaintedGlyph(place->ch, place->part, place->w * kx, place->h * ky, paint, glyph)) {
+        for (std::size_t i = 0; i < jobs.size(); i++) {
+            const AlphaPlace        *place = cell + i;
+            const capfont::PaintJob &job = jobs[i];
+            capfont::Glyph           glyph;
+            if (!capfont::GetPaintedGlyph(job.letters[0].ch, job.part, job.letters[0].w, job.letters[0].h, job.paint, glyph)) {
                 return false;
             }
             const float left = Snap(x + place->x * width / static_cast<float>(texel_width), mapping.scale_x, mapping.offset_x) +

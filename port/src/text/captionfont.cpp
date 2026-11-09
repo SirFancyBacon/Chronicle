@@ -1235,7 +1235,7 @@ void PaintAhead(std::function<std::vector<PaintJob>()> plan) {
                 std::optional<Painted> picture;
                 if (font.loaded) {
                     picture = job.word ? PaintWord(font, job.letters, job.paint)
-                                       : PaintGlyph(font, job.letters[0].ch, -1, job.letters[0].w, job.letters[0].h, job.paint);
+                                       : PaintGlyph(font, job.letters[0].ch, job.part, job.letters[0].w, job.letters[0].h, job.paint);
                 }
                 bytes += picture.has_value() ? picture->rgba.size() : 0;
                 painted++;
@@ -1268,7 +1268,7 @@ std::string PaintJobKey(const PaintJob &job) {
     if (job.letters.empty()) {
         return {};
     }
-    return job.word ? WordKey(job.letters, job.paint) : GlyphKey(job.letters[0].ch, -1, job.letters[0].w, job.letters[0].h, job.paint);
+    return job.word ? WordKey(job.letters, job.paint) : GlyphKey(job.letters[0].ch, job.part, job.letters[0].w, job.letters[0].h, job.paint);
 }
 
 void WaitForPaintingAhead() {

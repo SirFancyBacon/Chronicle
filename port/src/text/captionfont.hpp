@@ -112,6 +112,7 @@ struct PaintJob {
     bool                      word = true;
     std::vector<PlacedLetter> letters;
     Paint                     paint{};
+    int                       part = -1; /**< A glyph's piece of its character, as GetPaintedGlyph's `part`; -1 the whole. */
 };
 
 /**
