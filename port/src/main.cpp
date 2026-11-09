@@ -52,6 +52,7 @@
 #include "platform/audio.hpp"
 #include "platform/clock.hpp"
 #include "platform/config.hpp"
+#include "platform/crash_report.hpp"
 #include "platform/hitches.hpp"
 #include "platform/data_archive.hpp"
 #include "platform/discord.hpp"
@@ -584,6 +585,7 @@ int Screenshot(const char *path) {
 
 int Run(int argc, const char **argv) {
     DC_ANDROID_TRACE("Run: enter");
+    CrashReportInstall();
     GameSetIdentity();
     DC_ANDROID_TRACE("Run: identity set");
     const char *explicit_save = nullptr;

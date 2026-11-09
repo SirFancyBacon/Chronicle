@@ -688,6 +688,14 @@ std::function<void(const std::string &)> g_sink;
 
 } // namespace
 
+std::string CodeAddressName(std::uintptr_t address) {
+    // Its own, since the sampler's thread names with the sampler's. Never destroyed: a crash can be reported during exit.
+    static std::mutex lock;
+    static Stacks    *stacks = new Stacks;
+    const std::scoped_lock hold(lock);
+    return stacks->Name(address);
+}
+
 void HitchSamplerAttach(int threshold_ms) {
     if (threshold_ms <= 0 || g_sampler != nullptr) {
         return;

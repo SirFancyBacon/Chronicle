@@ -128,6 +128,11 @@ and no disc was given at the first-run prompt (one line names it and the
 own message: `LoadFile` prints `File open error "<path>"`). A `PS2_UNIMPLEMENTED`
 stub aborts (SIGABRT) so a debugger or a core dump stops at it.
 
+A crash (a fault, an illegal instruction, a division trap or an abort, on any thread) writes `crash:` lines to stderr
+before the process dies as it would have (`port/src/platform/crash_report.cpp`): what it was and where, the stack's
+addresses (on Linux with the executable's load address, for `addr2line`), then the stack's functions named as hitch
+reports name them. The game's buffered stdout is flushed first, so its last lines show what it was doing.
+
 For an isolated fixture, use `--seed-save path/to/fixture --save path/to/new-save` once.
 The source directory contains the save-root contents directly, such as `saves/1/save.dat`
 and `saves/state.json`. Existing nonempty destinations, overlapping roots and source links

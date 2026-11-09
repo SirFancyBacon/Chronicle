@@ -37,6 +37,9 @@ void HitchSamplerStop();
 /** Where reports go instead of stderr, one line a call: for tests. Empty for stderr again. */
 void HitchSamplerSetSink(std::function<void(const std::string &)> sink);
 
+/** A code address named as reports name it: the function, or the module and offset when it has no name to give. Any thread. */
+std::string CodeAddressName(std::uintptr_t address);
+
 /** The report's lines for samples whose stacks were found as these names, innermost first, over `span_ms`. */
 std::vector<std::string> HitchSamplesDescribe(const std::string &label, const std::vector<std::vector<std::string>> &stacks, double span_ms);
 
