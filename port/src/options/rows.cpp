@@ -290,7 +290,7 @@ void SetAnisotropy(Config &config, int choice) {
     config.anisotropy = kAnisotropy[choice];
 }
 
-constexpr ConfigAntiAliasing kAntiAliasing[] = {ConfigAntiAliasing::Off, ConfigAntiAliasing::Smaa, ConfigAntiAliasing::Taa};
+constexpr ConfigAntiAliasing kAntiAliasing[] = {ConfigAntiAliasing::Off, ConfigAntiAliasing::Smaa, ConfigAntiAliasing::SmaaT2x, ConfigAntiAliasing::Taa};
 
 int AntiAliasingCount(const Config & /*config*/) {
     return static_cast<int>(std::size(kAntiAliasing));
@@ -736,8 +736,8 @@ constexpr Row kDisplayRows[] = {
                "\"Anisotropic Filter\"\nSharper textures on\nsurfaces seen at a\nslant.", AnisotropyCount,
                AnisotropyChoice, SetAnisotropy, nullptr, "Off|2x|4x|8x|16x"),
     SettingRow("video.anti_aliasing", "Anti-Aliasing",
-               "\"Anti-Aliasing\"\nSmooths jagged edges.\nSMAA: each frame alone.\nTAA: across frames.", AntiAliasingCount,
-               AntiAliasingChoice, SetAntiAliasing, nullptr, "Off|SMAA|TAA"),
+               "\"Anti-Aliasing\"\nSmooths jagged edges.\nSMAA: each frame alone.\nT2x: two frames.\nTAA: many frames.",
+               AntiAliasingCount, AntiAliasingChoice, SetAntiAliasing, nullptr, "Off|SMAA|SMAA T2x|TAA"),
     GameRow<&ConfigGameOptions::soft_focus, true>("video.soft_focus", "Soft Focus", "On|Off", 0x169),
     NamedRow<&Config::enhanced_cloth>("video.cloth", "Cloth",
                                       "\"Cloth\"\nOriginal: the PS2's.\nEnhanced: the body no\nlonger passes through.",

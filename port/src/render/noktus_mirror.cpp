@@ -392,9 +392,19 @@ noktus::AntiAliasing ToAntiAliasing(MirrorAntiAliasing mode) {
     if (const char *forced = std::getenv("DC_NOKTUS_ANTI_ALIASING")) {
         std::string asked = forced;
         std::ranges::transform(asked, asked.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        mode = asked == "taa" ? MirrorAntiAliasing::Taa : asked == "smaa" ? MirrorAntiAliasing::Smaa : MirrorAntiAliasing::Off;
+        mode = asked == "taa" ? MirrorAntiAliasing::Taa : asked == "smaa" ? MirrorAntiAliasing::Smaa : asked == "smaa_t2x" ? MirrorAntiAliasing::SmaaT2x : MirrorAntiAliasing::Off;
     }
-    return mode == MirrorAntiAliasing::Taa ? noktus::AntiAliasing::Taa : mode == MirrorAntiAliasing::Smaa ? noktus::AntiAliasing::Smaa : noktus::AntiAliasing::Off;
+    switch (mode) {
+        case MirrorAntiAliasing::Smaa:
+            return noktus::AntiAliasing::Smaa;
+        case MirrorAntiAliasing::SmaaT2x:
+            return noktus::AntiAliasing::SmaaT2x;
+        case MirrorAntiAliasing::Taa:
+            return noktus::AntiAliasing::Taa;
+        case MirrorAntiAliasing::Off:
+            break;
+    }
+    return noktus::AntiAliasing::Off;
 }
 
 void Start(Mirror &mirror) {

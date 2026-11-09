@@ -704,6 +704,7 @@ TEST(PlatformConfig, Anisotropy) {
     ASSERT_TRUE(ConfigParse(R"({"video": {"anti_aliasing": "TAA"}})").anti_aliasing == ConfigAntiAliasing::Taa);
     ASSERT_TRUE(ConfigParse(R"({"video": {"anti_aliasing": "fxaa"}})").anti_aliasing == ConfigAntiAliasing::Off);
     ASSERT_TRUE(ConfigParse(ConfigSerialize(ConfigParse(R"({"video": {"anti_aliasing": "smaa"}})"))).anti_aliasing == ConfigAntiAliasing::Smaa);
+    ASSERT_TRUE(ConfigParse(ConfigSerialize(ConfigParse(R"({"video": {"anti_aliasing": "SMAA_T2x"}})"))).anti_aliasing == ConfigAntiAliasing::SmaaT2x);
 }
 
 TEST(PlatformConfig, ElementPicker) {

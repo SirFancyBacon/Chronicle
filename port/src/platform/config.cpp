@@ -166,6 +166,8 @@ bool ReadAntiAliasing(const Json &value, ConfigAntiAliasing &out) {
         out = ConfigAntiAliasing::Smaa;
     } else if (mode == "taa") {
         out = ConfigAntiAliasing::Taa;
+    } else if (mode == "smaa_t2x") {
+        out = ConfigAntiAliasing::SmaaT2x;
     } else {
         return false;
     }
@@ -178,6 +180,8 @@ const char *AntiAliasingName(ConfigAntiAliasing mode) {
             return "smaa";
         case ConfigAntiAliasing::Taa:
             return "taa";
+        case ConfigAntiAliasing::SmaaT2x:
+            return "smaa_t2x";
         case ConfigAntiAliasing::Off:
             break;
     }

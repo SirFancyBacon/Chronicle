@@ -31,6 +31,7 @@ enum class ConfigAntiAliasing {
     Off,
     Smaa,
     Taa,
+    SmaaT2x,
 };
 
 /**

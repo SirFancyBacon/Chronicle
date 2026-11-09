@@ -459,9 +459,10 @@ render::MirrorSettings MirrorSettingsOf(const Config &config) {
             .present_mode = PresentMode(config.present_mode),
             .max_fps = config.max_fps,
             .anisotropy = config.anisotropy,
-            .anti_aliasing = config.anti_aliasing == ConfigAntiAliasing::Taa    ? render::MirrorAntiAliasing::Taa
-                             : config.anti_aliasing == ConfigAntiAliasing::Smaa ? render::MirrorAntiAliasing::Smaa
-                                                                                 : render::MirrorAntiAliasing::Off,
+            .anti_aliasing = config.anti_aliasing == ConfigAntiAliasing::Taa       ? render::MirrorAntiAliasing::Taa
+                             : config.anti_aliasing == ConfigAntiAliasing::SmaaT2x ? render::MirrorAntiAliasing::SmaaT2x
+                             : config.anti_aliasing == ConfigAntiAliasing::Smaa    ? render::MirrorAntiAliasing::Smaa
+                                                                                    : render::MirrorAntiAliasing::Off,
             .hdr = hdr,
             .paper_white = static_cast<float>(config.hdr_paper_white),
             .peak = static_cast<float>(config.hdr_peak)};
