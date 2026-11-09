@@ -27,6 +27,7 @@ enum class Step : std::uint8_t;
 // and at its end (<prefix>.first.png, .second.png) and the second's motion and reactive (.motion.f32, .reactive.f32, .motion.json), for the harness's motion check.
 // Unpaced (offscreen) runs only: paced, frames drawn to be read don't count as frames shown, so the second's motion isn't from the first.
 // DC_NOKTUS_MOTION_VIEW=1 shows the motion in place of the picture, screenshots included: direction as hue, length as brightness, reactive in magenta.
+// DC_NOKTUS_ANTI_ALIASING=off, smaa or taa overrides the anti-aliasing setting for a run, for scripted tests.
 // DC_NOKTUS_WORKERS=<n> sets the threads sharing the work, and DC_NOKTUS_PARALLEL_FROM=<draws> how many mesh draws a tick needs before they're shared.
 
 /** What's sent to a display in HDR. */
@@ -36,12 +37,20 @@ enum class MirrorHdr : std::uint8_t {
     ScRgb,
 };
 
+/** How edges are smoothed, at the picture's own size. */
+enum class MirrorAntiAliasing : std::uint8_t {
+    Off,
+    Smaa,
+    Taa,
+};
+
 /** What the Options screen says about drawing. */
 struct MirrorSettings {
     bool             interpolate = true;
     gfx::PresentMode present_mode = gfx::PresentMode::Fifo;
     double           max_fps = 0.0;
     int              anisotropy = 0;
+    MirrorAntiAliasing anti_aliasing = MirrorAntiAliasing::Off;
     MirrorHdr        hdr = MirrorHdr::Off;
     float            paper_white = 0.0f; // nits; 0 takes what the system says
     float            peak = 0.0f;        // nits; 0 takes what the system says

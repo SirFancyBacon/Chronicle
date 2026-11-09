@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -386,6 +387,16 @@ noktus::DisplayOutput ToDisplayOutput(MirrorHdr mode) {
     return mode == MirrorHdr::ScRgb ? noktus::DisplayOutput::ScRgb : mode == MirrorHdr::Hdr10 ? noktus::DisplayOutput::Hdr10 : noktus::DisplayOutput::Sdr;
 }
 
+// The setting, unless DC_NOKTUS_ANTI_ALIASING says otherwise for a scripted run.
+noktus::AntiAliasing ToAntiAliasing(MirrorAntiAliasing mode) {
+    if (const char *forced = std::getenv("DC_NOKTUS_ANTI_ALIASING")) {
+        std::string asked = forced;
+        std::ranges::transform(asked, asked.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        mode = asked == "taa" ? MirrorAntiAliasing::Taa : asked == "smaa" ? MirrorAntiAliasing::Smaa : MirrorAntiAliasing::Off;
+    }
+    return mode == MirrorAntiAliasing::Taa ? noktus::AntiAliasing::Taa : mode == MirrorAntiAliasing::Smaa ? noktus::AntiAliasing::Smaa : noktus::AntiAliasing::Off;
+}
+
 void Start(Mirror &mirror) {
     if (mirror.renderer) {
         return;
@@ -436,6 +447,8 @@ void Start(Mirror &mirror) {
     host.present_mode = ToPresentMode(g_settings.present_mode);
     host.frame_limit = g_settings.max_fps;
     host.anisotropy = g_settings.anisotropy;
+    host.anti_aliasing = ToAntiAliasing(g_settings.anti_aliasing);
+    host.taa_ready = true; // so the Options screen can turn it on without a pause
     // Beside config.json, so that it goes wherever the player's settings do.
     host.pipeline_cache = PathsSaveRoot() / "noktus_pipelines.cache";
     if (const char *view = std::getenv("DC_NOKTUS_CLASS_VIEW")) {
@@ -652,6 +665,7 @@ void MirrorApply(const MirrorSettings &settings) {
         noktus::SetPresentMode(*mirror.renderer, ToPresentMode(settings.present_mode));
         noktus::SetFrameLimit(*mirror.renderer, settings.max_fps);
         noktus::SetAnisotropy(*mirror.renderer, settings.anisotropy);
+        noktus::SetAntiAliasing(*mirror.renderer, ToAntiAliasing(settings.anti_aliasing));
         if (mirror.window != nullptr) {
             const HdrOutput output = HdrForWindow(mirror);
             noktus::SetDisplayOutput(*mirror.renderer, ToDisplayOutput(output.mode));

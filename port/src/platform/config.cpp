@@ -155,6 +155,35 @@ const char *HdrName(ConfigHdr hdr) {
     return "off";
 }
 
+bool ReadAntiAliasing(const Json &value, ConfigAntiAliasing &out) {
+    if (!value.is_string()) {
+        return false;
+    }
+    const std::string mode = Lower(value.get<std::string>());
+    if (mode == "off") {
+        out = ConfigAntiAliasing::Off;
+    } else if (mode == "smaa") {
+        out = ConfigAntiAliasing::Smaa;
+    } else if (mode == "taa") {
+        out = ConfigAntiAliasing::Taa;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+const char *AntiAliasingName(ConfigAntiAliasing mode) {
+    switch (mode) {
+        case ConfigAntiAliasing::Smaa:
+            return "smaa";
+        case ConfigAntiAliasing::Taa:
+            return "taa";
+        case ConfigAntiAliasing::Off:
+            break;
+    }
+    return "off";
+}
+
 // 0 asks the system. PQ, which HDR10 sends, stops at 10,000.
 bool ReadNits(const Json &value, int &out) {
     if (!value.is_number_integer()) {
@@ -635,6 +664,9 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "video.hdr_peak") {
         return ReadNits(value, config.hdr_peak);
     }
+    if (name == "video.anti_aliasing") {
+        return ReadAntiAliasing(value, config.anti_aliasing);
+    }
     if (name == "video.anisotropy") {
         if (!value.is_number_integer()) {
             return false;
@@ -808,6 +840,7 @@ std::string ConfigSerialize(const Config &config) {
     root["video"]["detail_distance"] = Shortest(config.detail_distance);
     root["video"]["shadow_distance"] = Shortest(config.shadow_distance);
     root["video"]["anisotropy"] = config.anisotropy;
+    root["video"]["anti_aliasing"] = AntiAliasingName(config.anti_aliasing);
     root["video"]["hdr"] = HdrName(config.hdr);
     root["video"]["hdr_paper_white"] = config.hdr_paper_white;
     root["video"]["hdr_peak"] = config.hdr_peak;

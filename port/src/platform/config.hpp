@@ -26,6 +26,13 @@ enum class ConfigHdr {
     ScRgb,
 };
 
+/** video.anti_aliasing: how Noktus smooths edges, at the picture's own size. */
+enum class ConfigAntiAliasing {
+    Off,
+    Smaa,
+    Taa,
+};
+
 /**
  * The game's own Options screen settings, which retail keeps in each save: here they hold for every
  * save, and the save's copy follows them. config.json keeps each in the section of the screen's page
@@ -74,6 +81,7 @@ struct Config : HostSettings {
     float             detail_distance = 0.0f;
     float             shadow_distance = 0.0f;
     int               anisotropy = 0;
+    ConfigAntiAliasing anti_aliasing = ConfigAntiAliasing::Off;
     ConfigHdr         hdr = ConfigHdr::Off;
     int               hdr_paper_white = 0; // nits; 0 takes what the system says
     int               hdr_peak = 0;        // nits; 0 takes what the system says

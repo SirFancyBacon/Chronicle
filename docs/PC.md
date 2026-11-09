@@ -185,6 +185,7 @@ key is optional; these are the defaults:
         "detail_distance": 0,       // how far full detail reaches (world units); 0: at any distance
         "shadow_distance": 0,       // how far town parts cast full shadows (world units); 0: at any distance
         "anisotropy": 0,            // anisotropic filtering of 3D textures: 0 (off), 2, 4, 8 or 16 samples
+        "anti_aliasing": "off",     // off or taa (smoothed over frames, before the interface goes on); smaa is read but drawn as off for now
         "hdr": "off",               // off, hdr10 or scrgb; a display not in HDR stays SDR. On the Options screen on Windows only
         "hdr_paper_white": 0,       // nits SDR's white is shown at; 0 takes the system's
         "hdr_peak": 0,              // the most nits to send; 0 takes the system's
@@ -916,8 +917,9 @@ Noktus Nimbus draws the game, with the window or, in a headless run, into a pict
 
 Both are in one program. Kazarov's renderer sources are built with `render/kazarov_names.hpp` forced in, which gives the calls `gfx_host.cpp` also defines other names, so `tools/kazarov` needs no change. `gfx_host.cpp` answers to the real names and passes each call on when Kazarov's renderer is drawing.
 
-The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion, Anisotropic Filter, HDR, Paper White and Peak Brightness
-change as the game runs. Calibrate HDR, under HDR, sets the last two by eye, and only while HDR is being sent: first Peak Brightness, raised in steps of
+The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion, Anisotropic Filter, Anti-Aliasing, HDR, Paper White and
+Peak Brightness change as the game runs. TAA's pipelines are made at start whatever the setting, so turning it on doesn't pause; `DC_NOKTUS_ANTI_ALIASING`
+overrides the setting for scripted runs. Calibrate HDR, under HDR, sets the last two by eye, and only while HDR is being sent: first Peak Brightness, raised in steps of
 10 nits up to 1,000, 50 up to 2,000 and 100 up to 4,000 until a square at that peak can't be told from the field round it at 10,000 nits, which Noktus
 draws through `MirrorHdrPatches`; then Paper White, in steps of 10 from 80 to 500, never past the peak. Circle on the first step puts both back as they were.
 
