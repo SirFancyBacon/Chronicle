@@ -11,6 +11,7 @@
 #include <exception>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <memory>
@@ -172,10 +173,35 @@ void ReportPace(Mirror &mirror) {
                  gpu.worst_frame, passes.c_str(), gpu.mean_finish);
 }
 
+// With DC_NOKTUS_MOTION_OUT=<prefix>, the last tick drawn halfway, then at its end, and the second frame's motion: what the harness's motion check moves
+// the first along to compare with the second. Pictures as PNG, motion (x then y, a pixel each) and reactive as raw 32-bit floats, their size in a JSON beside.
+void WriteMotionPair(Mirror &mirror) {
+    const char *prefix = std::getenv("DC_NOKTUS_MOTION_OUT");
+    if (prefix == nullptr || *prefix == '\0') {
+        return;
+    }
+    std::uint32_t                   width = 0;
+    std::uint32_t                   height = 0;
+    const std::vector<std::uint8_t> first = noktus::ReadMoment(*mirror.renderer, 0.5f, &width, &height);
+    const std::vector<std::uint8_t> second = noktus::ReadMoment(*mirror.renderer, 1.0f, &width, &height);
+    const noktus::MotionPicture     motion = noktus::ReadMotion(*mirror.renderer);
+    if (first.empty() || second.empty() || motion.motion.empty()) {
+        return;
+    }
+    const std::string base = prefix;
+    gfx::WritePng(base + ".first.png", first.data(), width, height);
+    gfx::WritePng(base + ".second.png", second.data(), width, height);
+    std::ofstream(base + ".motion.f32", std::ios::binary).write(reinterpret_cast<const char *>(motion.motion.data()), static_cast<std::streamsize>(motion.motion.size() * sizeof(float)));
+    std::ofstream(base + ".reactive.f32", std::ios::binary)
+        .write(reinterpret_cast<const char *>(motion.reactive.data()), static_cast<std::streamsize>(motion.reactive.size() * sizeof(float)));
+    std::ofstream(base + ".motion.json") << std::format(R"({{"width": {}, "height": {}, "continues": {}}})", motion.width, motion.height, motion.continues);
+}
+
 void WriteLastPicture() {
     Mirror &mirror = State();
     if (mirror.renderer) {
         Guarded([&] {
+            WriteMotionPair(mirror);
             if (mirror.path.empty()) {
                 return;
             }
@@ -414,6 +440,9 @@ void Start(Mirror &mirror) {
     host.pipeline_cache = PathsSaveRoot() / "noktus_pipelines.cache";
     if (const char *view = std::getenv("DC_NOKTUS_CLASS_VIEW")) {
         host.class_view = std::string_view(view) == "1";
+    }
+    if (const char *motion = std::getenv("DC_NOKTUS_MOTION")) {
+        host.motion = std::string_view(motion) == "1";
     }
     if (const char *workers = std::getenv("DC_NOKTUS_WORKERS")) {
         host.workers = static_cast<int>(std::strtol(workers, nullptr, 10));
