@@ -290,14 +290,13 @@ void SetAnisotropy(Config &config, int choice) {
     config.anisotropy = kAnisotropy[choice];
 }
 
-// SMAA joins when it's built.
-constexpr ConfigAntiAliasing kAntiAliasing[] = {ConfigAntiAliasing::Off, ConfigAntiAliasing::Taa};
+constexpr ConfigAntiAliasing kAntiAliasing[] = {ConfigAntiAliasing::Off, ConfigAntiAliasing::Smaa, ConfigAntiAliasing::Taa};
 
 int AntiAliasingCount(const Config & /*config*/) {
     return static_cast<int>(std::size(kAntiAliasing));
 }
 
-// A setting the row doesn't offer yet (smaa, read from the file) is drawn as off, so the row says so.
+// A setting the row doesn't offer is drawn as off, so the row says so.
 int AntiAliasingChoice(const Config &config) {
     const auto found = std::ranges::find(kAntiAliasing, config.anti_aliasing);
     return found == std::end(kAntiAliasing) ? 0 : static_cast<int>(found - std::begin(kAntiAliasing));
@@ -737,8 +736,8 @@ constexpr Row kDisplayRows[] = {
                "\"Anisotropic Filter\"\nSharper textures on\nsurfaces seen at a\nslant.", AnisotropyCount,
                AnisotropyChoice, SetAnisotropy, nullptr, "Off|2x|4x|8x|16x"),
     SettingRow("video.anti_aliasing", "Anti-Aliasing",
-               "\"Anti-Aliasing\"\nSmooths jagged edges.\nTAA blends several\nframes together.", AntiAliasingCount,
-               AntiAliasingChoice, SetAntiAliasing, nullptr, "Off|TAA"),
+               "\"Anti-Aliasing\"\nSmooths jagged edges.\nSMAA: each frame alone.\nTAA: across frames.", AntiAliasingCount,
+               AntiAliasingChoice, SetAntiAliasing, nullptr, "Off|SMAA|TAA"),
     GameRow<&ConfigGameOptions::soft_focus, true>("video.soft_focus", "Soft Focus", "On|Off", 0x169),
     NamedRow<&Config::enhanced_cloth>("video.cloth", "Cloth",
                                       "\"Cloth\"\nOriginal: the PS2's.\nEnhanced: the body no\nlonger passes through.",
