@@ -309,7 +309,9 @@ glow and underline, sampled from the disc's card). With a plate for the card and
 the plate and draws the name over it from the font at the screen's own resolution (`area_card.cpp`), so the
 lettering is sharp at any window size and a better plate (a hand-redrawn or upscaled one) improves every language
 at once. The names are `area.<card>` in the language's JSON (`area.mt01`...), shipped for every language. Without a
-plate or the font the card is the language's picture as above, or the disc's.
+plate or the font the card is the language's picture as above, or the disc's. However it's drawn, the card eases in
+over 0.6 seconds, holds for 1.4 and eases out over 0.6 (`AreaCardAlpha` in `nowload.cpp`), its opacity taken from the
+clock at each display frame; retail's 6.6 seconds of fading covered the disc's reading, and here would only be waiting.
 
 **Shadows.** The pictures carry no shadow of their own; the port casts it when it loads one, so it can be set
 per kind of text. In Options, Display page: Text Shadow (the message text), Symbol Shadow (the button symbols),
