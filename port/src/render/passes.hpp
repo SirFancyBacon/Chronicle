@@ -103,8 +103,10 @@ private:
 Layer2D CurrentLayer2D();
 
 /**
- * The layer a 2D draw ends up in. World, Window and Cover are kept. The interface is where retail's 2D falls when nothing names it, so a draw there takes what its shape and
- * what it samples say, unless its scope says kDiffersFromRule: a picture of the frame behind a menu reaches the window's edges, on every screen, without each having to say so.
+ * The layer a 2D draw ends up in. Window and Cover are kept. The interface is where retail's 2D falls when nothing names it, so a draw there takes Window or Cover where its
+ * shape and what it samples say so; a draw in the scene takes Window where they say so and it ignores depth (a fill or a picture of the frame over the whole frame), never
+ * Cover. A scope that says kDiffersFromRule keeps its layer. So a picture of the frame behind a menu, or the opening's blur of the frame before, reaches the window's edges
+ * without each having to say so.
  */
 Layer2D DrawLayer2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture, const gfx::DrawState &state);
 

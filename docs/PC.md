@@ -901,8 +901,11 @@ interface laid over the picture, the picture kept for the next tick and for show
 
 Noktus decides where 2D reaches past the frame from the layer it's told. A screen can name one; a draw left in the
 interface layer, where retail's 2D falls when nothing names it, takes the answer of Kazarov's rule for its shape and
-what it samples (`DrawLayer2D`, `port/src/render/passes.cpp`), so the frame picture behind a menu reaches the window's
-edges on every screen without each saying so.
+what it samples wherever that reaches past the frame (`DrawLayer2D`, `port/src/render/passes.cpp`), so the frame
+picture behind a menu reaches the window's edges on every screen without each saying so. A draw in the scene's layer
+takes it only for a fill or a picture of the frame that ignores depth (the opening's Dark Genie blurring the frame
+before over the frame); a full-frame picture in the scene isn't stretched, because what the scene lays over it stays
+in the frame.
 
 ### Window aspect
 

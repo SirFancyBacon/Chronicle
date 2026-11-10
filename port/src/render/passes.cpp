@@ -234,6 +234,7 @@ struct Shape2D {
     bool    on_main = false;
     bool    has_edges = false; // false: a surface with nothing past its frame, where every layer means the same
     bool    one_quad = false;  // Noktus takes a layer for a whole draw, and a cover stretches every rectangle in it
+    bool    tests_depth = false;
 };
 
 // The renderer's rules for a 2D draw (Kazarov's gfx/draw.cpp, Draw2DSided), as it decides them from shape and state.
@@ -253,6 +254,7 @@ Shape2D ReadShape(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     shape.on_main = on_main;
     shape.has_edges = on_main || (drawn_on && (drawn_on->shares_main_depth || drawn_on->frame_target));
     shape.one_quad = vertices.size() == 4;
+    shape.tests_depth = state.depth_test != gfx::DepthTest::Always;
     bool reaches = false;
     if (quads) {
         for (std::size_t first = 0; first + 4 <= vertices.size(); first += 4) {
@@ -277,16 +279,29 @@ Shape2D ReadShape(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     return shape;
 }
 
+// The interface takes Kazarov's answer wherever it reaches past the frame. The scene takes it only for a fill or a
+// picture of the frame laid over everything without depth (the opening's Dark Genie blurs the frame before over the
+// frame), which would otherwise stop at the 4:3 frame: a scene's full-frame picture isn't stretched, since what the
+// scene lays over it stays in the frame, and nothing tested against depth leaves the scene's class.
 Layer2D Settled(Layer2D named, const Shape2D &shape) {
-    const bool reaches_out = shape.rule == Layer2D::Window || (shape.rule == Layer2D::Cover && shape.one_quad);
-    return named == Layer2D::Ui && !g_layer_differs && shape.has_edges && reaches_out ? shape.rule : named;
+    if (g_layer_differs || !shape.has_edges) {
+        return named;
+    }
+    if (named == Layer2D::Ui && (shape.rule == Layer2D::Window || (shape.rule == Layer2D::Cover && shape.one_quad))) {
+        return shape.rule;
+    }
+    if (named == Layer2D::World && shape.rule == Layer2D::Window && !shape.tests_depth) {
+        return Layer2D::Window;
+    }
+    return named;
 }
 
 } // namespace
 
 Layer2D DrawLayer2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture, const gfx::DrawState &state) {
     const Layer2D named = CurrentLayer2D();
-    return named == Layer2D::Ui && !vertices.empty() ? Settled(named, ReadShape(primitive, vertices, texture, state)) : named;
+    const bool    settles = named == Layer2D::Ui || named == Layer2D::World;
+    return settles && !vertices.empty() ? Settled(named, ReadShape(primitive, vertices, texture, state)) : named;
 }
 
 void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
@@ -306,8 +321,10 @@ void Note2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, c
     // Off the screen nothing follows the interface size, so Ui and World are one.
     const auto stays = [](Layer2D layer) { return layer == Layer2D::Ui || layer == Layer2D::World; };
     const bool agrees = declared == rule || (declared == Layer2D::Window && !covers) || (!on_main && stays(declared) && stays(rule));
+    // The scene keeps its full-frame pictures, and anything tested against depth, in the frame on purpose (Settled).
+    const bool scene_keeps = declared == Layer2D::World && (rule == Layer2D::Cover || (rule == Layer2D::Window && shape.tests_depth));
     g_layer_checked++;
-    if (!agrees && g_layer_differs) {
+    if (!agrees && (g_layer_differs || scene_keeps)) {
         g_layer_differing++;
     } else if (!agrees) {
         g_layer_wrong++;
