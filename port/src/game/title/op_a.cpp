@@ -37,6 +37,7 @@
 #include "title/op_b.hpp"
 #include "title/opening.hpp"
 #include "title/script.hpp"
+#include "title/title_rect.hpp"
 
 namespace dc::game {
 
@@ -46,21 +47,6 @@ namespace dc::game {
 using tagMOTION_KEY = MOTION_INFO;
 
 // The dungeon-square scene of the opening: set-up, per-tick drawing, sound and motion.
-
-/* The rectangle a texture transfer takes. rect.h's four-argument constructor assigns h, w, y and x
-   in that order; every rectangle this file builds assigns them the other way round. */
-template <class T>
-class CRect {
-public:
-    T x; /**< Left edge in pixels. */
-    T y; /**< Top edge in pixels. */
-    T w; /**< Width in pixels. */
-    T h; /**< Height in pixels. */
-
-    CRect() : x(0), y(0), w(0), h(0) {}
-
-    CRect(T new_x, T new_y, T new_width, T new_height) : x(new_x), y(new_y), w(new_width), h(new_height) {}
-} __attribute__((aligned(16)));
 
 void MoveImageTest(sceVif1Packet *packet, int sbp, int sbw, int spsm, const CRect<int> &rect, int dbp, int dbw, int dpsm, int dsax, int dsay, int dir);
 void set2DSprite(sceVif1Packet *packet, CTexture *texture, const CRect<int> &src, const CRect<int> &dst, u_char alpha);

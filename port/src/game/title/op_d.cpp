@@ -37,22 +37,11 @@
 #include "title/rushmovi.hpp"
 #include "title/script.hpp"
 #include "title/seireiking.hpp"
+#include "title/title_rect.hpp"
 #include "visual.hpp"
 #include "wind.hpp"
 
 namespace dc::game {
-
-// rect.h's four-argument constructor assigns the fields in the opposite order to this one.
-template <class T>
-class CRect {
-public:
-    T x; /**< Left edge. */
-    T y; /**< Top edge. */
-    T w; /**< Width. */
-    T h; /**< Height. */
-
-    CRect(T left, T top, T width, T height) : x(left), y(top), w(width), h(height) {}
-} __attribute__((aligned(16)));
 
 void set2DSprite(sceVif1Packet *packet, CTexture *texture, const CRect<int> &src, const CRect<int> &dst, u_char alpha);
 void MoveImageTest(sceVif1Packet *packet, int sbp, int sbw, int spsm, const CRect<int> &rect, int dbp, int dbw,

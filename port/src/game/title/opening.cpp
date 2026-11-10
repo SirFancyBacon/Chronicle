@@ -50,6 +50,7 @@
 #include "title/op_d.hpp"
 #include "title/opening.hpp"
 #include "title/script.hpp"
+#include "title/title_rect.hpp"
 #include "vector.hpp"
 #include "vutext.hpp"
 
@@ -59,22 +60,6 @@ using namespace dc::data;
 
 // The game's file and frame APIs take string literals as char *.
 #pragma clang diagnostic ignored "-Wwritable-strings"
-
-/**
- * Rectangle every 2D draw takes; declared here because rect.h's constructor takes its fields in another order.
- */
-template <class T>
-class alignas(16) CRect {
-public:
-    T x; /**< Left edge. */
-    T y; /**< Top edge. */
-    T w; /**< Width. */
-    T h; /**< Height. */
-
-    CRect() = default;
-
-    CRect(T left, T top, T width, T height) : x(left), y(top), w(width), h(height) {}
-};
 
 void MGFillBox(const CRect<int> &rect, u_char r, u_char g, u_char b, u_char a);
 void set2DSprite(sceVif1Packet *packet, CTexture *texture, const CRect<int> &dst, const CRect<int> &src, u_char alpha);

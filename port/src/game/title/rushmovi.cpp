@@ -42,6 +42,7 @@
 #include "title/rushmovi.hpp"
 #include "title/script.hpp"
 #include "title/title.hpp"
+#include "title/title_rect.hpp"
 #include "vutext.hpp"
 #include "water.hpp"
 #include "wind.hpp"
@@ -50,28 +51,6 @@ namespace dc::game {
 
 // The bodies are retail's, which pass string literals as char *.
 #pragma clang diagnostic ignored "-Wwritable-strings"
-
-/**
- * The title overlay's own rectangle, which its constructor assigns in
- * x, y, w, h order.
- */
-template <class T>
-class CRect {
-public:
-    T x; /**< Left edge. */
-    T y; /**< Top edge. */
-    T w; /**< Width. */
-    T h; /**< Height. */
-
-    CRect() {}
-
-    CRect(T left, T top, T width, T height) {
-        x = left;
-        y = top;
-        w = width;
-        h = height;
-    }
-};
 
 void MGMoveImage(sceGsTex0 *src, const CRect<int> &rect, sceGsTex0 *dst, int dsax, int dsay, int dir);
 void set2DSprite(sceVif1Packet *packet, CTexture *texture, const CRect<int> &dst, const CRect<int> &src, u_char alpha);

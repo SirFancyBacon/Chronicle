@@ -45,29 +45,13 @@
 #include "title/op_d.hpp"
 #include "title/opening.hpp"
 #include "title/script.hpp"
+#include "title/title_rect.hpp"
 #include "vector.hpp"
 #include "visualvu1.hpp"
 #include "water.hpp"
 #include "wind.hpp"
 
 namespace dc::game {
-
-/**
- * The rectangle a texture transfer takes, as an x, y, width and height. MoveImageTest, set2DSprite
- * and MGMoveImage are declared against this template, so it stays at namespace scope.
- */
-template <class T>
-class CRect {
-public:
-    T x; /**< Left edge. */
-    T y; /**< Top edge. */
-    T w; /**< Width. */
-    T h; /**< Height. */
-
-    CRect() : x(0), y(0), w(0), h(0) {}
-
-    CRect(T left, T top, T width, T height) : x(left), y(top), w(width), h(height) {}
-} __attribute__((aligned(16)));
 
 void MoveImageTest(sceVif1Packet *packet, int sbp, int sbw, int spsm, const CRect<int> &rect, int dbp, int dbw, int dpsm, int dsax, int dsay, int dir);
 void set2DSprite(sceVif1Packet *packet, CTexture *texture, const CRect<int> &src, const CRect<int> &dst, u_char r, u_char g, u_char b, u_char a);

@@ -42,6 +42,7 @@
 #include "title/op_c.hpp"
 #include "title/opening.hpp"
 #include "title/script.hpp"
+#include "title/title_rect.hpp"
 #include "vector3.hpp"
 #include "wind.hpp"
 
@@ -51,21 +52,6 @@ using namespace dc::data;
 
 // The game APIs this file calls take names as char *, and string literals are passed to them.
 #pragma clang diagnostic ignored "-Wwritable-strings"
-
-/* The title overlay's rectangle, whose constructor takes x, y, w and h in that order (rect.h's
-   takes them in another); MoveImageTest's adapter is declared against this type. */
-template <class T>
-class CRect {
-public:
-    T x; /**< Left edge in pixels. */
-    T y; /**< Top edge in pixels. */
-    T w; /**< Width in pixels. */
-    T h; /**< Height in pixels. */
-
-    CRect() = default;
-
-    CRect(T new_x, T new_y, T new_width, T new_height) : x(new_x), y(new_y), w(new_width), h(new_height) {}
-} __attribute__((aligned(16)));
 
 namespace {
 

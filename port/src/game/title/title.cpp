@@ -33,24 +33,9 @@
 #include "title/logo.hpp"
 #include "title/scfader.hpp"
 #include "title/sprite.hpp"
+#include "title/title_rect.hpp"
 
 namespace dc::game {
-
-/**
- * Screen or texel rectangle taken by the title overlay's 2D draws, built as left, top, width, height.
- */
-template <class T>
-class CRect {
-public:
-    T x; /**< Left edge. */
-    T y; /**< Top edge. */
-    T w; /**< Width. */
-    T h; /**< Height. */
-
-    CRect() = default;
-
-    CRect(T left, T top, T width, T height) : x(left), y(top), w(width), h(height) {}
-};
 
 /**
  * One piece of scenery the third scene lays out: model file, position and turn about the vertical
@@ -98,7 +83,7 @@ using namespace dc::title;
 void set2DSprite(sceVif1Packet *packet, CTexture *texture, const CRect<int> &dst, const CRect<int> &src, int width,
                  int height, float angle);
 
-// The title units declare their own rectangle template where every other unit takes CRect_i_.
+// The title units share their own rectangle template (title_rect.hpp) where every other unit takes CRect_i_.
 // MWCC mangled both the same, so retail linked the title's calls to the shared definitions; clang
 // mangles CRect<int> apart, so these give the title's spelling a body (op_a.cpp has MoveImageTest's).
 namespace {

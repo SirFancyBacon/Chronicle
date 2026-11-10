@@ -13,29 +13,9 @@
 #include "texture.hpp"
 #include "title/scfader.hpp"
 #include "title/title.hpp"
+#include "title/title_rect.hpp"
 
 namespace dc::game {
-
-/* The rectangle every 2D draw takes, declared here rather than reached through rect.h because the
-   two constructors that header states are not this file's: every rectangle here is built by one
-   that assigns x, y, w and h in that order, and rect.h's assigns them in the other. */
-template <class T>
-class CRect {
-public:
-    T x; /**< Left edge. */
-    T y; /**< Top edge. */
-    T w; /**< Width. */
-    T h; /**< Height. */
-
-    CRect() {}
-
-    CRect(T left, T top, T width, T height) {
-        x = left;
-        y = top;
-        w = width;
-        h = height;
-    }
-};
 
 void set2DSprite(sceVif1Packet *packet, CTexture *texture, const CRect<int> &dst, const CRect<int> &src, u_char alpha);
 
