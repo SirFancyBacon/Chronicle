@@ -210,6 +210,7 @@ int  g_town_dungeon;
 int  g_town_clock;
 std::string g_town_interior;
 bool g_dungeon_ura;
+DungeonOpen g_dungeon_open = DungeonOpen::None;
 bool g_fast_load;
 bool g_autosave;
 int  g_developer_return_mode = GAME_MODE_TITLE;
@@ -766,6 +767,16 @@ void GameSetDungeonUra() {
 
 bool GameTakeDungeonUra() {
     return std::exchange(g_dungeon_ura, false);
+}
+
+bool GameSetDungeonOpen(const char *what) {
+    const std::string_view asked = what;
+    g_dungeon_open = asked == "atla" ? DungeonOpen::Atla : asked == "chest" ? DungeonOpen::Chest : DungeonOpen::None;
+    return g_dungeon_open != DungeonOpen::None;
+}
+
+DungeonOpen GameTakeDungeonOpen() {
+    return std::exchange(g_dungeon_open, DungeonOpen::None);
 }
 
 bool GameSetJump(const char *spec) {

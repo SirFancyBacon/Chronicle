@@ -147,6 +147,18 @@ void GameSetDungeonUra();
  */
 bool GameTakeDungeonUra();
 
+/** What --dungeon-open opens: nothing, the nearest Atla, or the nearest chest. */
+enum class DungeonOpen : int { None, Atla, Chest };
+
+/**
+ * Test hook: once a dungeon floor plays, stand Toan at the nearest Atla ("atla") or chest ("chest") and open it, as Cross there would. False for
+ * anything else.
+ */
+bool GameSetDungeonOpen(const char *what);
+
+/** What GameSetDungeonOpen asked to open, once. */
+DungeonOpen GameTakeDungeonOpen();
+
 /**
  * Test hook: cuts the loading screen's holds and fades to a few ticks.
  */

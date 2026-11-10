@@ -110,7 +110,7 @@ a language the data lacks, and its English button reads as the disc's art does.
 | `--jump MODE[:MAP]` | test hook: start in a mode (see "Test hooks"); also `DC_JUMP` |
 | `--fast-load` | test hook: loading-screen holds and fades of a few ticks; also `DC_FAST_LOAD=1` |
 | `--town-menu N`, `--town-event N` | test hooks: open a town menu, or raise a town program (see "Test hooks") |
-| `--town-clock H`, `--town-interior NAME`, `--dungeon-ura` | test hooks: set the town's clock, enter an interior, or swap to a floor's back side (see "Test hooks") |
+| `--town-clock H`, `--town-interior NAME`, `--dungeon-ura`, `--dungeon-open atla\|chest` | test hooks: set the town's clock, enter an interior, swap to a floor's back side, or open the nearest Atla or chest (see "Test hooks") |
 | `--give ITEM,...` | test hook: items and weapons the party is given when a town or dungeon starts (see "Test hooks"); also `DC_GIVE` |
 | `--show-fps` | draw the FPS counter when headless too (a headless run leaves `show_fps` off) |
 | `--screenshot-fps` | with `--screenshot`: fail if the FPS counter is off |
@@ -633,42 +633,12 @@ For tests and debugging only; nothing the game does depends on them.
 - `--town-interior NAME` (or `DC_TOWN_INTERIOR`) enters the town's interior `NAME` (`i01h01`, as its folder is named) once
   the town walks, through `GotoInterior`, at the time of day the clock shows.
 - `--dungeon-ura` swaps to the floor's back side once the dungeon plays, as the script's request does.
-
-`darkcloud --headless --jump dungeon:0 --fast-load --frames 60` shows the first
-dungeon's floor select after about five seconds on lavapipe.
-
-### Developer menu
-
-PAL retail's `main` sets `DebugMode` when pad 2 holds L1+R1+L2+R2 through
-the warm-up; the game then starts in `GAME_MODE_MENU`, the developer menu
-(`MenuLoop`, `ps2/src/main.cpp`), instead of the language select, and leaves
-pad 2 unlocked. The port takes `DebugMode` from `game.debug_mode` in
-`config.json`, which is off by default. The port starts at the language select
-(the attract movie when the data has one language) whether this flag is true or false. Setting it to true enables debug controls
-from startup; the debug toggle chord can also enable them during play.
-`darkcloud` prints `debug mode on` when the flag starts enabled. An explicit
-`--jump menu` opens the developer menu at startup.
-
-While `DebugMode` is set, Start and Select on pad 1 go to the developer menu
-at once from every mode: the language select, the attract movie, the
-title, the opening, a town or an interior, the dungeon loader, a dungeon
-and the save screen (`GameDeveloperMenuRequested`,
-`port/src/app/gameloop.cpp`, after every frame of the main loop). The frame the
-second of the two goes down ends the mode where it stands: there is no fade
-and the town is not saved back to the save data; sound stops, the pad is
-unlocked and a pending map jump or start event is dropped
-(`GameEnterDeveloperMenu`). The chord is read from the host's pad, past the
-game's pad lock, so it works in events and fades; the loading screen between
-two modes and the fades a town presents on its own run to their end first.
-Holding it into the next mode does nothing until it is pressed again.
-
-After start-up, retail PAL flips `DebugMode` after every frame of the main
-loop where pad 2 holds L1+R1+L2+R2 and R3 is pressed (`ps2/src/main.cpp:963`);
-the port reads the same combination on pad 1 instead (`GameCheckDebugToggle`,
-past the game's pad lock), printing
-`debug mode on` or `debug mode off`. It does not move the game anywhere:
-`DebugMode` is a flag the modes read. What it does once set:
-
+- `--dungeon-open atla|chest` (or `DC_DUNGEON_OPEN`) once a floor plays and Cross would be taken, stands the character leading
+  at the nearest Atla (Toan only, as the game has it), or chest that opens without a script (a small one, or a large one with
+  no trap), and opens it as Cross there would, so the openings' close-ups can be captured without walking to one. The camera
+  follows from where it was, and with Smooth Motion a chest nearer than a jump can show a tick's slide to it; captures, drawn
+  at ticks, don't. Floors are laid out at random, so a floor may have none, which is said and leaves the floor as it is; the
+  same build and inputs lay a floor out the same way each run. Anything but `atla` or `chest` exits with status 2.
 - The town (`EditLoop`, `ps2/src/editloop.cpp:2041`) and the dungeon
   (`GameLoop`, `ps2/src/dun/gameloop.cpp:2087`) leave on Select held with
   Start (in the town after a fade); their loop results send the game to

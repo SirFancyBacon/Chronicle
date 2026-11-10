@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 
 #include "app/gameloop.hpp"
 #include "battlemenu.hpp"
@@ -110,6 +111,40 @@ void DeleteItemModel(int slot) {
     }
 }
 
+// Test hook (--dungeon-open): stands the character leading at the nearest Atla (Toan only, as the game has it) or chest that opens without a
+// script, and opens it as Cross there would. False, and said, when there's none to open.
+bool OpenNearest(app::DungeonOpen what) {
+    int   nearest = -1;
+    float closest = 0.0f;
+    for (int i = 0; i < static_cast<int>(std::size(NowDngMap->events)); i++) {
+        DUNGEON_EVENT &event = NowDngMap->events[i];
+        const bool     opens = what == app::DungeonOpen::Atla
+                                   ? event.kind == DNG_EVENT_ATRA && NowDngMap->atra[event.index].used != 0 && UserStatus->cur_chara == CHARA_TOAN
+                                   : event.kind == DNG_EVENT_TREASURE_BOX &&
+                                     (NowDngMap->boxes[event.index].kind != TREASURE_BOX_LARGE || NowDngMap->boxes[event.index].trap_no == 0);
+        const float    distance = DistVector(event.pos, CharaFrame->position);
+        if (opens && (nearest < 0 || distance < closest)) {
+            nearest = i;
+            closest = distance;
+        }
+    }
+    if (nearest < 0) {
+        std::fprintf(stderr, what == app::DungeonOpen::Atla && UserStatus->cur_chara != CHARA_TOAN ? "--dungeon-open: only Toan takes an Atla, and he isn't leading\n"
+                                                                                                    : "--dungeon-open: nothing of that kind to open on this floor\n");
+        return false;
+    }
+    const DUNGEON_EVENT &event = NowDngMap->events[nearest];
+    CharaMain.SetPosition(const_cast<float *>(event.pos));
+    driveNoInterpolate = 1; // his motion starts afresh, as the Atla opening's own move does
+    iventActive = nearest;
+    BtActStatus.motion_no = 0;
+    gameTask = what == app::DungeonOpen::Atla                                    ? GAME_TASK_ATRA_GET_INIT
+               : NowDngMap->boxes[event.index].kind == TREASURE_BOX_LARGE ? GAME_TASK_BOX_BIG_INIT
+                                                                                 : GAME_TASK_BOX_SMALL_INIT;
+    std::fprintf(stderr, "--dungeon-open: opening event %d\n", nearest);
+    return true;
+}
+
 } // namespace
 
 int DungeonTownMap(int dungeon) {
@@ -199,6 +234,12 @@ void DunMoveChara() {
             if (app::GameTakeDungeonUra()) {
                 gameTask = GAME_TASK_URA_SWAP;
                 break;
+            }
+            // Only once Cross there would be taken, so it opens as a press would.
+            if (BtActStatus.can_act != 0 && BtActStatus.movement_locked == 0 && BtActStatus.event_block_frames == 0 && BtActStatus.recoil_frames == 0) {
+                if (const app::DungeonOpen open = app::GameTakeDungeonOpen(); open != app::DungeonOpen::None && OpenNearest(open)) {
+                    break;
+                }
             }
 
             if (CheckTrialEnd() != 0) {

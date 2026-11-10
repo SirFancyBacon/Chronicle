@@ -152,13 +152,19 @@ void DropWindow(Mirror &mirror) {
 
 Pass FromNoktusPass(noktus::Pass pass);
 
+void ReportGpu(const noktus::GpuTimes &gpu);
+
 void ReportPace(Mirror &mirror) {
     const noktus::PaceReport pace = noktus::TakePace(*mirror.renderer);
     std::fprintf(stderr, "noktus pacing: %llu frames, %llu ticks, mean %.2f ms, slowest 1%% %.2f ms, worst %.2f ms, held %llu, missed %llu, %d ahead, display timing %s, %s, target lead %.1f ms, work: frame %.3f ms, of it waiting %.3f ms, tick %.3f ms, link %.3f ms, %d workers, late pipelines %llu\n",
                  static_cast<unsigned long long>(pace.frames), static_cast<unsigned long long>(pace.ticks), pace.mean_interval, pace.slowest_1_percent, pace.worst_interval,
                  static_cast<unsigned long long>(pace.held), static_cast<unsigned long long>(pace.missed), pace.frames_ahead, pace.display_timing ? "yes" : "no", pace.variable ? "variable" : "fixed", pace.lead,
                  pace.mean_frame_work, pace.mean_frame_wait, pace.mean_tick_work, pace.mean_link_work, pace.workers, static_cast<unsigned long long>(pace.late_pipelines));
-    const noktus::GpuTimes &gpu = pace.gpu;
+    ReportGpu(pace.gpu);
+}
+
+// How long the GPU took, by pass. With no window too (offscreen, as the harness runs), where pacing means nothing but GPU time still does.
+void ReportGpu(const noktus::GpuTimes &gpu) {
     if (!gpu.measured) {
         std::fprintf(stderr, "noktus gpu: not timed, as this GPU can't time its work\n");
         return;
@@ -228,6 +234,8 @@ void WriteLastPicture() {
         }
         if (mirror.window != nullptr) {
             ReportPace(mirror);
+        } else {
+            ReportGpu(noktus::TakePace(*mirror.renderer).gpu);
         }
         mirror.renderer.reset();
         DropWindow(mirror);
@@ -1021,9 +1029,13 @@ void MirrorEndTick() {
             }
         }
         // Every few seconds, so that a load doesn't hide how play went.
-        if (mirror.window != nullptr && ++mirror.ticks_since_report == 300) {
+        if (++mirror.ticks_since_report == 300) {
             mirror.ticks_since_report = 0;
-            ReportPace(mirror);
+            if (mirror.window != nullptr) {
+                ReportPace(mirror);
+            } else {
+                ReportGpu(noktus::TakePace(*mirror.renderer).gpu);
+            }
         }
     }
 }
