@@ -152,7 +152,7 @@ void DropWindow(Mirror &mirror) {
 
 Pass FromNoktusPass(noktus::Pass pass);
 
-void ReportGpu(const noktus::GpuTimes &gpu);
+void ReportGpu(const noktus::PaceReport &pace);
 
 void ReportPace(Mirror &mirror) {
     const noktus::PaceReport pace = noktus::TakePace(*mirror.renderer);
@@ -160,11 +160,19 @@ void ReportPace(Mirror &mirror) {
                  static_cast<unsigned long long>(pace.frames), static_cast<unsigned long long>(pace.ticks), pace.mean_interval, pace.slowest_1_percent, pace.worst_interval,
                  static_cast<unsigned long long>(pace.held), static_cast<unsigned long long>(pace.missed), pace.frames_ahead, pace.display_timing ? "yes" : "no", pace.variable ? "variable" : "fixed", pace.lead,
                  pace.mean_frame_work, pace.mean_frame_wait, pace.mean_tick_work, pace.mean_link_work, pace.workers, static_cast<unsigned long long>(pace.late_pipelines));
-    ReportGpu(pace.gpu);
+    ReportGpu(pace);
 }
 
-// How long the GPU took, by pass. With no window too (offscreen, as the harness runs), where pacing means nothing but GPU time still does.
-void ReportGpu(const noktus::GpuTimes &gpu) {
+// How long the GPU took, by pass, and the memory it holds. With no window too (offscreen, as the harness runs), where pacing means nothing but these still do.
+void ReportGpu(const noktus::PaceReport &pace) {
+    const noktus::GpuMemory &memory = pace.memory;
+    const std::string budget = memory.device_budget == 0 ? std::string()
+                                                         : std::format("; the driver counts {:.0f} MB used of {:.0f} allowed", static_cast<double>(memory.device_usage) / 1048576.0,
+                                                                       static_cast<double>(memory.device_budget) / 1048576.0);
+    std::fprintf(stderr, "noktus memory: %llu blocks (most %llu), %.0f MB in the GPU's memory (most %.0f), %.0f MB in the host's%s\n", static_cast<unsigned long long>(memory.blocks),
+                 static_cast<unsigned long long>(memory.most_blocks), static_cast<double>(memory.device_bytes) / 1048576.0, static_cast<double>(memory.most_device_bytes) / 1048576.0,
+                 static_cast<double>(memory.host_bytes) / 1048576.0, budget.c_str());
+    const noktus::GpuTimes &gpu = pace.gpu;
     if (!gpu.measured) {
         std::fprintf(stderr, "noktus gpu: not timed, as this GPU can't time its work\n");
         return;
@@ -235,7 +243,7 @@ void WriteLastPicture() {
         if (mirror.window != nullptr) {
             ReportPace(mirror);
         } else {
-            ReportGpu(noktus::TakePace(*mirror.renderer).gpu);
+            ReportGpu(noktus::TakePace(*mirror.renderer));
         }
         mirror.renderer.reset();
         DropWindow(mirror);
@@ -1034,7 +1042,7 @@ void MirrorEndTick() {
             if (mirror.window != nullptr) {
                 ReportPace(mirror);
             } else {
-                ReportGpu(noktus::TakePace(*mirror.renderer).gpu);
+                ReportGpu(noktus::TakePace(*mirror.renderer));
             }
         }
     }
