@@ -108,10 +108,10 @@ extern int now_loding_off;
 extern int now_loading_vsync_end;
 
 /**
- * The area name card's opacity (0 to 0x80) a number of seconds after the loading screen started showing it: eased in
- * over 0.6 seconds, held for 1.4 and eased out over 0.6, after which the loading screen ends (retail's took 128 ticks
- * each way and 120 between). The boot logos keep retail's timing.
+ * The area name card's opacity (0 to 0x80) a number of ticks, fractions included, after the loading screen started
+ * showing it: eased in over retail's 128 ticks, held for its 120 and eased out over 128 (6.3 seconds at 60 a second),
+ * after which the loading screen ends. The boot logos keep retail's timing.
  */
-unsigned char AreaCardAlpha(double seconds);
+unsigned char AreaCardAlpha(double ticks);
 
 } // namespace dc::game

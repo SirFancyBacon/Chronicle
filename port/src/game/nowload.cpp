@@ -64,11 +64,11 @@ constexpr std::size_t kArchiveBytes = 320000 + 2048;
 
 int hold_count;
 
-// The area card fades in, holds and fades out over these seconds, each fade eased, instead of retail's 128 ticks a
-// fade (two seconds each) and two held: on the PS2 they covered the disc's reading, here only waiting.
-constexpr double kCardIn = 0.6;
-constexpr double kCardHold = 1.4;
-constexpr double kCardOut = 0.6;
+// The area card fades in, holds and fades out for retail's ticks (128 a fade and 120 held), each fade eased and its
+// opacity taken at each display frame rather than stepped tick by tick.
+constexpr double kCardIn = 128.0;
+constexpr double kCardHold = 120.0;
+constexpr double kCardOut = 128.0;
 
 // The game's ticks the card has been showing for, and when the first was: the end is counted in ticks, the opacity
 // drawn from the clock, so the fades are as smooth as the display's frames are many.
@@ -77,18 +77,18 @@ std::optional<std::chrono::steady_clock::time_point> card_since;
 
 } // namespace
 
-u_char AreaCardAlpha(double seconds) {
+u_char AreaCardAlpha(double ticks) {
     const auto eased = [](double t) {
         t = std::clamp(t, 0.0, 1.0);
         return t * t * (3 - 2 * t);
     };
     double opacity = 0.0;
-    if (seconds < kCardIn) {
-        opacity = eased(seconds / kCardIn);
-    } else if (seconds < kCardIn + kCardHold) {
+    if (ticks < kCardIn) {
+        opacity = eased(ticks / kCardIn);
+    } else if (ticks < kCardIn + kCardHold) {
         opacity = 1.0;
     } else {
-        opacity = eased(1.0 - (seconds - kCardIn - kCardHold) / kCardOut);
+        opacity = eased(1.0 - (ticks - kCardIn - kCardHold) / kCardOut);
     }
     return static_cast<u_char>(std::lround(opacity * 0x80));
 }
@@ -275,8 +275,7 @@ void PresentLoadingFrame() {
             if (SmoothCard() && card_since.has_value()) {
                 // Between the ticks too, never past the tick's own: the card ends on the ticks' count.
                 const double since = std::chrono::duration<double>(std::chrono::steady_clock::now() - *card_since).count();
-                const double ticked = static_cast<double>(card_ticks) / ClockTickRate();
-                sprite.alpha = AreaCardAlpha(std::min(since, ticked));
+                sprite.alpha = AreaCardAlpha(std::min(since * ClockTickRate(), static_cast<double>(card_ticks)));
             }
             DrawSprite();
         }
@@ -454,9 +453,9 @@ int VSyncCallBack_Load(int /*field*/) {
             if (card_ticks++ == 0) {
                 card_since = std::chrono::steady_clock::now();
             }
-            const double seconds = static_cast<double>(card_ticks - 1) / ClockTickRate();
-            Show(&nl_tex, CRect_i_(0x80, 0xA0, 0x180, 0x80), CRect_i_(0, 0, 0x180, 0x80), AreaCardAlpha(seconds));
-            if (seconds >= kCardIn + kCardHold + kCardOut) {
+            const double ticks = static_cast<double>(card_ticks - 1);
+            Show(&nl_tex, CRect_i_(0x80, 0xA0, 0x180, 0x80), CRect_i_(0, 0, 0x180, 0x80), AreaCardAlpha(ticks));
+            if (ticks >= kCardIn + kCardHold + kCardOut) {
                 end_flag = 1;
             }
         } else {
