@@ -83,6 +83,7 @@ struct Config : HostSettings {
     float             shadow_distance = 0.0f;
     int               anisotropy = 0;
     ConfigAntiAliasing anti_aliasing = ConfigAntiAliasing::Off;
+    int               supersampling = 1; /**< video.supersampling: samples a pixel, 1 (off), 2 or 4: the picture drawn larger and filtered down. */
     ConfigHdr         hdr = ConfigHdr::Off;
     int               hdr_paper_white = 0; // nits; 0 takes what the system says
     int               hdr_peak = 0;        // nits; 0 takes what the system says

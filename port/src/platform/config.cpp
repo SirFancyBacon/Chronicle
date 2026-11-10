@@ -668,6 +668,17 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "video.hdr_peak") {
         return ReadNits(value, config.hdr_peak);
     }
+    if (name == "video.supersampling") {
+        if (!value.is_number_integer()) {
+            return false;
+        }
+        const int samples = value.get<int>();
+        if (samples != 1 && samples != 2 && samples != 4) {
+            return false;
+        }
+        config.supersampling = samples;
+        return true;
+    }
     if (name == "video.anti_aliasing") {
         return ReadAntiAliasing(value, config.anti_aliasing);
     }
@@ -845,6 +856,7 @@ std::string ConfigSerialize(const Config &config) {
     root["video"]["shadow_distance"] = Shortest(config.shadow_distance);
     root["video"]["anisotropy"] = config.anisotropy;
     root["video"]["anti_aliasing"] = AntiAliasingName(config.anti_aliasing);
+    root["video"]["supersampling"] = config.supersampling;
     root["video"]["hdr"] = HdrName(config.hdr);
     root["video"]["hdr_paper_white"] = config.hdr_paper_white;
     root["video"]["hdr_peak"] = config.hdr_peak;

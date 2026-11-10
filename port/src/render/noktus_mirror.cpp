@@ -387,6 +387,11 @@ noktus::DisplayOutput ToDisplayOutput(MirrorHdr mode) {
     return mode == MirrorHdr::ScRgb ? noktus::DisplayOutput::ScRgb : mode == MirrorHdr::Hdr10 ? noktus::DisplayOutput::Hdr10 : noktus::DisplayOutput::Sdr;
 }
 
+// Samples a pixel as Noktus's render scale: the picture's size by the window's, each way.
+float RenderScale(int samples) {
+    return std::sqrt(static_cast<float>(std::clamp(samples, 1, 4)));
+}
+
 // The setting, unless DC_NOKTUS_ANTI_ALIASING says otherwise for a scripted run.
 noktus::AntiAliasing ToAntiAliasing(MirrorAntiAliasing mode) {
     if (const char *forced = std::getenv("DC_NOKTUS_ANTI_ALIASING")) {
@@ -458,6 +463,7 @@ void Start(Mirror &mirror) {
     host.frame_limit = g_settings.max_fps;
     host.anisotropy = g_settings.anisotropy;
     host.anti_aliasing = ToAntiAliasing(g_settings.anti_aliasing);
+    host.render_scale = RenderScale(g_settings.supersampling);
     host.taa_ready = true; // so the Options screen can turn it on without a pause
     // Beside config.json, so that it goes wherever the player's settings do.
     host.pipeline_cache = PathsSaveRoot() / "noktus_pipelines.cache";
@@ -676,6 +682,7 @@ void MirrorApply(const MirrorSettings &settings) {
         noktus::SetFrameLimit(*mirror.renderer, settings.max_fps);
         noktus::SetAnisotropy(*mirror.renderer, settings.anisotropy);
         noktus::SetAntiAliasing(*mirror.renderer, ToAntiAliasing(settings.anti_aliasing));
+        noktus::SetRenderScale(*mirror.renderer, RenderScale(settings.supersampling));
         if (mirror.window != nullptr) {
             const HdrOutput output = HdrForWindow(mirror);
             noktus::SetDisplayOutput(*mirror.renderer, ToDisplayOutput(output.mode));

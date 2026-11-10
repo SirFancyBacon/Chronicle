@@ -306,6 +306,21 @@ void SetAntiAliasing(Config &config, int choice) {
     config.anti_aliasing = kAntiAliasing[choice];
 }
 
+constexpr int kSupersampling[] = {1, 2, 4};
+
+int SupersamplingCount(const Config & /*config*/) {
+    return static_cast<int>(std::size(kSupersampling));
+}
+
+int SupersamplingChoice(const Config &config) {
+    const auto found = std::ranges::find(kSupersampling, config.supersampling);
+    return found == std::end(kSupersampling) ? 0 : static_cast<int>(found - std::begin(kSupersampling));
+}
+
+void SetSupersampling(Config &config, int choice) {
+    config.supersampling = kSupersampling[choice];
+}
+
 int HdrChoice(const Config &config) {
     return static_cast<int>(config.hdr);
 }
@@ -738,6 +753,9 @@ constexpr Row kDisplayRows[] = {
     SettingRow("video.anti_aliasing", "Anti-Aliasing",
                "\"Anti-Aliasing\"\nSmooths jagged edges.\nSMAA: each frame alone.\nT2x: two frames.\nTAA: many frames.",
                AntiAliasingCount, AntiAliasingChoice, SetAntiAliasing, nullptr, "Off|SMAA|SMAA T2x|TAA"),
+    SettingRow("video.supersampling", "Supersampling",
+               "\"Supersampling\"\nDraws the picture larger\nand shrinks it to fit.\nSmoothest, but costly.",
+               SupersamplingCount, SupersamplingChoice, SetSupersampling, nullptr, "Off|2x|4x"),
     GameRow<&ConfigGameOptions::soft_focus, true>("video.soft_focus", "Soft Focus", "On|Off", 0x169),
     NamedRow<&Config::enhanced_cloth>("video.cloth", "Cloth",
                                       "\"Cloth\"\nOriginal: the PS2's.\nEnhanced: the body no\nlonger passes through.",
@@ -771,8 +789,8 @@ constexpr Row kAndroidDisplayRows[] = {
     kDisplayRows[8],
     kDisplayRows[9],
     kDisplayRows[10],
-    kDisplayRows[12],
     kDisplayRows[13],
+    kDisplayRows[14],
 };
 #elifdef __SWITCH__
 constexpr Row kSwitchDisplayRows[] = {
@@ -780,8 +798,8 @@ constexpr Row kSwitchDisplayRows[] = {
     kDisplayRows[7],
     kDisplayRows[8],
     kDisplayRows[9],
-    kDisplayRows[11],
     kDisplayRows[12],
+    kDisplayRows[13],
 };
 #endif
 

@@ -463,6 +463,7 @@ render::MirrorSettings MirrorSettingsOf(const Config &config) {
                              : config.anti_aliasing == ConfigAntiAliasing::SmaaT2x ? render::MirrorAntiAliasing::SmaaT2x
                              : config.anti_aliasing == ConfigAntiAliasing::Smaa    ? render::MirrorAntiAliasing::Smaa
                                                                                     : render::MirrorAntiAliasing::Off,
+            .supersampling = config.supersampling,
             .hdr = hdr,
             .paper_white = static_cast<float>(config.hdr_paper_white),
             .peak = static_cast<float>(config.hdr_peak)};

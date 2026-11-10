@@ -701,6 +701,9 @@ TEST(PlatformConfig, Anisotropy) {
     ASSERT_TRUE(ConfigParse(R"({"video": {"anisotropy": 3}})").anisotropy == 0);
     ASSERT_TRUE(ConfigParse(ConfigSerialize(ConfigParse(R"({"video": {"anisotropy": 8}})"))).anisotropy == 8);
     ASSERT_TRUE(ConfigParse("").anti_aliasing == ConfigAntiAliasing::Off);
+    ASSERT_TRUE(ConfigParse("").supersampling == 1);
+    ASSERT_TRUE(ConfigParse(R"({"video": {"supersampling": 3}})").supersampling == 1);
+    ASSERT_TRUE(ConfigParse(ConfigSerialize(ConfigParse(R"({"video": {"supersampling": 4}})"))).supersampling == 4);
     ASSERT_TRUE(ConfigParse(R"({"video": {"anti_aliasing": "TAA"}})").anti_aliasing == ConfigAntiAliasing::Taa);
     ASSERT_TRUE(ConfigParse(R"({"video": {"anti_aliasing": "fxaa"}})").anti_aliasing == ConfigAntiAliasing::Off);
     ASSERT_TRUE(ConfigParse(ConfigSerialize(ConfigParse(R"({"video": {"anti_aliasing": "smaa"}})"))).anti_aliasing == ConfigAntiAliasing::Smaa);

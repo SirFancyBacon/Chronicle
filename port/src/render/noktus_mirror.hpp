@@ -25,7 +25,8 @@ enum class Step : std::uint8_t;
 // DC_NOKTUS_CLASS_VIEW=1 draws each draw in its class's colour (noktus::DrawClass), for checking classes by eye.
 // DC_NOKTUS_MOTION=1 writes motion and reactive beside the scene (noktus::ReadMotion). With DC_NOKTUS_MOTION_OUT=<prefix> too, at exit the last tick drawn halfway
 // and at its end (<prefix>.first.png, .second.png) and the second's motion and reactive (.motion.f32, .reactive.f32, .motion.json), for the harness's motion check.
-// Unpaced (offscreen) runs only: paced, frames drawn to be read don't count as frames shown, so the second's motion isn't from the first.
+// Unpaced (offscreen) runs only: paced, frames drawn to be read don't count as frames shown, so the second's motion isn't from the first. With
+// supersampling off: the motion is at the picture's size and the pictures at the window's.
 // DC_NOKTUS_MOTION_VIEW=1 shows the motion in place of the picture, screenshots included: direction as hue, length as brightness, reactive in magenta.
 // DC_NOKTUS_ANTI_ALIASING=off, smaa, smaa_t2x or taa overrides the anti-aliasing setting for a run, for scripted tests.
 // DC_NOKTUS_WORKERS=<n> sets the threads sharing the work, and DC_NOKTUS_PARALLEL_FROM=<draws> how many mesh draws a tick needs before they're shared.
@@ -52,6 +53,7 @@ struct MirrorSettings {
     double           max_fps = 0.0;
     int              anisotropy = 0;
     MirrorAntiAliasing anti_aliasing = MirrorAntiAliasing::Off;
+    int              supersampling = 1; // samples a pixel: 1, 2 or 4
     MirrorHdr        hdr = MirrorHdr::Off;
     float            paper_white = 0.0f; // nits; 0 takes what the system says
     float            peak = 0.0f;        // nits; 0 takes what the system says
