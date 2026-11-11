@@ -28,9 +28,9 @@ TEST(SupersamplingRoom, ASmallerWindowLeavesRoomForMore) {
 }
 
 TEST(SupersamplingRoom, WithoutABudgetLessOfTheMemoryIsCountedOn) {
-    // 2x at 4K is counted at about 4.3 GB. A 5 GB GPU that allows 4.9 GB has room (90% of it, 4.4 GB); with no budget known, 70% of 5 GB, 3.5 GB, is counted on.
-    EXPECT_EQ(MostSupersamplingFor({.heap = 5120 * kMiB, .budget = 0}, 3840, 2400, false), 1);
-    EXPECT_EQ(MostSupersamplingFor({.heap = 5120 * kMiB, .budget = 5000 * kMiB}, 3840, 2400, false), 2);
+    // 2x at 4K is counted at about 3.4 GB. A 4.7 GB GPU that allows 4.5 GB has room (90% of it, 4 GB); with no budget known, 70% of 4.7 GB, 3.3 GB, is counted on.
+    EXPECT_EQ(MostSupersamplingFor({.heap = 4800 * kMiB, .budget = 0}, 3840, 2400, false), 1);
+    EXPECT_EQ(MostSupersamplingFor({.heap = 4800 * kMiB, .budget = 4600 * kMiB}, 3840, 2400, false), 2);
 }
 
 TEST(SupersamplingRoom, NothingKnownLimitsNothing) {

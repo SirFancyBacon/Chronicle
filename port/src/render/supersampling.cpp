@@ -6,12 +6,14 @@ namespace dc::render {
 
 namespace {
 
-// GPU memory a pixel of the picture costs once the game has shown its effects, measured at its most over the whole opening into Norune at 3840x2400
-// (most of it the effects' own pictures, made once and kept): the rise from no supersampling (1946 MB) to 2x (3858 MB), over the pixels that added.
-constexpr double kBytesPerPixel = 218.0;
-// TAA and SMAA T2x keep frames as well: SMAA T2x, the more, rose to 2258 MB.
-constexpr double kTemporalBytesPerPixel = 254.0;
-// What doesn't grow with the picture: textures, meshes and what the driver keeps, with room for a town's or a dungeon's more.
+// GPU memory a pixel of the picture costs once the game has shown its effects, measured at its most from the title into Norune at 3840x2400 (most of it
+// the effects' own pictures): the rise from no supersampling (1515 MB) to 2x (2993 MB), over the pixels that added, with surfaces' depth made only
+// when needed.
+constexpr double kBytesPerPixel = 170.0;
+// TAA and SMAA T2x keep frames as well: SMAA T2x, the more, added 36 bytes a pixel.
+constexpr double kTemporalBytesPerPixel = 206.0;
+// Headroom for what doesn't grow with the picture: textures, meshes, what the driver keeps and the room in VMA's blocks, measured at a few tens of MB,
+// and a town's or a dungeon's more.
 constexpr double kFixedBytes = 512.0 * 1024.0 * 1024.0;
 // Of what the system allows: some it lends to others as it goes.
 constexpr double kShareOfBudget = 0.9;
