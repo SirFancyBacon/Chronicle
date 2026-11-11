@@ -4,6 +4,8 @@
 // go through the renderer's calls, whichever renderer draws.
 
 #include <filesystem>
+#include <functional>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -50,10 +52,33 @@ struct ShadowTap {
 std::vector<unsigned char> ShadowCoverage(const std::vector<unsigned char> &alpha, int w, int h, std::span<const ShadowTap> taps, int &left,
                                           int &top, int &width, int &height);
 
+// ShadowCoverage's picture, and where its top-left is from the glyph's.
+struct ShadowPicture {
+    std::vector<unsigned char> coverage;
+    int                        left = 0, top = 0, width = 0, height = 0;
+};
+
+// What ShadowLater paints from: the glyph's coverage (w x h) and the taps.
+struct ShadowSource {
+    std::vector<unsigned char> alpha;
+    int                        w = 0, h = 0;
+    std::vector<ShadowTap>     taps;
+};
+
+// ShadowCoverage painted on a thread of its own, so that the game's never waits for one: the picture for key once it's
+// painted (taken, so asked for again it's painted again), nothing until then. The first asking starts it from what source
+// makes, called then and only then; later ones while it's painted just look. Meanwhile, the shadow can be drawn as its
+// taps' quads.
+std::optional<ShadowPicture> ShadowLater(const std::string &key, const std::function<std::optional<ShadowSource>()> &source);
+
+// Waits for every picture asked of ShadowLater to be painted: for tests.
+void WaitForShadows();
+
 // The shadow of ch at an em of em_px pixels painted into the atlas, white with ShadowCoverage's as alpha, so the draw's
 // vertex colour is its colour; x_offset and y_offset are of its top-left from the glyph's, in the glyph's pixels. Each
-// tap's opacity is at most 1, as drawn. The taps are rounded to a quarter of a pixel. Painted when first asked for, which
-// may start the atlas again (see Generation). False where GetGlyph would be.
+// tap's opacity is at most 1, as drawn. The taps are rounded to a quarter of a pixel. Painted on a thread of its own when
+// first asked for (ShadowLater): false until it's ready, and false where GetGlyph would be. Put into the atlas, it may
+// start it again (see Generation).
 bool GetShadow(char32_t ch, int em_px, std::span<const ShadowTap> taps, Glyph &out);
 
 // Counts the atlas's restarts, when it fills: a glyph or shadow got before one has coordinates that show something else now.

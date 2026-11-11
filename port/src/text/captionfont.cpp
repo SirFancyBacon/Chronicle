@@ -37,7 +37,9 @@ namespace dc::text::capfont {
 
 namespace {
 
-constexpr int kAtlasSize = 2048;
+// At 4K a letter's cell is about 100 pixels tall, and its edge picture larger: 2048 filled with a page or two of new text
+// and started again, painting everything anew.
+constexpr int kAtlasSize = 4096;
 // Transparent atlas padding prevents neighboring glyphs bleeding under linear sampling.
 constexpr int kPad = 1;
 

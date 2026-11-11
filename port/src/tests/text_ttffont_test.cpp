@@ -137,3 +137,39 @@ TEST(TtfFontShadow, TapsLaidAsOneAreTheTapsInOrder) {
 
     EXPECT_TRUE(dc::ttffont::ShadowCoverage(glyph, 2, 1, {}, left, top, width, height).empty());
 }
+
+// A shadow asked of ShadowLater is painted on another thread: nothing the first time, its source made once however often
+// it's asked meanwhile, then ShadowCoverage's picture once, taken.
+TEST(TtfFontShadow, ShadowLaterPaintsOnItsOwnThreadAndHandsThePictureOverOnce) {
+    const std::vector<unsigned char>          glyph = {255, 128};
+    const std::vector<dc::ttffont::ShadowTap> taps = {{.dx = 0.5f, .dy = 0.0f, .alpha = 1.0f}, {.dx = 1.0f, .dy = 1.0f, .alpha = 0.5f}};
+    int                                       made = 0;
+    const auto source = [&]() -> std::optional<dc::ttffont::ShadowSource> {
+        made++;
+        return dc::ttffont::ShadowSource{.alpha = glyph, .w = 2, .h = 1, .taps = taps};
+    };
+    const std::string key = "test:shadow-later";
+    EXPECT_FALSE(dc::ttffont::ShadowLater(key, source).has_value());
+    dc::ttffont::WaitForShadows();
+    const std::optional<dc::ttffont::ShadowPicture> picture = dc::ttffont::ShadowLater(key, source);
+    ASSERT_TRUE(picture.has_value());
+    EXPECT_EQ(made, 1);
+
+    int                              left = 0;
+    int                              top = 0;
+    int                              width = 0;
+    int                              height = 0;
+    const std::vector<unsigned char> expected = dc::ttffont::ShadowCoverage(glyph, 2, 1, taps, left, top, width, height);
+    EXPECT_EQ(picture->coverage, expected);
+    EXPECT_EQ(picture->left, left);
+    EXPECT_EQ(picture->top, top);
+    EXPECT_EQ(picture->width, width);
+    EXPECT_EQ(picture->height, height);
+
+    // Taken: asked for again, it's painted again, and a source that makes nothing asks for nothing.
+    EXPECT_FALSE(dc::ttffont::ShadowLater(key, [] { return std::optional<dc::ttffont::ShadowSource>(); }).has_value());
+    dc::ttffont::WaitForShadows();
+    EXPECT_FALSE(dc::ttffont::ShadowLater(key, source).has_value());
+    EXPECT_EQ(made, 2);
+    dc::ttffont::WaitForShadows();
+}

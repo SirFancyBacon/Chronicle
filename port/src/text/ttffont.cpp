@@ -5,11 +5,17 @@
 
 #include <algorithm>
 #include <cmath>
+#include <condition_variable>
+#include <deque>
 #include <format>
+#include <functional>
 #include <fstream>
 #include <map>
+#include <mutex>
+#include <set>
 #include <span>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "render/types.hpp"
@@ -476,6 +482,103 @@ std::vector<unsigned char> ShadowCoverage(const std::vector<unsigned char> &alph
     return out;
 }
 
+namespace {
+
+// ShadowLater's pictures and the threads that paint them. Made once and never destroyed: a thread may still be painting as
+// the program ends, and nothing it touches goes away under it.
+struct ShadowPainter {
+    std::mutex                                 lock;
+    std::condition_variable                    wake;
+    std::condition_variable                    idle;
+    struct Job {
+        std::string                key;
+        std::vector<unsigned char> alpha;
+        int                        w = 0, h = 0;
+        std::vector<ShadowTap>     taps;
+    };
+    std::deque<Job>                             queued;
+    std::set<std::string>                       asked; // queued or being painted
+    std::map<std::string, ShadowPicture>        ready;
+};
+
+// Paints what's queued, for good.
+void Paint(ShadowPainter &painter) {
+    for (;;) {
+        ShadowPainter::Job job;
+        {
+            std::unique_lock hold(painter.lock);
+            painter.wake.wait(hold, [&] { return !painter.queued.empty(); });
+            job = std::move(painter.queued.front());
+            painter.queued.pop_front();
+        }
+        ShadowPicture picture;
+        picture.coverage = ShadowCoverage(job.alpha, job.w, job.h, job.taps, picture.left, picture.top, picture.width, picture.height);
+        {
+            const std::scoped_lock hold(painter.lock);
+            painter.asked.erase(job.key);
+            // A picture never taken (text gone before it was painted) waits for its letter to come back: past this many, the
+            // waiting ones go.
+            constexpr std::size_t kMostWaiting = 2048;
+            if (painter.ready.size() >= kMostWaiting) {
+                std::erase_if(painter.ready, [](const auto &entry) { return !entry.second.coverage.empty(); });
+            }
+            painter.ready[job.key] = std::move(picture);
+        }
+        painter.idle.notify_all();
+    }
+}
+
+ShadowPainter &Painter() {
+    static ShadowPainter *painter = [] {
+        auto *made = new ShadowPainter;
+        // A page of new text asks for a picture a letter: a few threads share them, leaving the rest of the machine to the game.
+        const unsigned threads = std::clamp(std::thread::hardware_concurrency() / 2, 1u, 3u);
+        for (unsigned i = 0; i < threads; i++) {
+            std::thread(Paint, std::ref(*made)).detach();
+        }
+        return made;
+    }();
+    return *painter;
+}
+
+} // namespace
+
+std::optional<ShadowPicture> ShadowLater(const std::string &key, const std::function<std::optional<ShadowSource>()> &source) {
+    ShadowPainter &painter = Painter();
+    {
+        const std::scoped_lock hold(painter.lock);
+        if (auto found = painter.ready.find(key); found != painter.ready.end()) {
+            // One with nothing in it stays, so that it isn't painted again and again for as long as it's shown.
+            if (found->second.coverage.empty()) {
+                return found->second;
+            }
+            ShadowPicture picture = std::move(found->second);
+            painter.ready.erase(found);
+            return picture;
+        }
+        if (painter.asked.contains(key)) {
+            return std::nullopt;
+        }
+    }
+    // Made outside the lock: rastering a glyph is the game's thread's own work.
+    std::optional<ShadowSource> made = source();
+    if (!made) {
+        return std::nullopt;
+    }
+    const std::scoped_lock hold(painter.lock);
+    if (painter.asked.insert(key).second) {
+        painter.queued.push_back({.key = key, .alpha = std::move(made->alpha), .w = made->w, .h = made->h, .taps = std::move(made->taps)});
+        painter.wake.notify_one();
+    }
+    return std::nullopt;
+}
+
+void WaitForShadows() {
+    ShadowPainter   &painter = Painter();
+    std::unique_lock hold(painter.lock);
+    painter.idle.wait(hold, [&] { return painter.asked.empty(); });
+}
+
 bool GetShadow(char32_t ch, int em_px, std::span<const ShadowTap> taps, Glyph &out) {
     if (!g_font.loaded || em_px < 4 || em_px > 512 || taps.empty()) {
         return false;
@@ -486,22 +589,25 @@ bool GetShadow(char32_t ch, int em_px, std::span<const ShadowTap> taps, Glyph &o
         out = found->second;
         return true;
     }
-    const platform::load_profile::Span profile(platform::load_profile::Kind::Glyphs);
-    Bitmap                             bitmap;
-    if (!EnsureAtlas() || !Coverage(ch, em_px, bitmap)) {
+    if (!EnsureAtlas()) {
         return false;
     }
-    int                              left = 0;
-    int                              top = 0;
-    int                              width = 0;
-    int                              height = 0;
-    const std::vector<unsigned char> coverage = ShadowCoverage(bitmap.alpha, bitmap.w, bitmap.h, rounded, left, top, width, height);
-    Glyph                            shadow = {};
-    shadow.x_offset = static_cast<float>(left);
-    shadow.y_offset = static_cast<float>(top);
-    shadow.width = static_cast<float>(width);
-    shadow.height = static_cast<float>(height);
-    Put(coverage, width, height, shadow);
+    std::optional<ShadowPicture> painted = ShadowLater("ttf:" + key, [&]() -> std::optional<ShadowSource> {
+        Bitmap bitmap;
+        if (!Coverage(ch, em_px, bitmap)) {
+            return std::nullopt;
+        }
+        return ShadowSource{.alpha = std::move(bitmap.alpha), .w = bitmap.w, .h = bitmap.h, .taps = rounded};
+    });
+    if (!painted || painted->coverage.empty()) {
+        return false;
+    }
+    Glyph shadow = {};
+    shadow.x_offset = static_cast<float>(painted->left);
+    shadow.y_offset = static_cast<float>(painted->top);
+    shadow.width = static_cast<float>(painted->width);
+    shadow.height = static_cast<float>(painted->height);
+    Put(painted->coverage, painted->width, painted->height, shadow);
     g_atlas.shadows[key] = shadow;
     out = shadow;
     return true;

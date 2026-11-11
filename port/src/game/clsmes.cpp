@@ -2345,23 +2345,29 @@ const PassPicture *PassGlyph(const Cell &cell, int set, int index, int size, int
     if (budget <= 0) {
         return nullptr;
     }
-    budget--;
-    const int                  w = crop_x1 - crop_x0;
-    const int                  h = crop_y1 - crop_y0;
-    std::vector<unsigned char> crop(static_cast<size_t>(w) * h);
-    for (int y = 0; y < h; y++) {
-        std::copy_n(&cell.alpha[static_cast<size_t>(crop_y0 + y) * cell.w + crop_x0], w, &crop[static_cast<size_t>(y) * w]);
+    // Painted on a thread of its own: until it's ready, the letter's taps are laid quad by quad.
+    std::optional<ttffont::ShadowPicture> painted = ttffont::ShadowLater("letter:" + key, [&] {
+        const int                  w = crop_x1 - crop_x0;
+        const int                  h = crop_y1 - crop_y0;
+        std::vector<unsigned char> crop(static_cast<size_t>(w) * h);
+        for (int y = 0; y < h; y++) {
+            std::copy_n(&cell.alpha[static_cast<size_t>(crop_y0 + y) * cell.w + crop_x0], w, &crop[static_cast<size_t>(y) * w]);
+        }
+        return std::optional<ttffont::ShadowSource>(ttffont::ShadowSource{.alpha = std::move(crop), .w = w, .h = h, .taps = std::move(taps)});
+    });
+    if (!painted || painted->coverage.empty()) {
+        return nullptr;
     }
-    const platform::load_profile::Span profile(platform::load_profile::Kind::Glyphs);
-    PassPicture                        picture;
-    int                                width = 0;
-    int                                height = 0;
-    const std::vector<unsigned char>   coverage = ttffont::ShadowCoverage(crop, w, h, taps, picture.left, picture.top, width, height);
-    std::vector<unsigned char>         rgba(coverage.size() * 4, 255);
+    budget--;
+    PassPicture                picture;
+    picture.left = painted->left;
+    picture.top = painted->top;
+    const std::vector<unsigned char> &coverage = painted->coverage;
+    std::vector<unsigned char>        rgba(coverage.size() * 4, 255);
     for (size_t k = 0; k < coverage.size(); k++) {
         rgba[k * 4 + 3] = coverage[k];
     }
-    if (coverage.empty() || !capfont::AddImage(rgba, width, height, picture.glyph)) {
+    if (!capfont::AddImage(rgba, painted->width, painted->height, picture.glyph)) {
         return nullptr;
     }
     ForgetCellsIfTheAtlasRestarted();
