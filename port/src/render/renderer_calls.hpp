@@ -2,11 +2,18 @@
 
 #include <limits>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "gfx/gfx.hpp"
 #include "render/noktus_mirror.hpp"
+
+namespace gfx {
+/** The names render targets are kept under: Chronicle's host keeps them while Noktus draws; none under the old renderer, which keeps its own. */
+std::vector<std::string> NamedRenderTargetNames();
+} // namespace gfx
 
 // The renderer calls game code makes, other than drawing (render/passes.hpp). Game code goes through these rather than gfx, so
 // that there is one place to move when the renderer changes. tools/check_boundary.sh in Noktus Nimbus keeps it that way.
@@ -171,6 +178,14 @@ inline bool SnapshotFrame(gfx::TextureHandle target) {
 inline void DestroyTexture(gfx::TextureHandle texture) {
     MirrorDestroyTexture(texture);
     gfx::DestroyTexture(texture);
+}
+
+/** Lets go of the render target kept under this name, if there is one: the next asked for by it is made new, black. */
+inline void DropNamedRenderTarget(std::string_view name) {
+    const gfx::TextureHandle target = gfx::FindNamedRenderTarget(name);
+    if (target != gfx::kNullTexture) {
+        DestroyTexture(target);
+    }
 }
 
 // What HDR is sending now, mode Off when it isn't, and the patches shown over the picture for calibrating it.

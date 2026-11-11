@@ -62,6 +62,7 @@
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
 #include "render/passes.hpp"
+#include "render/texture_registry.hpp"
 #include "save/extension.hpp"
 #include "save/save_slots.hpp"
 #include "savedata.hpp"
@@ -1064,6 +1065,8 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
             mode = GAME_MODE_RUSH_MOVIE;
         }
 
+        // The last mode's effects let go of their pictures, which would otherwise add up, mode after mode, past what a GPU holds.
+        PortDropUnheldTargets();
         LoadOverlay(mode);
         GameLoadTraceCheckpoint("overlay_done");
         MGSetRenderInfo(800.0f, 10.0f, 65535.0f);

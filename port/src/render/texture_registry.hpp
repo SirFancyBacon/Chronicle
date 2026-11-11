@@ -155,11 +155,17 @@ unsigned PortRegisterNamedTarget(std::string_view name, unsigned width, unsigned
 
 /**
  * Releases one key, every key an owner holds, or reports whether a key is registered.
- * Releasing destroys the renderer texture the entry created; named targets live on in gfx.
+ * Releasing destroys the renderer texture the entry created, and the named target it stood for once no key names it.
  */
 void PortReleaseKey(unsigned key);
 void PortReleaseOwner(PortTextureOwner owner);
 bool PortKeyLive(unsigned key);
+
+/**
+ * Lets go of every named render target no key holds: the effects' own (depth of field, water, frame copies), which game code asks for by name each time
+ * it uses one. For between the game's modes, which retail began with VRAM given over afresh.
+ */
+void PortDropUnheldTargets();
 
 /**
  * The GS local-to-local transfer MGMoveImage describes, in texels of the two images: TBP0/PSM of

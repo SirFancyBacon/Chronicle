@@ -742,6 +742,14 @@ unsigned PortCreatePlaceholder(std::string_view name, unsigned width, unsigned h
     return PortRegisterNamedTarget(target, width, height, has_alpha, owner);
 }
 
+namespace {
+
+bool TargetHeld(std::string_view name) {
+    return std::ranges::any_of(Reg().entries, [&](const Entry &entry) { return entry.kind != EntryKind::Free && entry.target == name; });
+}
+
+} // namespace
+
 void PortReleaseKey(unsigned key) {
     Entry *entry = Live(key);
     if (entry == nullptr) {
@@ -751,7 +759,24 @@ void PortReleaseKey(unsigned key) {
         MirrorDestroyTexture(entry->texture);
         gfx::DestroyTexture(entry->texture);
     }
+    const std::string target = std::move(entry->target);
     *entry = Entry{};
+    // The picture under the name goes with the last texture that named it, as the VRAM it stood for did. Kept, every scene's would add up: at 4K, more
+    // than a 4 GB GPU holds.
+    if (!target.empty() && RendererUp() && !TargetHeld(target)) {
+        render::DropNamedRenderTarget(target);
+    }
+}
+
+void PortDropUnheldTargets() {
+    if (!RendererUp()) {
+        return;
+    }
+    for (const std::string &name : gfx::NamedRenderTargetNames()) {
+        if (!TargetHeld(name)) {
+            render::DropNamedRenderTarget(name);
+        }
+    }
 }
 
 void PortReleaseOwner(PortTextureOwner owner) {

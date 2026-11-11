@@ -14,6 +14,7 @@
 #include <fstream>
 #include <map>
 #include <string>
+#include <vector>
 #include <unordered_map>
 
 // This order matters: here gfx.hpp declares only Kazarov's versions, and this file defines the plain names. render/passes.hpp can't come in,
@@ -553,6 +554,17 @@ TextureHandle FindNamedRenderTarget(std::string_view name) {
     }
     const auto found = G().named.find(name);
     return found == G().named.end() ? kNullTexture : found->second;
+}
+
+std::vector<std::string> NamedRenderTargetNames() {
+    std::vector<std::string> names;
+    if (Old()) {
+        return names;
+    }
+    for (const auto &entry : G().named) {
+        names.push_back(entry.first);
+    }
+    return names;
 }
 
 TextureHandle NamedRenderTarget(std::string_view name, uint32_t logical_width, uint32_t logical_height, bool has_alpha, bool share_main_depth, bool frame_target) {
