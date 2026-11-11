@@ -33,11 +33,18 @@ const std::vector<std::uint8_t> *Rebuild(std::string_view alias);
 void Splice(std::string_view path, std::span<std::uint8_t> bytes);
 
 /**
- * Rebuilds every published source whose alias starts with one of `prefixes`, on a thread of its own, and keeps them for good: the files menus open, so
- * that opening one doesn't wait while dozens of models are rebuilt. A rebuild the game asks for meanwhile waits for one source at most. Called again, it
- * stops the last one first. The data's reader isn't made to be indexed while it's read, so call it once the data is indexed.
+ * Rebuilds every published source whose alias starts with one of `prefixes`, in the order given, on a thread of its own, and
+ * keeps them until LetGo: the files menus open, so that opening one doesn't wait while dozens of models are rebuilt, and a
+ * cutscene's, so that its scenes don't as they load. The thread builds without holding what the game's reads wait on. Called
+ * again, it stops the last one first. The data's reader isn't made to be indexed while it's read, so call it once the data is
+ * indexed.
  */
 void PrepareAhead(std::vector<std::string> prefixes);
+
+/**
+ * Stops rebuilding ahead, and lets go of what was rebuilt ahead under `prefix`: rebuilt again when next read. Call PrepareAhead again for the rest.
+ */
+void LetGo(std::string_view prefix);
 
 /**
  * Stops rebuilding ahead, for good: before the data is indexed again.

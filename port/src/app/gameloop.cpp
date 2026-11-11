@@ -87,6 +87,23 @@ using namespace dc::save;
 
 namespace {
 
+// The opening's models and motions, rebuilt from their glTF on a thread of their own while it plays: each scene otherwise rebuilt its own as it loaded,
+// on the game's thread, for up to a second (most of it reading JSON). Let go once it's over, as nothing else reads them.
+void PrepareModelsFor(int mode) {
+    static bool opening_prepared = false;
+    const bool  opening = mode == GAME_MODE_OPENING;
+    if (opening == opening_prepared) {
+        return;
+    }
+    opening_prepared = opening;
+    if (opening) {
+        data::model_gltf::PrepareAhead({"opdat/", "commenu/"}); // the opening first: it reads from the start
+    } else {
+        data::model_gltf::LetGo("opdat/");
+        data::model_gltf::PrepareAhead({"commenu/"});
+    }
+}
+
 using LoadTraceClock = std::chrono::steady_clock;
 
 struct LoadTrace {
@@ -1067,6 +1084,7 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
 
         // The last mode's effects let go of their pictures, which would otherwise add up, mode after mode, past what a GPU holds.
         PortDropUnheldTargets();
+        PrepareModelsFor(mode);
         LoadOverlay(mode);
         GameLoadTraceCheckpoint("overlay_done");
         MGSetRenderInfo(800.0f, 10.0f, 65535.0f);

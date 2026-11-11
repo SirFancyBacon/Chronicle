@@ -9,6 +9,7 @@
 #include <bit>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <deque>
@@ -51,8 +52,7 @@ struct State {
     std::unordered_map<std::string, std::unique_ptr<std::vector<std::uint8_t>>> rebuilt;
     std::deque<std::string>                                                     rebuilt_order; // those that can be let go, oldest first
     std::size_t                                                                 rebuilt_bytes = 0;
-    std::set<std::string>                                                       kept_ahead; // rebuilt by PrepareAhead, never let go
-    bool                                                                        keep_new_bundles = true;
+    std::set<std::string>                                                       kept_ahead; // rebuilt by PrepareAhead, kept until LetGo
     std::jthread                                                                preparer; // last, so it stops before the rest goes
 };
 
@@ -215,10 +215,6 @@ std::shared_ptr<const Bundle> LoadBundle(State &state, const std::string &path) 
         storage.bytes.resize(data.size());
         std::memcpy(storage.bytes.data(), data.data(), data.size());
         buffer.data = std::move(storage);
-    }
-    // Rebuilding ahead parses each bundle once, and would push out those the game is using.
-    if (!state.keep_new_bundles) {
-        return bundle;
     }
     // Holders keep their bundles alive past an eviction.
     while (state.recent.size() >= kKeptBundles) {
@@ -867,7 +863,7 @@ bool Publishes(std::string_view alias) {
 
 namespace {
 
-// A source's bytes rebuilt and checked, or null, with the state locked. A failure is remembered.
+// A source's bytes rebuilt and checked, or null: with the shared state locked, or on the preparer's own unlocked. A failure is remembered in the state given.
 std::unique_ptr<std::vector<std::uint8_t>> BuildChecked(State &state, std::string_view alias, const std::string &key, const Json &entry) {
     std::unique_ptr<std::vector<std::uint8_t>> bytes;
     try {
@@ -1087,41 +1083,73 @@ void PrepareAhead(std::vector<std::string> prefixes) {
         }
     }
     state.preparer = std::jthread([&state, started, generation, sources = std::move(sources)](std::stop_token stop) {
+        // Built with bundles of its own and without the lock, which is taken only to look and to keep what's built: holding it through a build had the
+        // game's reads wait, and a mutex doesn't promise them their turn, so a mode's loads waited seconds.
+        State       scratch; // its bundles, which a scene's sources share, kept apart from the game's
         std::size_t made = 0;
         std::size_t kept_bytes = 0;
+        // Already rebuilt for the game: kept from here on, out of the bytes that can be let go.
+        const auto keep = [&](const std::string &key, std::vector<std::uint8_t> &bytes) {
+            if (auto at = std::ranges::find(state.rebuilt_order, key); at != state.rebuilt_order.end()) {
+                state.rebuilt_order.erase(at);
+                state.rebuilt_bytes -= bytes.size();
+            }
+            state.kept_ahead.insert(key);
+            kept_bytes += bytes.size();
+        };
         for (const auto &[key, entry] : sources) {
             if (stop.stop_requested()) {
                 return;
             }
-            // One source at a time, so that the game's own rebuilds wait for one at most.
-            std::lock_guard<std::mutex> lock(state.mutex);
-            if (!state.indexed || state.generation != generation || state.kept_ahead.contains(key) || state.failed.contains(key)) {
-                continue;
-            }
-            if (auto found = state.rebuilt.find(key); found != state.rebuilt.end()) {
-                // Already rebuilt for the game: kept from here on, out of the bytes that can be let go.
-                if (auto at = std::ranges::find(state.rebuilt_order, key); at != state.rebuilt_order.end()) {
-                    state.rebuilt_order.erase(at);
-                    state.rebuilt_bytes -= found->second->size();
+            {
+                std::lock_guard<std::mutex> lock(state.mutex);
+                if (!state.indexed || state.generation != generation) {
+                    return;
                 }
-                state.kept_ahead.insert(key);
-                kept_bytes += found->second->size();
+                if (state.kept_ahead.contains(key) || state.failed.contains(key)) {
+                    continue;
+                }
+                if (auto found = state.rebuilt.find(key); found != state.rebuilt.end()) {
+                    keep(key, *found->second);
+                    continue;
+                }
+            }
+            std::unique_ptr<std::vector<std::uint8_t>> bytes = BuildChecked(scratch, key, key, entry);
+            std::lock_guard<std::mutex> lock(state.mutex);
+            if (!state.indexed || state.generation != generation) {
+                return;
+            }
+            if (bytes == nullptr) {
+                state.failed.insert(key);
                 continue;
             }
-            state.keep_new_bundles = false;
-            std::unique_ptr<std::vector<std::uint8_t>> bytes = BuildChecked(state, key, key, entry);
-            state.keep_new_bundles = true;
-            if (bytes != nullptr) {
-                kept_bytes += bytes->size();
-                state.rebuilt.emplace(key, std::move(bytes));
-                state.kept_ahead.insert(key);
-                made++;
+            // The game may have rebuilt it meanwhile.
+            if (auto found = state.rebuilt.find(key); found != state.rebuilt.end()) {
+                if (!state.kept_ahead.contains(key)) {
+                    keep(key, *found->second);
+                }
+                continue;
             }
+            kept_bytes += bytes->size();
+            state.rebuilt.emplace(key, std::move(bytes));
+            state.kept_ahead.insert(key);
+            made++;
         }
         const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
         std::fprintf(stderr, "models: %zu of %zu sources rebuilt ahead in %.2f s, %.1f MB kept\n", made, sources.size(), seconds,
                      static_cast<double>(kept_bytes) / (1024.0 * 1024.0));
     });
+}
+
+void LetGo(std::string_view prefix) {
+    StopPreparing();
+    State                      &state = Shared();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    const std::string           folded = Key(prefix);
+    for (auto it = state.kept_ahead.lower_bound(folded); it != state.kept_ahead.end() && it->starts_with(folded);) {
+        state.rebuilt.erase(*it);
+        it = state.kept_ahead.erase(it);
+    }
 }
 
 void Reset() {
