@@ -525,6 +525,13 @@ void Start(Mirror &mirror) {
     if (const char *view = std::getenv("DC_NOKTUS_CLASS_VIEW")) {
         host.class_view = std::string_view(view) == "1";
     }
+    // Step 7: the scene in linear light, while its blends are tuned; off until then.
+    if (const char *linear = std::getenv("DC_NOKTUS_LINEAR")) {
+        host.linear = std::string_view(linear) == "1";
+    }
+    if (const char *toe = std::getenv("DC_NOKTUS_TONE_TOE")) {
+        host.tone_map_toe = std::strtof(toe, nullptr);
+    }
     if (const char *motion = std::getenv("DC_NOKTUS_MOTION")) {
         host.motion = std::string_view(motion) == "1";
     }
