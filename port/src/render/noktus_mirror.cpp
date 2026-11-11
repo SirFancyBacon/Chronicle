@@ -175,9 +175,10 @@ void ReportGpu(const noktus::PaceReport &pace) {
     const std::string budget = memory.device_budget == 0 ? std::string()
                                                          : std::format("; the driver counts {:.0f} MB used of {:.0f} allowed", static_cast<double>(memory.device_usage) / 1048576.0,
                                                                        static_cast<double>(memory.device_budget) / 1048576.0);
-    std::fprintf(stderr, "noktus memory: %llu blocks (most %llu), %.0f MB in the GPU's memory (most %.0f), %.0f MB in the host's%s\n", static_cast<unsigned long long>(memory.blocks),
-                 static_cast<unsigned long long>(memory.most_blocks), static_cast<double>(memory.device_bytes) / 1048576.0, static_cast<double>(memory.most_device_bytes) / 1048576.0,
-                 static_cast<double>(memory.host_bytes) / 1048576.0, budget.c_str());
+    std::fprintf(stderr, "noktus memory: %llu objects (most %llu) in %llu blocks, %.0f MB in the GPU's memory (most %.0f), %.0f MB in the host's%s\n",
+                 static_cast<unsigned long long>(memory.objects), static_cast<unsigned long long>(memory.most_objects), static_cast<unsigned long long>(memory.blocks),
+                 static_cast<double>(memory.device_bytes) / 1048576.0, static_cast<double>(memory.most_device_bytes) / 1048576.0, static_cast<double>(memory.host_bytes) / 1048576.0,
+                 budget.c_str());
     const noktus::GpuTimes &gpu = pace.gpu;
     if (!gpu.measured) {
         std::fprintf(stderr, "noktus gpu: not timed, as this GPU can't time its work\n");
