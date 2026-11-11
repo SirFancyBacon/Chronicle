@@ -110,6 +110,9 @@ bool MirrorHasWindow();
 /** Takes the settings as they stand, now and for when the mirror starts. */
 void MirrorApply(const MirrorSettings &settings);
 
+/** The most supersampling, 1, 2 or 4, the GPU's memory has room for at the window's size with this anti-aliasing: what the Options screen offers. 4 with no Noktus drawing. */
+int MirrorMostSupersampling(MirrorAntiAliasing anti_aliasing);
+
 /** Names the pass Noktus records drawing in from now on. */
 void MirrorSetPass(Pass pass);
 

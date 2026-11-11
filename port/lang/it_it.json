@@ -295,7 +295,7 @@
     "options.video.supersampling.choice.0": "No",
     "options.video.supersampling.choice.1": "2x",
     "options.video.supersampling.choice.2": "4x",
-    "options.video.supersampling.help": "\"Supersampling\"\nDisegna l'immagine più\ngrande e la riduce.\nLa più liscia, ma costosa.",
+    "options.video.supersampling.help": "\"Supersampling\"\nDisegna l'immagine più\ngrande e la riduce.\nLa più liscia, ma costosa.\nSecondo la memoria GPU.",
     "options.video.supersampling.label": "Supersampling",
     "area.mt01": "NOLUN",
     "area.mt02": "BRACCONIRIA",

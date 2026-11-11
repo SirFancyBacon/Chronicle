@@ -295,7 +295,7 @@
     "options.video.supersampling.choice.0": "No",
     "options.video.supersampling.choice.1": "2x",
     "options.video.supersampling.choice.2": "4x",
-    "options.video.supersampling.help": "\"Supermuestreo\"\nDibuja la imagen más\ngrande y la reduce.\nLo más suave, pero caro.",
+    "options.video.supersampling.help": "\"Supermuestreo\"\nDibuja la imagen más\ngrande y la reduce.\nLo más suave, pero caro.\nSegún la memoria de la GPU.",
     "options.video.supersampling.label": "Supermuestreo",
     "area.mt01": "NOLUM",
     "area.mt02": "PUEBLO CAZADOR",

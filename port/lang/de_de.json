@@ -295,7 +295,7 @@
     "options.video.supersampling.choice.0": "Aus",
     "options.video.supersampling.choice.1": "2x",
     "options.video.supersampling.choice.2": "4x",
-    "options.video.supersampling.help": "\"Supersampling\"\nZeichnet das Bild größer\nund verkleinert es.\nAm glattesten, aber teuer.",
+    "options.video.supersampling.help": "\"Supersampling\"\nZeichnet das Bild größer\nund verkleinert es.\nAm glattesten, aber teuer.\nJe nach Grafikspeicher.",
     "options.video.supersampling.label": "Supersampling",
     "area.mt01": "DAS DORF NOLUN",
     "area.mt02": "DAS DORF POACHER",

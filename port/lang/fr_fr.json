@@ -295,7 +295,7 @@
     "options.video.supersampling.choice.0": "Désactivé",
     "options.video.supersampling.choice.1": "2x",
     "options.video.supersampling.choice.2": "4x",
-    "options.video.supersampling.help": "\"Suréchantillonnage\"\nDessine l'image en plus\ngrand puis la réduit.\nLe plus lisse, mais coûteux.",
+    "options.video.supersampling.help": "\"Suréchantillonnage\"\nDessine l'image en plus\ngrand puis la réduit.\nLe plus lisse, mais coûteux.\nSelon la mémoire du GPU.",
     "options.video.supersampling.label": "Suréchantillonnage",
     "area.mt01": "NOLAN",
     "area.mt02": "VILLAGE DU TIREUR",

@@ -16,6 +16,7 @@
 #include "options/menu_option.hpp"
 #include "platform/input.hpp"
 #include "platform/window.hpp"
+#include "render/noktus_mirror.hpp"
 
 namespace dc::options {
 
@@ -308,13 +309,21 @@ void SetAntiAliasing(Config &config, int choice) {
 
 constexpr int kSupersampling[] = {1, 2, 4};
 
-int SupersamplingCount(const Config & /*config*/) {
-    return static_cast<int>(std::size(kSupersampling));
+// As far as the GPU's memory has room for at the window's size, with the anti-aliasing chosen: past that, more samples run it out.
+int SupersamplingCount(const Config &config) {
+    const render::MirrorAntiAliasing anti_aliasing = config.anti_aliasing == ConfigAntiAliasing::Taa       ? render::MirrorAntiAliasing::Taa
+                                                     : config.anti_aliasing == ConfigAntiAliasing::SmaaT2x ? render::MirrorAntiAliasing::SmaaT2x
+                                                     : config.anti_aliasing == ConfigAntiAliasing::Smaa    ? render::MirrorAntiAliasing::Smaa
+                                                                                                            : render::MirrorAntiAliasing::Off;
+    const int most = render::MirrorMostSupersampling(anti_aliasing);
+    return static_cast<int>(std::ranges::find(kSupersampling, most) - std::begin(kSupersampling)) + 1;
 }
 
+// A setting past what's offered is drawn as the most offered, which is what the picture is drawn at.
 int SupersamplingChoice(const Config &config) {
     const auto found = std::ranges::find(kSupersampling, config.supersampling);
-    return found == std::end(kSupersampling) ? 0 : static_cast<int>(found - std::begin(kSupersampling));
+    const int  choice = found == std::end(kSupersampling) ? 0 : static_cast<int>(found - std::begin(kSupersampling));
+    return std::min(choice, SupersamplingCount(config) - 1);
 }
 
 void SetSupersampling(Config &config, int choice) {
@@ -754,7 +763,7 @@ constexpr Row kDisplayRows[] = {
                "\"Anti-Aliasing\"\nSmooths jagged edges.\nSMAA: each frame alone.\nT2x: two frames.\nTAA: many frames.",
                AntiAliasingCount, AntiAliasingChoice, SetAntiAliasing, nullptr, "Off|SMAA|SMAA T2x|TAA"),
     SettingRow("video.supersampling", "Supersampling",
-               "\"Supersampling\"\nDraws the picture larger\nand shrinks it to fit.\nSmoothest, but costly.",
+               "\"Supersampling\"\nDraws the picture larger\nand shrinks it to fit.\nSmoothest, but costly.\nAs far as GPU memory allows.",
                SupersamplingCount, SupersamplingChoice, SetSupersampling, nullptr, "Off|2x|4x"),
     GameRow<&ConfigGameOptions::soft_focus, true>("video.soft_focus", "Soft Focus", "On|Off", 0x169),
     NamedRow<&Config::enhanced_cloth>("video.cloth", "Cloth",

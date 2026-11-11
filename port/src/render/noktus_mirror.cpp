@@ -34,6 +34,7 @@
 #include "platform/paths.hpp"
 #include "render/noktus_adapter.hpp"
 #include "render/passes.hpp"
+#include "render/supersampling.hpp"
 #include "platform/load_work_profile.hpp"
 
 namespace dc::render {
@@ -69,6 +70,11 @@ struct Mirror {
     std::string                                              path;
     SDL_Window                                              *window = nullptr;
     int                                                      ticks_since_report = 0;
+    int                                                      most_samples = 4;   // supersampling the GPU's memory has room for at room_width x room_height
+    int                                                      most_temporal_samples = 4; // and with anti-aliasing that keeps frames
+    std::uint32_t                                            room_width = 0;
+    std::uint32_t                                            room_height = 0;
+    int                                                      drawn_samples = 0;  // what the renderer was last told
     std::unique_ptr<noktus::Renderer>                        renderer;
     std::unordered_map<gfx::TextureHandle, noktus::TextureId> textures;
     std::unordered_map<gfx::MeshHandle, noktus::MeshId>       meshes;
@@ -408,6 +414,37 @@ float RenderScale(int samples) {
     return std::sqrt(static_cast<float>(std::clamp(samples, 1, 4)));
 }
 
+bool Temporal(MirrorAntiAliasing mode) {
+    return mode == MirrorAntiAliasing::Taa || mode == MirrorAntiAliasing::SmaaT2x;
+}
+
+// The supersampling asked for, held to what the GPU's memory has room for at the window's size. That's worked out again when the window changes size
+// or the settings do, not as the budget drifts, so that the picture's size doesn't come and go with what other programs hold.
+void ApplySupersampling(Mirror &mirror, bool settings_changed) {
+    const noktus::MemoryRoom room = noktus::RoomFor(*mirror.renderer);
+    if (settings_changed || room.window_width != mirror.room_width || room.window_height != mirror.room_height) {
+        mirror.room_width = room.window_width;
+        mirror.room_height = room.window_height;
+        const GpuRoom gpu = {.heap = room.heap, .budget = room.budget};
+        mirror.most_samples = MostSupersamplingFor(gpu, room.window_width, room.window_height, false);
+        mirror.most_temporal_samples = MostSupersamplingFor(gpu, room.window_width, room.window_height, true);
+    }
+    const int most = Temporal(g_settings.anti_aliasing) ? mirror.most_temporal_samples : mirror.most_samples;
+    const int samples = std::min(std::clamp(g_settings.supersampling, 1, 4), most);
+    if (samples == mirror.drawn_samples) {
+        return;
+    }
+    if (samples < g_settings.supersampling) {
+        const std::string why = room.budget != 0 ? std::format("{:.0f} MB the system allows of the GPU's {:.0f}", static_cast<double>(room.budget) / 1048576.0,
+                                                               static_cast<double>(room.heap) / 1048576.0)
+                                                 : std::format("the GPU's {:.0f} MB, its driver giving no budget", static_cast<double>(room.heap) / 1048576.0);
+        std::fprintf(stderr, "noktus: supersampling held to %dx of %dx, for a %ux%u window in %s\n", samples, g_settings.supersampling, room.window_width,
+                     room.window_height, why.c_str());
+    }
+    noktus::SetRenderScale(*mirror.renderer, RenderScale(samples));
+    mirror.drawn_samples = samples;
+}
+
 // The setting, unless DC_NOKTUS_ANTI_ALIASING says otherwise for a scripted run.
 noktus::AntiAliasing ToAntiAliasing(MirrorAntiAliasing mode) {
     if (const char *forced = std::getenv("DC_NOKTUS_ANTI_ALIASING")) {
@@ -479,7 +516,8 @@ void Start(Mirror &mirror) {
     host.frame_limit = g_settings.max_fps;
     host.anisotropy = g_settings.anisotropy;
     host.anti_aliasing = ToAntiAliasing(g_settings.anti_aliasing);
-    host.render_scale = RenderScale(g_settings.supersampling);
+    // Not supersampled until it's known there's room: ApplySupersampling raises it once the renderer can say what the GPU has.
+    host.render_scale = 1.0f;
     host.taa_ready = true; // so the Options screen can turn it on without a pause
     // Beside config.json, so that it goes wherever the player's settings do.
     host.pipeline_cache = PathsSaveRoot() / "noktus_pipelines.cache";
@@ -505,6 +543,8 @@ void Start(Mirror &mirror) {
         throw;
     }
     std::fprintf(stderr, "noktus: drawing on %s, window: %s\n", noktus::RendererDeviceName(*mirror.renderer).c_str(), noktus::DescribeWindow(*mirror.renderer).c_str());
+    mirror.drawn_samples = 1; // as host.render_scale started it
+    ApplySupersampling(mirror, true);
     mirror.textures[gfx::kPreviousFrame] = mirror.renderer->LastFrame();
     if (const std::optional<noktus::Pass> pass = ToNoktusPass(CurrentPass())) {
         mirror.renderer->SetPass(*pass);
@@ -688,6 +728,16 @@ bool MirrorDepthProbe() {
     return probe;
 }
 
+int MirrorMostSupersampling(MirrorAntiAliasing anti_aliasing) {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (!mirror.renderer || !MirrorOn()) {
+        return 4;
+    }
+    // What the picture is held to, worked out when it last was, so the row and the picture agree.
+    return Temporal(anti_aliasing) ? mirror.most_temporal_samples : mirror.most_samples;
+}
+
 void MirrorApply(const MirrorSettings &settings) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
@@ -698,7 +748,7 @@ void MirrorApply(const MirrorSettings &settings) {
         noktus::SetFrameLimit(*mirror.renderer, settings.max_fps);
         noktus::SetAnisotropy(*mirror.renderer, settings.anisotropy);
         noktus::SetAntiAliasing(*mirror.renderer, ToAntiAliasing(settings.anti_aliasing));
-        noktus::SetRenderScale(*mirror.renderer, RenderScale(settings.supersampling));
+        ApplySupersampling(mirror, true);
         if (mirror.window != nullptr) {
             const HdrOutput output = HdrForWindow(mirror);
             noktus::SetDisplayOutput(*mirror.renderer, ToDisplayOutput(output.mode));
@@ -1035,6 +1085,10 @@ void MirrorEndTick() {
                 mirror.frames_at_rate = frames;
                 mirror.rate_since = now;
             }
+        }
+        // Every 30 ticks, for a window that's changed size.
+        if (mirror.ticks_since_report % 30 == 0) {
+            Guarded([&] { ApplySupersampling(mirror, false); });
         }
         // Every few seconds, so that a load doesn't hide how play went.
         if (++mirror.ticks_since_report == 300) {
