@@ -20,6 +20,27 @@ std::vector<std::string> NamedRenderTargetNames();
 
 namespace dc::render {
 
+/** Depth of field and heat haze, in the game's settings turned into distances: see noktus::Focus. */
+struct FocusSettings {
+    float near = 0.0f;
+    float near_band = 0.0f;
+    float near_blur = 0.0f;
+    float far = 0.0f;
+    float far_band = 0.0f;
+    float far_blur = 0.0f;
+    float haze = 0.0f; // the most bend, as a share of the frame's height
+    float haze_start = 0.0f;
+    float haze_end = 0.0f;
+};
+
+/** Whether the renderer draws depth of field and heat haze itself (ApplyFocus), in place of the game's layered copies: with Noktus drawing, unless
+ * DC_GAME_DOF=1 asks for the game's own, to compare. */
+bool ModernFocus();
+
+/** Lays depth of field and heat haze on the screen as drawn so far, where the game drew its own. */
+void ApplyFocus(const FocusSettings &settings);
+
+
 #define DC_RENDERER_CALL(name)                                    \
     template <typename... Args>                                   \
     decltype(auto) name(Args &&...args) {                         \

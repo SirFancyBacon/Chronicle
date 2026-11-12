@@ -449,6 +449,38 @@ LowHaze PrepareLowHaze(render::TextureHandle snapshot, const render::LogicalRect
 void DepthOfField(float *focus, int level, int alpha, int blur) {
     render::PassScope pass(render::Pass::DepthOfField);
     render::StepScope step(blur > 0 ? render::Step::Haze : render::Step::DepthOfField);
+    // Drawn by the renderer from the scene's depth, in place of the layered copies below, with the game's own settings: the blur beyond each focus plane
+    // over the bands its planes span (30 and 20), mixed in at its alpha (of 128) as the game mixes each (a single spread, between the game's half- and
+    // quarter-size blurs, measured to take as much detail away overall); or the haze over the range the copies below give it. The game's wobble, up to blur sixteenths of a pixel,
+    // moved narrow columns mixed by distance and read as a shimmer; bending the whole picture that far swirls it, so the bend is about a pixel and a
+    // half at 480 lines at the towns' blur of 96, up to twice that. The owner's choice of 2026-11-11.
+    if (render::ModernFocus()) {
+        render::FocusSettings settings;
+        const float           strength = std::clamp(static_cast<float>(alpha) / 128.0f, 0.0f, 1.0f);
+        if (blur > 0) {
+            // As the game's: from the front of the near focus band, to beyond the far focus plane where its level draws that far, else the near
+            // band's back. A range that isn't one (the game's own copies refuse it too) draws no haze.
+            const HazeRange range = HazeRangeOf(focus);
+            settings.haze = std::clamp(static_cast<float>(blur) / 96.0f, 0.0f, 2.0f) * 1.5f / static_cast<float>(SCREEN_HEIGHT);
+            settings.haze_start = range.near_front;
+            settings.haze_end = level >= 2 ? range.far_back : range.near_back;
+            if (!std::isfinite(settings.haze_start) || !std::isfinite(settings.haze_end)) {
+                settings.haze = 0.0f;
+                settings.haze_start = settings.haze_end = 0.0f;
+            }
+        } else {
+            settings.near = focus[0];
+            settings.near_band = 30.0f;
+            settings.near_blur = strength;
+            if (level >= 2) {
+                settings.far = focus[1];
+                settings.far_band = 20.0f;
+                settings.far_blur = strength;
+            }
+        }
+        render::ApplyFocus(settings);
+        return;
+    }
     render::TextureHandle target = render::CurrentRenderTarget();
     bool               haze = blur > 0;
     const HazeRange    range = HazeRangeOf(focus);

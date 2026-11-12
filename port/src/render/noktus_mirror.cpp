@@ -34,6 +34,7 @@
 #include "platform/paths.hpp"
 #include "render/noktus_adapter.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/supersampling.hpp"
 #include "platform/load_work_profile.hpp"
 
@@ -812,6 +813,33 @@ Step FromNoktusStep(noktus::Step step) {
 }
 
 } // namespace
+
+bool ModernFocus() {
+    static const bool game_dof = [] {
+        const char *asked = std::getenv("DC_GAME_DOF");
+        return asked != nullptr && std::string_view(asked) == "1";
+    }();
+    return !game_dof && !KazarovDraws() && MirrorOn();
+}
+
+void ApplyFocus(const FocusSettings &settings) {
+    if (!MirrorOn()) {
+        return;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.renderer) {
+        mirror.renderer->ApplyFocus({.near = settings.near,
+                                     .near_band = settings.near_band,
+                                     .near_blur = settings.near_blur,
+                                     .far = settings.far,
+                                     .far_band = settings.far_band,
+                                     .far_blur = settings.far_blur,
+                                     .haze = settings.haze,
+                                     .haze_start = settings.haze_start,
+                                     .haze_end = settings.haze_end});
+    }
+}
 
 void MirrorBeginStep(Step step) {
     if (!MirrorOn()) {
