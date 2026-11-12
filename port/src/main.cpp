@@ -100,6 +100,7 @@ struct Options {
     const char  *town_menu = nullptr;
     const char  *town_dungeon = nullptr;
     const char  *town_clock = nullptr;
+    const char  *town_place = nullptr;
     const char  *town_interior = nullptr;
     bool         dungeon_ura = false;
     const char  *dungeon_open = nullptr;
@@ -170,6 +171,7 @@ float g_switch_render_scale = 0.0f;
                  "  --town-event N     raise town program N the first time Cross goes down in a town (DC_TOWN_EVENT)\n"
                  "  --town-dungeon N   enter dungeon N (0-6) once a town walks, at its floor select (DC_TOWN_DUNGEON)\n"
                  "  --town-clock H     set the town's clock to hour H (0-23) once it walks (DC_TOWN_CLOCK)\n"
+                 "  --town-place X,Y,Z[,TURN]  put the player there once the town walks (DC_TOWN_PLACE)\n"
                  "  --town-interior N  enter the town's interior N (i01h01) once it walks (DC_TOWN_INTERIOR)\n"
                  "  --dungeon-ura      swap to the floor's back side once the dungeon plays\n"
                  "  --dungeon-open X   once a floor plays, open the nearest atla or chest (DC_DUNGEON_OPEN)\n",
@@ -230,6 +232,8 @@ Options ParseOptions(int argc, const char **argv) {
             options.town_dungeon = value();
         } else if (arg == "--town-clock") {
             options.town_clock = value();
+        } else if (arg == "--town-place") {
+            options.town_place = value();
         } else if (arg == "--town-interior") {
             options.town_interior = value();
         } else if (arg == "--dungeon-ura") {
@@ -669,6 +673,13 @@ int Run(int argc, const char **argv) {
     }
     if (options.town_clock != nullptr && *options.town_clock != '\0' && !GameSetTownClock(options.town_clock)) {
         std::fprintf(stderr, "bad --town-clock: %s\n", options.town_clock);
+        std::exit(kExitUsage);
+    }
+    if (options.town_place == nullptr) {
+        options.town_place = std::getenv("DC_TOWN_PLACE");
+    }
+    if (options.town_place != nullptr && *options.town_place != '\0' && !GameSetTownPlace(options.town_place)) {
+        std::fprintf(stderr, "bad --town-place: %s\n", options.town_place);
         std::exit(kExitUsage);
     }
     if (options.town_interior == nullptr) {

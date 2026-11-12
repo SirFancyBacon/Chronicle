@@ -4,11 +4,14 @@
 #include <array>
 #include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <format>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <print>
 #include <string>
 #include <string_view>
@@ -36,8 +39,8 @@
 #include "editloop3.hpp"
 #include "fishing/host.hpp"
 #include "gamemode.hpp"
-#include "georama/tables.hpp"
 #include "gamepad.hpp"
+#include "georama/tables.hpp"
 #include "item/framework.hpp"
 #include "item/host.hpp"
 #include "journal/heard.hpp"
@@ -226,6 +229,7 @@ int  g_town_event;
 // The dungeon --town-dungeon asked for, plus one; 0 for none.
 int  g_town_dungeon;
 int  g_town_clock;
+std::optional<std::array<float, 4>> g_town_place;
 std::string g_town_interior;
 bool g_dungeon_ura;
 DungeonOpen g_dungeon_open = DungeonOpen::None;
@@ -769,6 +773,34 @@ bool GameSetTownClock(const char *hour) {
 
 int GameTakeTownClock() {
     return std::exchange(g_town_clock, 0) - 1;
+}
+
+bool GameSetTownPlace(const char *place) {
+    // Left out, the turn is NaN: the player keeps the facing the town gave.
+    std::array<float, 4> values = {0.0f, 0.0f, 0.0f, std::numeric_limits<float>::quiet_NaN()};
+    std::string_view     rest = place;
+    std::size_t          count = 0;
+    bool                 trailing = false;
+    while (!rest.empty() && count < values.size()) {
+        const std::size_t      comma = rest.find(',');
+        const std::string_view part = rest.substr(0, comma);
+        auto [end, error] = std::from_chars(part.data(), part.data() + part.size(), values[count]);
+        if (error != std::errc{} || end != part.data() + part.size() || !std::isfinite(values[count])) {
+            return false;
+        }
+        count++;
+        trailing = comma != std::string_view::npos;
+        rest = trailing ? rest.substr(comma + 1) : std::string_view{};
+    }
+    if (count < 3 || !rest.empty() || trailing) {
+        return false;
+    }
+    g_town_place = values;
+    return true;
+}
+
+std::optional<std::array<float, 4>> GameTakeTownPlace() {
+    return std::exchange(g_town_place, std::nullopt);
 }
 
 void GameSetTownInterior(const char *name) {

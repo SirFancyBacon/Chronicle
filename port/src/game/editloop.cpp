@@ -17,6 +17,7 @@
 #include <format>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -1986,6 +1987,22 @@ int EditLoop() {
     if (settled) {
         if (const int hour = app::GameTakeTownClock(); hour >= 0) {
             EdSetClock(static_cast<float>(hour));
+        }
+        if (const std::optional<std::array<float, 4>> place = app::GameTakeTownPlace()) {
+            sceVu0FVECTOR at = {(*place)[0], (*place)[1], (*place)[2], 1.0f};
+            Chara->SetPosition(at);
+            // As the town's start places the player and camera: behind the player when it's turned, arriving at once rather than gliding there
+            // through whatever's between.
+            if (!std::isnan((*place)[3])) {
+                Chara->SetRotation(0.0f, (*place)[3], 0.0f);
+                float yaw = (*place)[3] - PI_SHORT;
+                if (yaw < PI_SHORT) {
+                    yaw -= TWO_PI;
+                }
+                MainCamera.SetAngleSoon(yaw);
+            }
+            MainCamera.SetFollow(at[0], 14.0f + at[1], at[2]);
+            MainCamera.Step(-1);
         }
         if (std::string interior = app::GameTakeTownInterior(); !interior.empty()) {
             GotoInterior(interior.data(), 0, 0, nullptr, -1);

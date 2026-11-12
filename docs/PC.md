@@ -630,6 +630,11 @@ For tests and debugging only; nothing the game does depends on them.
   with the save's floors, Atla and limits. Anything else exits with status 2.
 - `--town-clock H` (or `DC_TOWN_CLOCK`) sets the town's clock to hour `H` (0-23) once the town walks, through
   `EdSetClock`, so a capture can show a time of day. Anything else exits with status 2.
+- `--town-place X,Y,Z[,TURN]` (or `DC_TOWN_PLACE`) puts the player at `X,Y,Z` in the town's own units, `Y` up (a building's place in
+  its `mapinfo.cfg`, say), turned `TURN` radians as the model's own rotation (an event entry's rotation plus π, as the game applies
+  those), or as the town left it without one, once the town walks, so a capture can show a spot the town's start doesn't. The
+  camera arrives with the player, behind it when it's turned and at its own angle otherwise, as the town's start places them.
+  Anything else exits with status 2.
 - `--town-interior NAME` (or `DC_TOWN_INTERIOR`) enters the town's interior `NAME` (`i01h01`, as its folder is named) once
   the town walks, through `GotoInterior`, at the time of day the clock shows.
 - `--dungeon-ura` swaps to the floor's back side once the dungeon plays, as the script's request does.

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "app/presentation.hpp"
@@ -125,6 +127,17 @@ bool GameSetTownClock(const char *hour);
  * The hour GameSetTownClock asked for, once; -1 for none.
  */
 int GameTakeTownClock();
+
+/**
+ * Test hook: where to put the player once the current town walks, as "X,Y,Z" or "X,Y,Z,TURN" in the town's own units (a building's place in its
+ * mapinfo.cfg, say) and its turn in radians, so a capture can show a spot the town's start doesn't. False for anything else.
+ */
+bool GameSetTownPlace(const char *place);
+
+/**
+ * The place GameSetTownPlace asked for, once: x, y, z and turn, the turn NaN where none was given.
+ */
+std::optional<std::array<float, 4>> GameTakeTownPlace();
 
 /**
  * Test hook: an interior of the current town (i01h01, as its folder is named) to enter once the town
