@@ -450,14 +450,16 @@ void DepthOfField(float *focus, int level, int alpha, int blur) {
     render::PassScope pass(render::Pass::DepthOfField);
     render::StepScope step(blur > 0 ? render::Step::Haze : render::Step::DepthOfField);
     // Drawn by the renderer from the scene's depth, in place of the layered copies below, with the game's own settings: the blur beyond each focus plane
-    // over the bands its planes span (30 and 20), mixed in at its alpha (of 128) as the game mixes each, the far laid over the near, and spread as far as
+    // over the bands its planes span (30 and 20), mixed in a tenth less than its alpha (of 128) mixes each, the far laid over the near, and spread as far as
     // the game's half- and quarter-size copies spread at its 480 lines, about one line and two, the same share of the picture at any size; or the haze
     // over the range the copies below give it. The game's wobble, up to blur sixteenths of a pixel,
     // moved narrow columns mixed by distance and read as a shimmer; bending the whole picture that far swirls it, so the bend is about a pixel and a
     // half at 480 lines at the towns' blur of 96, up to twice that. The owner's choice of 2026-11-11.
     if (render::ModernFocus()) {
         render::FocusSettings settings;
-        const float           strength = std::clamp(static_cast<float>(alpha) / 128.0f, 0.0f, 1.0f);
+        // A tenth less than the game mixes in: the PS2's blur also hid how short its view was, and a cleaner distance reads better on a sharp
+        // screen. The owner's choice of 2026-11-12.
+        const float strength = 0.9f * std::clamp(static_cast<float>(alpha) / 128.0f, 0.0f, 1.0f);
         if (blur > 0) {
             // As the game's: from the front of the near focus band, to beyond the far focus plane where its level draws that far, else the near
             // band's back. A range that isn't one (the game's own copies refuse it too) draws no haze.
