@@ -450,8 +450,9 @@ void DepthOfField(float *focus, int level, int alpha, int blur) {
     render::PassScope pass(render::Pass::DepthOfField);
     render::StepScope step(blur > 0 ? render::Step::Haze : render::Step::DepthOfField);
     // Drawn by the renderer from the scene's depth, in place of the layered copies below, with the game's own settings: the blur beyond each focus plane
-    // over the bands its planes span (30 and 20), mixed in at its alpha (of 128) as the game mixes each (a single spread, between the game's half- and
-    // quarter-size blurs, measured to take as much detail away overall); or the haze over the range the copies below give it. The game's wobble, up to blur sixteenths of a pixel,
+    // over the bands its planes span (30 and 20), mixed in at its alpha (of 128) as the game mixes each, the far laid over the near, and spread as far as
+    // the game's half- and quarter-size copies spread at its 480 lines, about one line and two, the same share of the picture at any size; or the haze
+    // over the range the copies below give it. The game's wobble, up to blur sixteenths of a pixel,
     // moved narrow columns mixed by distance and read as a shimmer; bending the whole picture that far swirls it, so the bend is about a pixel and a
     // half at 480 lines at the towns' blur of 96, up to twice that. The owner's choice of 2026-11-11.
     if (render::ModernFocus()) {
@@ -472,10 +473,12 @@ void DepthOfField(float *focus, int level, int alpha, int blur) {
             settings.near = focus[0];
             settings.near_band = 30.0f;
             settings.near_blur = strength;
+            settings.near_spread = 1.0f / static_cast<float>(SCREEN_HEIGHT);
             if (level >= 2) {
                 settings.far = focus[1];
                 settings.far_band = 20.0f;
                 settings.far_blur = strength;
+                settings.far_spread = 2.0f / static_cast<float>(SCREEN_HEIGHT);
             }
         }
         render::ApplyFocus(settings);

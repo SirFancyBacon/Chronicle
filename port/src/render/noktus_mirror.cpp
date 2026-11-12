@@ -832,9 +832,11 @@ void ApplyFocus(const FocusSettings &settings) {
         mirror.renderer->ApplyFocus({.near = settings.near,
                                      .near_band = settings.near_band,
                                      .near_blur = settings.near_blur,
+                                     .near_spread = settings.near_spread,
                                      .far = settings.far,
                                      .far_band = settings.far_band,
                                      .far_blur = settings.far_blur,
+                                     .far_spread = settings.far_spread,
                                      .haze = settings.haze,
                                      .haze_start = settings.haze_start,
                                      .haze_end = settings.haze_end});

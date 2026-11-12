@@ -25,9 +25,11 @@ struct FocusSettings {
     float near = 0.0f;
     float near_band = 0.0f;
     float near_blur = 0.0f;
+    float near_spread = 0.0f; // a share of the frame's height
     float far = 0.0f;
     float far_band = 0.0f;
     float far_blur = 0.0f;
+    float far_spread = 0.0f;
     float haze = 0.0f; // the most bend, as a share of the frame's height
     float haze_start = 0.0f;
     float haze_end = 0.0f;
