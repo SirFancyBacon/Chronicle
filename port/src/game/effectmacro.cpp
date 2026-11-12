@@ -15,6 +15,7 @@
 #include "effectgroup.hpp"
 #include "frame.hpp"
 #include "mglib.hpp"
+#include "options/menu_option.hpp"
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/draw3d.hpp"
@@ -23,6 +24,7 @@
 #include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
 #include "render/types.hpp"
+#include "savedata.hpp"
 #include "texture.hpp"
 
 namespace dc::game {
@@ -460,6 +462,11 @@ void DepthOfField(float *focus, int level, int alpha, int blur) {
         // A tenth less than the game mixes in: the PS2's blur also hid how short its view was, and a cleaner distance reads better on a sharp
         // screen. The owner's choice of 2026-11-12.
         const float strength = 0.9f * std::clamp(static_cast<float>(alpha) / 128.0f, 0.0f, 1.0f);
+        // The Options screen's Soft Focus turns this depth of field on and off as a whole, wherever the game draws it (retail's Off dropped only the
+        // far plane, leaving the near). The haze isn't soft focus and stays. The owner's choice of 2026-11-12.
+        if (blur <= 0 && !options::SoftFocusOn(SaveData)) {
+            return;
+        }
         if (blur > 0) {
             // As the game's: from the front of the near focus band, to beyond the far focus plane where its level draws that far, else the near
             // band's back. A range that isn't one (the game's own copies refuse it too) draws no haze.

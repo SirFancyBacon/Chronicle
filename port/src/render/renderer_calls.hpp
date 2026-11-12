@@ -35,8 +35,8 @@ struct FocusSettings {
     float haze_end = 0.0f;
 };
 
-/** Whether the renderer draws depth of field and heat haze itself (ApplyFocus), in place of the game's layered copies: with Noktus drawing, unless
- * DC_GAME_DOF=1 asks for the game's own, to compare. */
+/** Whether the renderer draws depth of field and heat haze itself (ApplyFocus), in place of the game's layered copies: whenever Noktus draws. The
+ * copies remain for the builds Kazarov draws. */
 bool ModernFocus();
 
 /** Lays depth of field and heat haze on the screen as drawn so far, where the game drew its own. */

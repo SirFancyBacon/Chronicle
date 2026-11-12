@@ -47,6 +47,12 @@ void GameOptionsChanged(const platform::Config &before, const platform::Config &
 void GameOptionsClear(game::CSaveData &save);
 
 /**
+ * Returns whether Soft Focus is on, as the save holds it for the game (its configuration word);
+ * without a save, on.
+ */
+bool SoftFocusOn(game::CSaveData *save);
+
+/**
  * A window size the Resolution row can choose;
  * 0 by 0 is the monitor's own (Desktop).
  */

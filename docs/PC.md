@@ -190,7 +190,7 @@ key is optional; these are the defaults:
         "hdr": "off",               // off, hdr10 or scrgb; a display not in HDR stays SDR. On the Options screen on Windows only
         "hdr_paper_white": 0,       // nits SDR's white is shown at; 0 takes the system's
         "hdr_peak": 0,              // the most nits to send; 0 takes the system's
-        "soft_focus": true,         // the game's farside soft focus
+        "soft_focus": true,         // depth of field; drawn by Noktus, off is none at all (retail's off dropped only the far plane)
         "cloth": "original"         // original: the PS2's cloth; enhanced: also kept out of the body (docs/MODEL_FRAMEWORK.md)
     },
     "audio": {

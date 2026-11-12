@@ -138,4 +138,8 @@ void GameOptionsClear(CSaveData &save) {
     save.GetMenuCursor()->reset_pos = 0;
 }
 
+bool SoftFocusOn(CSaveData *save) {
+    return save == nullptr || ConfigWords(*save)[kWordSoftFocusOff] == 0;
+}
+
 } // namespace dc::options

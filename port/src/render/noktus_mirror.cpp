@@ -815,11 +815,7 @@ Step FromNoktusStep(noktus::Step step) {
 } // namespace
 
 bool ModernFocus() {
-    static const bool game_dof = [] {
-        const char *asked = std::getenv("DC_GAME_DOF");
-        return asked != nullptr && std::string_view(asked) == "1";
-    }();
-    return !game_dof && !KazarovDraws() && MirrorOn();
+    return !KazarovDraws() && MirrorOn();
 }
 
 void ApplyFocus(const FocusSettings &settings) {

@@ -78,11 +78,13 @@
 #include "npcharacter.hpp"
 #include "objanime.hpp"
 #include "objectframe.hpp"
+#include "options/menu_option.hpp"
 #include "platform/arena.hpp"
 #include "platform/input.hpp"
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/types.hpp"
 #include "runeffect.hpp"
 #include "savedata.hpp"
@@ -2509,7 +2511,9 @@ void EditMainDraw() {
                 far_drawn = EdDrawBeyondRetailReach(far_marks.get(), draw_trace);
 
                 const auto dof_start = draw_trace.Start();
-                if ((static_cast<int *>(SaveData->GetConfigData()))[6] != 0) {
+                // Retail's Soft Focus Off dropped the far plane. Drawn by the renderer, Soft Focus turns the depth of field off as a whole instead
+                // (DepthOfField), and the haze keeps its whole range.
+                if (!render::ModernFocus() && !options::SoftFocusOn(SaveData)) {
                     dof_level = 1;
                 }
 
