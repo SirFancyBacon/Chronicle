@@ -2,6 +2,8 @@
 
 #include "common.h"
 
+#include <array>
+
 #include <libvu0.h>
 
 /**
@@ -747,9 +749,30 @@ int EdSearchEvent(ED_EVENT_PARAM *param, char *name, int map_no, float time);
 void EdSetBgmVol(float time);
 
 /**
- * Applies a map description lighting preset to a frame.
+ * Applies a map description lighting preset to a frame. With modern light (render::ModernLight) and the clock running, the main light falls from the
+ * sun or the moon as the sky draws them (EdSunAndMoonLight).
  */
 void EdSetLightParam(float clock, int fixed, EDIT_MAP_INFO *info, CFrameVu1 *sky);
+
+/**
+ * The towns' main light at an hour: the direction towards it, y up, and how much of the preset's light falls from it.
+ */
+struct EdSkyLight {
+    std::array<float, 3> towards;
+    float                strength = 1.0f;
+};
+
+/**
+ * The towns' main light at the clock's hour (0 to 12, noon at 1): from the sun along its arc by day and the moon along its own by night, never lower
+ * than about 27 degrees above the horizon; at dusk and dawn the one fades out to nothing as the other fades in, changing from the one to the other there.
+ */
+EdSkyLight EdSunAndMoonLight(float clock);
+
+/**
+ * A town shadow's darkness, faded with the main light at dusk and dawn (EdSunAndMoonLight), so a shadow never outlasts the light that casts it; indoors
+ * (an interior), as it is.
+ */
+u_char EdFadedShadow(u_char alpha);
 
 /**
  * Draws the editor sky dome, celestial layers, and their time-of-day transitions.

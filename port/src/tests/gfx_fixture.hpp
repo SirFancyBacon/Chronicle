@@ -23,6 +23,13 @@ struct GfxOptions {
 // A headless window, with Noktus drawing into a picture that a test reads back.
 struct GfxFixture {
     explicit GfxFixture(int width = 640, int height = 480, float render_scale = 1.0f, const GfxOptions & = {}) {
+        // The pixels these tests read are the game's colours as it drew them: Noktus's linear scene, on by default, would tone-map them at the frame's
+        // finish (white to 241). Before the renderer starts, which reads it once.
+#ifdef _WIN32
+        _putenv_s("DC_NOKTUS_LINEAR", "0");
+#else
+        setenv("DC_NOKTUS_LINEAR", "0", 1);
+#endif
         WindowConfig window{width, height, true};
         window.vulkan = false;
         WindowInit(window);

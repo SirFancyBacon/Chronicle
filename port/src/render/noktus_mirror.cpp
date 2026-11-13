@@ -47,6 +47,27 @@ namespace {
 constexpr std::size_t kDepthAnswersKept = 4;
 constexpr float       kDepthAgrees = 0.0005f;
 
+// Whether Noktus draws the scene in linear light, where the game's light becomes modern light (ModernLight).
+std::atomic<bool> g_linear = false;
+
+// Whether the scene is outdoors (SetOutdoorLight). Game thread.
+bool g_outdoors = false;
+
+// The game's world is y up. Outdoors, the ambient from the ground below as a share of that from the sky above: half, so the undersides of things are
+// darker than what faces the sky, walls keeping the game's ambient; DC_NOKTUS_GROUND sets it, 1 for the game's ambient alike from every side, as it
+// is indoors.
+noktus::SceneLight SceneLightOfTheWorld() {
+    static const float ground = [] {
+        const char *asked = std::getenv("DC_NOKTUS_GROUND");
+        return asked != nullptr ? std::strtof(asked, nullptr) : 0.5f;
+    }();
+    return {.up = {0.0f, 1.0f, 0.0f}, .ground = g_outdoors ? ground : 1.0f};
+}
+
+bool SameSceneLight(const noktus::SceneLight &a, const noktus::SceneLight &b) {
+    return a.up.x == b.up.x && a.up.y == b.up.y && a.up.z == b.up.z && a.ground == b.ground;
+}
+
 // A paletted texture, kept as the game gave it. Noktus has no palettes: what it draws is one of these through a palette, made as it's first drawn that way, and made again when either
 // changes. The game draws one image through another's palette, for text colours, so it's the pair that counts.
 struct Indexed {
@@ -92,6 +113,7 @@ struct Mirror {
     std::set<gfx::TextureHandle>                             frame_images; // hold a picture of the frame, so they lie where it does
     std::mutex                                               lock;
     bool                                                     open = false;
+    noktus::SceneLight                                       scene_light; // the scene light last given
     std::uint64_t                                            drawn = 0;
     std::uint64_t                                            skipped = 0;
     std::uint64_t                                            elsewhere = 0;
@@ -532,6 +554,7 @@ void Start(Mirror &mirror) {
     if (const char *linear = std::getenv("DC_NOKTUS_LINEAR")) {
         host.linear = std::string_view(linear) != "0";
     }
+    g_linear = host.linear;
     // Bloom: light past white spreading around what gives it, on with the linear scene; DC_NOKTUS_BLOOM sets its strength, 0 for none.
     host.bloom = host.linear ? 1.0f : 0.0f;
     if (const char *bloom = std::getenv("DC_NOKTUS_BLOOM")) {
@@ -664,6 +687,12 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
     if (Draw3DIsLight()) {
         const float share = LightShare();
         scene.draw.material.emissive = {share, share, share, 1.0f};
+    }
+    // The scene's light falls on what's lit, not on what shows its own colour.
+    const noktus::SceneLight wanted = Draw3DSelfLit() ? noktus::SceneLight{} : SceneLightOfTheWorld();
+    if (!SameSceneLight(wanted, mirror.scene_light)) {
+        mirror.renderer->SetSceneLight(wanted);
+        mirror.scene_light = wanted;
     }
     mirror.renderer->SetCamera(scene.camera);
     draw = std::move(scene.draw);
@@ -837,6 +866,18 @@ Step FromNoktusStep(noktus::Step step) {
 
 bool ModernFocus() {
     return !KazarovDraws() && MirrorOn();
+}
+
+bool ModernLight() {
+    return g_linear && !KazarovDraws() && MirrorOn();
+}
+
+void SetOutdoorLight(bool outdoors) {
+    g_outdoors = outdoors;
+}
+
+bool OutdoorLight() {
+    return g_outdoors;
 }
 
 void ApplyFocus(const FocusSettings &settings) {
@@ -1115,6 +1156,8 @@ void MirrorBeginTick() {
         const gfx::FrameLayout layout = gfx::CurrentFrameLayout();
         mirror.renderer->SetLayout({.fit = layout.aspect == gfx::AspectMode::Fill ? noktus::FrameFit::Fill : noktus::FrameFit::Letterbox, .interface_scale = layout.ui_scale});
         mirror.renderer->BeginTick();
+        mirror.scene_light = SceneLightOfTheWorld();
+        mirror.renderer->SetSceneLight(mirror.scene_light);
         mirror.open = true;
         mirror.target_known = true;
     });

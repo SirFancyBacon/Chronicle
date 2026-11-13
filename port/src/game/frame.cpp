@@ -957,6 +957,8 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
             // their own colour whatever the light; with the linear scene they're lights, and bloom.
             Draw3DLightScope light(!info->shadow_pass && attr.use_color && !attr.ambient_boost && !attr.fog_enable && attr.blend_mode == 0 &&
                                    FrameNameIsLight(name));
+            // Self-lit (the 'C' code): its own colour, the scene's light falling on it no more than the game's lights did.
+            Draw3DSelfLitScope self_lit(!info->shadow_pass && attr.use_color && !attr.ambient_boost);
             visual->DrawVu1(packet, matrix, info, VU1_PROGRAM_UNKNOWN6, nullptr, 0, 0);
         }
 

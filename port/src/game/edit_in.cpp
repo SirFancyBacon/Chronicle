@@ -52,6 +52,7 @@
 #include "platform/input.hpp"
 #include "rect.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "savedata.hpp"
 #include "scriptinterpreter.hpp"
 #include "snd.hpp"
@@ -446,6 +447,8 @@ int EditInInit(float time, char *name) {
     if (name == nullptr) {
         return 0;
     }
+    // Indoors: the ambient falls alike from every side, as the game's did.
+    render::SetOutdoorLight(false);
 
     const std::string_view interior_name(name);
 

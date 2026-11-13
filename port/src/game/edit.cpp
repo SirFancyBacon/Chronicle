@@ -1823,7 +1823,7 @@ void EdDrawCharacter(CCharacter *player, int player_draw_mask, int npc_count, CN
             }
         }
 
-        MGEndDrawShadow(0x34);
+        MGEndDrawShadow(EdFadedShadow(0x34));
         MGSetPLight(light_direction, light_colour);
     }
 

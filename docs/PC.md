@@ -897,7 +897,9 @@ The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Sm
 Peak Brightness change as the game runs. TAA's pipelines are made at start whatever the setting, so turning it on doesn't pause; `DC_NOKTUS_ANTI_ALIASING`
 overrides the setting for scripted runs. The solid world is drawn in linear light and tone-mapped (Khronos PBR Neutral) before the interface goes on; what the game blends (effects,
 see-through surfaces, its layers) still blends in the display's encoding. `DC_NOKTUS_LINEAR=0` draws the whole scene in the display's encoding, to compare. With it, light past white blooms (`DC_NOKTUS_BLOOM`, its strength, 1; 0 for none), and frames named self-lit and unfogged
-(night windows, lamps, torches' bodies; `FrameNameIsLight`, skies left out) give off light of their own, which blooms (`DC_NOKTUS_LIGHTS`, 1; 0 for none). Calibrate HDR, under HDR, sets the last two by eye, and only while HDR is being sent: first Peak Brightness, raised in steps of
+(night windows, lamps, torches' bodies; `FrameNameIsLight`, skies left out) give off light of their own, which blooms (`DC_NOKTUS_LIGHTS`, 1; 0 for none). The solid world is lit as modern games light (Noktus's step 7, slice 4): its ambient comes more
+from the sky above than the ground below (`DC_NOKTUS_GROUND`, the share from below, a half; 1 for the game's ambient alike from every side), except on self-lit frames,
+and in towns with the clock running the main light falls from the sun or the moon where the sky draws them (`EdSunAndMoonLight`), the one fading out as the other fades in. Calibrate HDR, under HDR, sets the last two by eye, and only while HDR is being sent: first Peak Brightness, raised in steps of
 10 nits up to 1,000, 50 up to 2,000 and 100 up to 4,000 until a square at that peak can't be told from the field round it at 10,000 nits, which Noktus
 draws through `MirrorHdrPatches`; then Paper White, in steps of 10 from 80 to 500, never past the peak. Circle on the first step puts both back as they were.
 

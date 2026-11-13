@@ -65,6 +65,7 @@
 #include "quest/host.hpp"
 #include "rect.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "runscript.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
@@ -2195,6 +2196,82 @@ void EdDrawLensFlare(float time, CFrame **sky) {
     }
 }
 
+namespace {
+
+// The towns' sun and moon as modern light (step 7, slice 4b): the light falls from where the sky draws them (EdDrawSky), the sun along its arc by day
+// and the moon along its own by night, the one fading out as the other fades in, in place of the map's hand-set table (def_light), which only roughly
+// followed the sun. Towards the light, y up, as the game's light directions are.
+constexpr float kSkyTilt = 0.5f;          // the sky's turn about x, as LoadGroundData gives it
+constexpr float kLowestLight = 0.4636476f; // no lower than the table's lowest, y 0.5 to a run of 1 (atan 0.5, about 27 degrees): a long shadow, not one across the town
+
+std::array<float, 3> TowardsSky(float rotation) {
+    return {-std::sin(rotation), std::cos(rotation) * std::cos(kSkyTilt), std::cos(rotation) * std::sin(kSkyTilt)};
+}
+
+std::array<float, 3> NoLowerThanLowest(std::array<float, 3> towards) {
+    const float run = std::hypot(towards[0], towards[2]);
+    if (run < 1e-6f || std::atan2(towards[1], run) >= kLowestLight) {
+        return towards;
+    }
+    const float across = std::cos(kLowestLight) / run;
+    return {towards[0] * across, std::sin(kLowestLight), towards[2] * across};
+}
+
+// How much of the light comes from the sun, and how much from the moon, at the clock's hour (0 to 12, noon at 1): the sun up from 10 to 4, the moon
+// from 5.5 to 8.5, each fading over an hour, the two overlapping so the light never goes.
+float SunShare(float clock) {
+    if (clock >= 10.0f || clock <= 4.0f) {
+        return 1.0f;
+    }
+    if (clock < 5.0f) {
+        return 5.0f - clock;
+    }
+    if (clock > 9.0f) {
+        return clock - 9.0f;
+    }
+    return 0.0f;
+}
+
+float MoonShare(float clock) {
+    if (clock >= 5.5f && clock <= 8.5f) {
+        return 1.0f;
+    }
+    if (clock > 4.5f && clock < 5.5f) {
+        return clock - 4.5f;
+    }
+    if (clock > 8.5f && clock < 9.5f) {
+        return 9.5f - clock;
+    }
+    return 0.0f;
+}
+
+} // namespace
+
+EdSkyLight EdSunAndMoonLight(float clock) {
+    // As EdDrawSky turns them: the sun at its height at 1, rising at 10 and setting at 4; the moon at its height at 7.
+    const float                sun_clock = clock > 10.0f ? clock - 12.0f : clock;
+    const std::array<float, 3> towards_sun = NoLowerThanLowest(TowardsSky(PI_SHORT * ((2.0f + sun_clock) / 6.0f) - HALF_PI));
+    const std::array<float, 3> towards_moon = NoLowerThanLowest(TowardsSky(1.2f * (PI_SHORT * ((clock - 4.0f) / 6.0f) - HALF_PI)));
+    const float                sun_share = SunShare(clock);
+    const float                moon_share = MoonShare(clock);
+    // The sun fades out as the moon fades in: the light falls from the stronger of the two, and to nothing where they cross, where it changes from the
+    // one to the other unseen, the shadows faded with it (EdFadedShadow) and the ambient lighting the town meanwhile.
+    return {sun_share >= moon_share ? towards_sun : towards_moon, std::abs(sun_share - moon_share)};
+}
+
+namespace {
+// How much of the towns' main light falls this tick (EdSunAndMoonLight's strength): 1 but at dusk and dawn with modern light.
+float g_main_light_strength = 1.0f;
+} // namespace
+
+u_char EdFadedShadow(u_char alpha) {
+    // Only outdoors, where the town's light set the strength: an interior's shadows keep their darkness whatever the hour outside.
+    if (!render::OutdoorLight()) {
+        return alpha;
+    }
+    return static_cast<u_char>(std::lround(static_cast<float>(alpha) * g_main_light_strength));
+}
+
 void EdSetLightParam(float clock, int fixed, EDIT_MAP_INFO *info, CFrameVu1 *sky) {
     int current = static_cast<int>(clock);
     int next = static_cast<int>(clock) + 1;
@@ -2274,6 +2351,18 @@ void EdSetLightParam(float clock, int fixed, EDIT_MAP_INFO *info, CFrameVu1 *sky
         sceVu0AddVector(direction[i], current_direction[i], next_direction[i]);
     }
 
+    // The light outdoors comes more from the sky than the ground (the scene's light in Noktus).
+    render::SetOutdoorLight(true);
+    // With the clock running, the light falls from the sun or the moon as the sky draws them, with the presets' colours.
+    g_main_light_strength = 1.0f;
+    if (info->time_stop == 0 && render::ModernLight()) {
+        const EdSkyLight sky_light = EdSunAndMoonLight(clock);
+        direction[0][0] = sky_light.towards[0];
+        direction[0][1] = sky_light.towards[1];
+        direction[0][2] = sky_light.towards[2];
+        sceVu0ScaleVector(colour[0], colour[0], sky_light.strength);
+        g_main_light_strength = sky_light.strength;
+    }
     sceVu0Normalize(direction[0], direction[0]);
     sceVu0Normalize(direction[1], direction[1]);
     sceVu0Normalize(direction[2], direction[2]);

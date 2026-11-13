@@ -201,6 +201,25 @@ private:
     bool previous;
 };
 
+/**
+ * Marks what's drawn meanwhile as self-lit, showing its own colour whatever the light (a CFrame named with the 'C' code: skies, the sun and moon, signs):
+ * the scene's light (Noktus's SceneLight) doesn't fall on it. Restored after.
+ */
+class Draw3DSelfLitScope {
+public:
+    explicit Draw3DSelfLitScope(bool self_lit);
+    ~Draw3DSelfLitScope();
+
+    Draw3DSelfLitScope(const Draw3DSelfLitScope &) = delete;
+    Draw3DSelfLitScope &operator=(const Draw3DSelfLitScope &) = delete;
+
+private:
+    bool previous;
+};
+
+/** Whether what's being drawn is self-lit (Draw3DSelfLitScope). */
+bool Draw3DSelfLit();
+
 /** Whether the mesh draws being made are a light (Draw3DLightScope). */
 bool Draw3DIsLight();
 

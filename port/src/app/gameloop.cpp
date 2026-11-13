@@ -65,6 +65,7 @@
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "render/texture_registry.hpp"
 #include "save/extension.hpp"
 #include "save/save_slots.hpp"
@@ -261,6 +262,8 @@ void ModeInit(int &title_ran, int &exist_data, bool &skip_title) {
     }
     InputSetMenuNavigation(mode == GAME_MODE_MENU || mode == GAME_MODE_LOADER);
     InputSetDeveloperMenu(mode == GAME_MODE_MENU);
+    // Indoors until a town's light says otherwise.
+    render::SetOutdoorLight(false);
     switch (mode) {
         case GAME_MODE_LOADER:
             LoaderInit();

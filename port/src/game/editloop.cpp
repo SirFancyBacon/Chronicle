@@ -2369,7 +2369,7 @@ bool EdDrawBeyondRetailReach(int *far_marks, const GameDrawTrace &draw_trace) {
         EdGroundDrawShadowBeyondNear(pEditGround, EditMapInfo->shadow_near);
         draw_trace.Finish(GameDrawPhase::FarShadowParts, shadow_parts_start);
         const auto shadow_end_start = draw_trace.Start();
-        MGEndDrawShadow(EditMapInfo->shadow_mode);
+        MGEndDrawShadow(EdFadedShadow(EditMapInfo->shadow_mode));
         MGSetPLight(saved_light, light_colour);
         draw_trace.Finish(GameDrawPhase::FarShadowEnd, shadow_end_start);
         draw_trace.Finish(GameDrawPhase::FarShadow, shadow_start);
@@ -2685,14 +2685,14 @@ void EditMainDraw() {
                 const auto shadow_georama_start = draw_trace.Start();
                 MGBeginDrawShadow(*reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("shadow_buff", -1)->tex0));
                 pEditGround->DrawShadow(1, 0.0f, 100000.0f);
-                MGEndDrawShadow(0x20);
+                MGEndDrawShadow(EdFadedShadow(0x20));
                 draw_trace.Finish(GameDrawPhase::ShadowGeorama, shadow_georama_start);
             } else {
                 if (EditMapInfo->shadow_level > 0) {
                     const auto shadow_near_start = draw_trace.Start();
                     MGBeginDrawShadow(*reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("shadow_buff", -1)->tex0));
                     pEditGround->DrawShadow(0, shadow_range[0], shadow_range[1]);
-                    MGEndDrawShadow(EditMapInfo->shadow_mode);
+                    MGEndDrawShadow(EdFadedShadow(EditMapInfo->shadow_mode));
                     draw_trace.Finish(GameDrawPhase::ShadowNear, shadow_near_start);
                 }
 
@@ -2700,7 +2700,7 @@ void EditMainDraw() {
                     const auto shadow_far_start = draw_trace.Start();
                     MGBeginDrawShadow(*reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("shadow_buff", -1)->tex0));
                     pEditGround->DrawShadow(0, shadow_range[1], shadow_range[2]);
-                    MGEndDrawShadow(EditMapInfo->shadow_mode_2);
+                    MGEndDrawShadow(EdFadedShadow(EditMapInfo->shadow_mode_2));
                     draw_trace.Finish(GameDrawPhase::ShadowFar, shadow_far_start);
                 }
             }

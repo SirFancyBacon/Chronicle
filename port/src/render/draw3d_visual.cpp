@@ -323,4 +323,20 @@ bool Draw3DIsLight() {
     return g_light;
 }
 
+namespace {
+bool g_self_lit = false; // game thread
+} // namespace
+
+Draw3DSelfLitScope::Draw3DSelfLitScope(bool self_lit) : previous(g_self_lit) {
+    g_self_lit = self_lit;
+}
+
+Draw3DSelfLitScope::~Draw3DSelfLitScope() {
+    g_self_lit = previous;
+}
+
+bool Draw3DSelfLit() {
+    return g_self_lit;
+}
+
 } // namespace dc::render

@@ -39,6 +39,16 @@ struct FocusSettings {
  * copies remain for the builds Kazarov draws. */
 bool ModernFocus();
 
+/** Whether the game's light becomes modern light: Noktus drawing the scene in linear light. The towns' sun and moon then follow their arcs. */
+bool ModernLight();
+
+/** Whether the scene is outdoors, its ambient coming more from the sky above than the ground below: set by the towns' light each tick, cleared as
+ * any mode starts and in an interior. Indoors, in dungeons and on the title, the ambient falls alike from every side, as the game's did. */
+void SetOutdoorLight(bool outdoors);
+
+/** Whether the scene is outdoors (SetOutdoorLight). */
+bool OutdoorLight();
+
 /** Lays depth of field and heat haze on the screen as drawn so far, where the game drew its own. */
 void ApplyFocus(const FocusSettings &settings);
 
