@@ -307,4 +307,20 @@ Draw3DIdentityScope::~Draw3DIdentityScope() {
     render::SetInterpKey(key, no_interpolation);
 }
 
+namespace {
+bool g_light = false; // game thread
+} // namespace
+
+Draw3DLightScope::Draw3DLightScope(bool light) : previous(g_light) {
+    g_light = light;
+}
+
+Draw3DLightScope::~Draw3DLightScope() {
+    g_light = previous;
+}
+
+bool Draw3DIsLight() {
+    return g_light;
+}
+
 } // namespace dc::render

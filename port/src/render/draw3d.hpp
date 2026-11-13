@@ -186,6 +186,25 @@ private:
 };
 
 /**
+ * Marks the mesh draws a CFrame makes as a light (night windows, lamps): set around the frame's visual draw, restored after. With the linear scene,
+ * Noktus has them give off light of their own, which blooms.
+ */
+class Draw3DLightScope {
+public:
+    explicit Draw3DLightScope(bool light);
+    ~Draw3DLightScope();
+
+    Draw3DLightScope(const Draw3DLightScope &) = delete;
+    Draw3DLightScope &operator=(const Draw3DLightScope &) = delete;
+
+private:
+    bool previous;
+};
+
+/** Whether the mesh draws being made are a light (Draw3DLightScope). */
+bool Draw3DIsLight();
+
+/**
  * Applies what SetMaterial uploaded: diffuse (alpha in w), ambient and specular. The diffuse
  * colours the ambient light as well as the lights, as VU1 lit with it; ambient is not used.
  */

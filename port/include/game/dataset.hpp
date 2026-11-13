@@ -35,6 +35,13 @@ void BufferAllClear();
 void SetFrameAttr(CFrame *frame, int recurse);
 
 /**
+ * Whether a frame's name marks it as a light, read as SetFrameAttr reads the codes: self-lit ('C') and left alone by the fog ('F') by its own
+ * name, not by a loader that never fogged it, and not a sky (any name beginning "sky" or "tenkyu"). Night windows, lamps and torches' bodies are
+ * named so. Whether it adds or takes away is the frame's attributes' to say.
+ */
+bool FrameNameIsLight(const char *name);
+
+/**
  * Receives the files that synchronous game-data reads load.
  */
 extern u_int *read_buffer;

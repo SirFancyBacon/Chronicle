@@ -16,6 +16,7 @@
 #include "boxvu0.hpp"
 #include "collision.hpp"
 #include "dataalloc.hpp"
+#include "dataset.hpp"
 #include "framevu1.hpp"
 #include "mathutil.hpp"
 #include "mglib.hpp"
@@ -952,6 +953,10 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
 
         {
             Draw3DIdentityScope identity(this, kDraw3DTeleportDistance);
+            // Named self-lit and unfogged, and solid (FrameNameIsLight): night windows, lamps and torches' bodies, signs. The game shows them at
+            // their own colour whatever the light; with the linear scene they're lights, and bloom.
+            Draw3DLightScope light(!info->shadow_pass && attr.use_color && !attr.ambient_boost && !attr.fog_enable && attr.blend_mode == 0 &&
+                                   FrameNameIsLight(name));
             visual->DrawVu1(packet, matrix, info, VU1_PROGRAM_UNKNOWN6, nullptr, 0, 0);
         }
 

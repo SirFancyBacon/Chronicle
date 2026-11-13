@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -324,6 +325,50 @@ void ArrangeShadowMDT(u_int *data) {
 }
 
 } // namespace
+
+bool FrameNameIsLight(const char *name) {
+    const char *codes = std::strstr(name, "__");
+    // The sky domes of the title (sky__CFS) and the attract movie (tenkyu__CFS, the celestial sphere) are named self-lit and unfogged too, and every
+    // sky's name begins with one or the other: a sky isn't a light.
+    const auto begins = [&](std::string_view stem) {
+        return std::ranges::equal(std::string_view(name).substr(0, stem.size()), stem,
+                                  [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == b; });
+    };
+    if (codes == nullptr || begins("sky") || begins("tenkyu")) {
+        return false;
+    }
+    bool self_lit = false;
+    bool unfogged = false;
+    for (const char *at = codes + 2; *at != '\0'; at++) {
+        switch (*at) {
+            case 'c':
+            case 'C':
+                self_lit = true;
+                break;
+            case 'f':
+            case 'F':
+                unfogged = true;
+                break;
+            case 'a':
+            case 'A':
+                // Two characters follow (a blend, or an alpha test's reference in hex, such as 7F), which aren't codes of their own.
+                if (at[1] == '\0' || at[2] == '\0') {
+                    return false;
+                }
+                at += 2;
+                break;
+            case 'b':
+            case 'B':
+                if (at[1] != '\0') {
+                    at++;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+    return self_lit && unfogged;
+}
 
 void SetFrameAttr(CFrame *frame, int recurse) {
     char *name = frame->name;

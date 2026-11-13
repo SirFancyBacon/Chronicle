@@ -32,6 +32,7 @@
 #include "noktus/vulkan_renderer.hpp"
 #include "platform/clock.hpp"
 #include "platform/paths.hpp"
+#include "render/draw3d.hpp"
 #include "render/noktus_adapter.hpp"
 #include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
@@ -531,6 +532,11 @@ void Start(Mirror &mirror) {
     if (const char *linear = std::getenv("DC_NOKTUS_LINEAR")) {
         host.linear = std::string_view(linear) != "0";
     }
+    // Bloom: light past white spreading around what gives it, on with the linear scene; DC_NOKTUS_BLOOM sets its strength, 0 for none.
+    host.bloom = host.linear ? 1.0f : 0.0f;
+    if (const char *bloom = std::getenv("DC_NOKTUS_BLOOM")) {
+        host.bloom = std::strtof(bloom, nullptr);
+    }
     if (const char *toe = std::getenv("DC_NOKTUS_TONE_TOE")) {
         host.tone_map_toe = std::strtof(toe, nullptr);
     }
@@ -624,6 +630,16 @@ std::optional<noktus::TextureId> Sampled(Mirror &mirror, const gfx::TextureBindi
     return Expand(mirror, binding.texture, binding.palette);
 }
 
+// How much light of its own a frame marked as a light gives, as a share of it as drawn: with the linear scene, enough to pass white and bloom.
+// DC_NOKTUS_LIGHTS sets it, 0 for none.
+float LightShare() {
+    static const float share = [] {
+        const char *asked = std::getenv("DC_NOKTUS_LIGHTS");
+        return asked != nullptr ? std::strtof(asked, nullptr) : 1.0f;
+    }();
+    return share;
+}
+
 // A mesh draw as Noktus takes it, or false for one it can't take yet.
 bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::TextureBinding &texture, const gfx::DrawState &state,
              const gfx::MeshTransform *transform, noktus::MeshDraw &draw) {
@@ -644,6 +660,10 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
         scene.draw.material.albedo = *sampled;
     } else {
         scene.draw.material.albedo = noktus::TextureId::None;
+    }
+    if (Draw3DIsLight()) {
+        const float share = LightShare();
+        scene.draw.material.emissive = {share, share, share, 1.0f};
     }
     mirror.renderer->SetCamera(scene.camera);
     draw = std::move(scene.draw);
