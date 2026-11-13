@@ -50,8 +50,8 @@ void LangsetInit();
 int LangsetLoop();
 
 /**
- * Moves the language cursor with the pad and reports that the choice was
- * confirmed.
+ * Moves the language cursor with the pad and the mouse (a hover moves it, a
+ * left click chooses) and reports that the choice was confirmed.
  */
 int LangsetProc();
 

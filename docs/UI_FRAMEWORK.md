@@ -70,6 +70,7 @@ drawn in the 3D world stay with the game. The framework is for menus, boards and
 | Event item board: an event's items, fishing's bait, the rods | `port/src/game/menu_save.cpp` | `SlotGrid`, `MenuHand`, `StayFrame`, `Picture`, `ItemIcon::DrawInSlot` |
 | Fish exchange and fishing records | `port/src/game/shop.cpp` | `ListCursor`, `MenuHand`, `Picture`, `PictureNumber`, `ItemIcon::DrawInSlot` |
 | Dungeon floor select | `port/src/game/menu_dungeon.cpp` | `Picture` (`DrawClipped`, `DrawColumn`, `DrawScreen`), `PictureNumber`, `StayFrame`, `MenuHand`, `ScreenFill`, `Label` |
+| Language select | `port/src/game/langset.cpp` | `Picture`, `MenuPointer` |
 
 The event item board, the fish exchange and the fishing records moved for the fishing framework, and
 draw as retail's did pixel for pixel, every state of them compared on one renderer (section 4): the
@@ -81,6 +82,15 @@ The floor select moved to warn of the floors that limit the party (docs/DUNGEON.
 compared the same way from a save (`--town-dungeon`, docs/PC.md "Test hooks"): fading in and out,
 moving, paging and scrolling with rows clipped at the board's edges, every dungeon. It draws as
 retail's did except for the warnings and the mouse.
+
+The language select moved so the mouse can choose a language: its bands are retail's `lang_set` picture,
+each drawn where it lies in the picture, and the same places tell the mouse which language it is over (a
+hover moves the cursor, a left click chooses, the wheel moves as Up and Down do; retail's screen plays no
+sound, and nor does this). While the mouse is in use, the title's hand (`icon01`, the same picture in every
+language's title pack, taken from the English one) shows where it points; with the pad, nothing differs from
+retail. A button held through the fade keeps the screen dark until it's let go. Compared from a start with no
+language set, two builds on one renderer: fading in, settled, moved down twice, wrapped up from the top and
+fading out, pixel for pixel.
 
 Still retail's: the save and load boards (`DrawMenuSave`, port-drawn but copied from retail), the
 item menu, shops, storage, the Georama menu's Config/Assembly and Move/Remove pages and the dungeon
