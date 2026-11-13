@@ -895,7 +895,8 @@ Both are in one program. Kazarov's renderer sources are built with `render/kazar
 
 The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion, Anisotropic Filter, Anti-Aliasing, HDR, Paper White and
 Peak Brightness change as the game runs. TAA's pipelines are made at start whatever the setting, so turning it on doesn't pause; `DC_NOKTUS_ANTI_ALIASING`
-overrides the setting for scripted runs. Calibrate HDR, under HDR, sets the last two by eye, and only while HDR is being sent: first Peak Brightness, raised in steps of
+overrides the setting for scripted runs. The solid world is drawn in linear light and tone-mapped (Khronos PBR Neutral) before the interface goes on; what the game blends (effects,
+see-through surfaces, its layers) still blends in the display's encoding. `DC_NOKTUS_LINEAR=0` draws the whole scene in the display's encoding, to compare. Calibrate HDR, under HDR, sets the last two by eye, and only while HDR is being sent: first Peak Brightness, raised in steps of
 10 nits up to 1,000, 50 up to 2,000 and 100 up to 4,000 until a square at that peak can't be told from the field round it at 10,000 nits, which Noktus
 draws through `MirrorHdrPatches`; then Paper White, in steps of 10 from 80 to 500, never past the peak. Circle on the first step puts both back as they were.
 
