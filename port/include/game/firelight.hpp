@@ -10,8 +10,8 @@ namespace dc::game {
  */
 
 /**
- * Gives a fire's light for this tick, flickering as a fire does, where its flame burns; nothing without modern light. Matched to the light the game gave
- * a character ten units from a town fire: nearer it's brighter, further fainter, as light falls off, and none past forty units, as the game's.
+ * Gives a fire's light for this tick, flickering gently as a fire does, where its flame burns; nothing without modern light. The game's average fire
+ * brightness at fifteen units: nearer it's brighter, further fainter, as light falls off, and none past eighty units.
  * @param key Who the fire is from tick to tick, never 0: its flicker and its place between ticks follow it.
  * @param flame Where the flame burns, in the world.
  */
