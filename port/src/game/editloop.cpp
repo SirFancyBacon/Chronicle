@@ -21,6 +21,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -711,6 +712,35 @@ namespace {
 // Treant's clearing before (map 33) and after (map 13) the flood shares its five chests' flags.
 bool TreantChestFlag(int flag_no) {
     return (MapNo == 33 || MapNo == 13) && flag_no >= 360 && flag_no <= 364;
+}
+
+} // namespace
+
+namespace {
+
+// A town fire's light on the player, flickering as a fire does: a new brightness every few ticks, eased towards each tick. The game drew a new one every
+// tick, from 80 to 127, which with light added as light (Noktus's linear scene) reads as a strobe (the owner's report, 2026-11-13). drawn is the
+// brightness the game drew this tick: taken as the next to ease towards every kFireFlickerTicks.
+constexpr int   kFireFlickerTicks = 6;
+constexpr float kFireFlickerEase = 0.25f;
+
+struct FireFlickerState {
+    float brightness = 0.0f;
+    float towards = 0.0f;
+    int   ticks = 0;
+};
+
+float FireFlicker(const void *fire, float drawn) {
+    static std::unordered_map<const void *, FireFlickerState> fires;
+    FireFlickerState &state = fires[fire];
+    if (state.ticks == 0 && state.brightness == 0.0f) {
+        state.brightness = state.towards = drawn;
+    }
+    if (state.ticks++ % kFireFlickerTicks == 0) {
+        state.towards = drawn;
+    }
+    state.brightness += (state.towards - state.brightness) * kFireFlickerEase;
+    return state.brightness;
 }
 
 } // namespace
@@ -2644,7 +2674,10 @@ void EditMainDraw() {
                                 float distance = DistVector(chara_pos, light_pos);
 
                                 if (distance <= 40.0f) {
-                                    float brightness = 80.0f + static_cast<float>(rand() % 48);
+                                    // The game drew a new brightness every tick; one call as before keeps the game's random numbers in step. Eased
+                                    // with modern light, where the steps read as a strobe; the game's own with it off.
+                                    const float drawn = 80.0f + static_cast<float>(rand() % 48);
+                                    float       brightness = render::ModernLight() ? FireFlicker(effect, drawn) : drawn;
 
                                     light_pos[3] = distance;
                                     Chara->SetPointLight(light_pos, 5.0f, 40.0f, brightness, brightness, brightness, 128.0f);
