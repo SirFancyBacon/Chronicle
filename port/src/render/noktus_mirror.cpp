@@ -1,5 +1,8 @@
 #include "render/noktus_mirror.hpp"
 
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -26,18 +29,15 @@
 #include <unordered_map>
 #include <vector>
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_vulkan.h>
-
 #include "noktus/vulkan_renderer.hpp"
 #include "platform/clock.hpp"
+#include "platform/load_work_profile.hpp"
 #include "platform/paths.hpp"
 #include "render/draw3d.hpp"
 #include "render/noktus_adapter.hpp"
 #include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
 #include "render/supersampling.hpp"
-#include "platform/load_work_profile.hpp"
 
 namespace dc::render {
 
@@ -53,6 +53,9 @@ std::atomic<bool> g_linear = false;
 // Whether the scene is outdoors (SetOutdoorLight). Game thread.
 bool g_outdoors = false;
 
+// Whether point lights reach the meshes drawn now (SetPointLit). Game thread.
+bool g_point_lit = true;
+
 // The game's world is y up. Outdoors, the ambient from the ground below as a share of that from the sky above: half, so the undersides of things are
 // darker than what faces the sky, walls keeping the game's ambient; DC_NOKTUS_GROUND sets it, 1 for the game's ambient alike from every side, as it
 // is indoors.
@@ -61,7 +64,10 @@ noktus::SceneLight SceneLightOfTheWorld() {
         const char *asked = std::getenv("DC_NOKTUS_GROUND");
         return asked != nullptr ? std::strtof(asked, nullptr) : 0.5f;
     }();
-    return {.up = {0.0f, 1.0f, 0.0f}, .ground = g_outdoors ? ground : 1.0f};
+    return {
+        .up = {0.0f, 1.0f, 0.0f},
+        .ground = g_outdoors ? ground : 1.0f
+    };
 }
 
 bool SameSceneLight(const noktus::SceneLight &a, const noktus::SceneLight &b) {
@@ -402,7 +408,8 @@ Pass FromNoktusPass(noktus::Pass pass) {
 }
 
 const char *HdrName(MirrorHdr mode) {
-    return mode == MirrorHdr::Hdr10 ? "hdr10" : mode == MirrorHdr::ScRgb ? "scrgb" : "off";
+    return mode == MirrorHdr::Hdr10 ? "hdr10" : mode == MirrorHdr::ScRgb ? "scrgb"
+                                                                         : "off";
 }
 
 // Windows says how bright it shows SDR's white and how far past that the display goes, and those are what HDR starts from.
@@ -411,7 +418,8 @@ HdrOutput HdrForWindow(Mirror &mirror) {
     if (const char *const asked = std::getenv("DC_NOKTUS_HDR")) {
         const std::string_view mode = asked;
         if (mode == "hdr10" || mode == "scrgb" || mode == "off") {
-            settings.hdr = mode == "hdr10" ? MirrorHdr::Hdr10 : mode == "scrgb" ? MirrorHdr::ScRgb : MirrorHdr::Off;
+            settings.hdr = mode == "hdr10" ? MirrorHdr::Hdr10 : mode == "scrgb" ? MirrorHdr::ScRgb
+                                                                                : MirrorHdr::Off;
         } else {
             static const bool warned = (std::fprintf(stderr, "DC_NOKTUS_HDR: %s isn't hdr10, scrgb or off, so the setting stands\n", asked), true);
             static_cast<void>(warned);
@@ -437,7 +445,8 @@ HdrOutput HdrForWindow(Mirror &mirror) {
 }
 
 noktus::DisplayOutput ToDisplayOutput(MirrorHdr mode) {
-    return mode == MirrorHdr::ScRgb ? noktus::DisplayOutput::ScRgb : mode == MirrorHdr::Hdr10 ? noktus::DisplayOutput::Hdr10 : noktus::DisplayOutput::Sdr;
+    return mode == MirrorHdr::ScRgb ? noktus::DisplayOutput::ScRgb : mode == MirrorHdr::Hdr10 ? noktus::DisplayOutput::Hdr10
+                                                                                              : noktus::DisplayOutput::Sdr;
 }
 
 // Samples a pixel as Noktus's render scale: the picture's size by the window's, each way.
@@ -481,7 +490,9 @@ noktus::AntiAliasing ToAntiAliasing(MirrorAntiAliasing mode) {
     if (const char *forced = std::getenv("DC_NOKTUS_ANTI_ALIASING")) {
         std::string asked = forced;
         std::ranges::transform(asked, asked.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        mode = asked == "taa" ? MirrorAntiAliasing::Taa : asked == "smaa" ? MirrorAntiAliasing::Smaa : asked == "smaa_t2x" ? MirrorAntiAliasing::SmaaT2x : MirrorAntiAliasing::Off;
+        mode = asked == "taa" ? MirrorAntiAliasing::Taa : asked == "smaa"   ? MirrorAntiAliasing::Smaa
+                                                      : asked == "smaa_t2x" ? MirrorAntiAliasing::SmaaT2x
+                                                                            : MirrorAntiAliasing::Off;
     }
     switch (mode) {
         case MirrorAntiAliasing::Smaa:
@@ -711,6 +722,7 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
         mirror.lights_waiting.clear();
     }
     draw = std::move(scene.draw);
+    draw.point_lit = g_point_lit;
     draw.key = mirror.key;
     draw.still = mirror.still;
     draw.jump_distance = mirror.jump_distance;
@@ -888,6 +900,10 @@ bool ModernLight() {
     return g_linear && !KazarovDraws() && MirrorOn();
 }
 
+void SetPointLit(bool on) {
+    g_point_lit = on;
+}
+
 void SetOutdoorLight(bool outdoors) {
     g_outdoors = outdoors;
 }
@@ -905,11 +921,13 @@ void AddPointLight(const PointLightGiven &given) {
     if (!mirror.open || !mirror.renderer) {
         return;
     }
-    const noktus::PointLight light = {.key = static_cast<noktus::ObjectKey>(given.key),
-                                      .position = {given.position[0], given.position[1], given.position[2]},
-                                      .color = {given.color[0], given.color[1], given.color[2], 1.0f},
-                                      .range = given.range,
-                                      .size = given.size};
+    const noktus::PointLight light = {
+        .key = static_cast<noktus::ObjectKey>(given.key),
+        .position = {given.position[0], given.position[1], given.position[2]},
+        .color = {given.color[0], given.color[1], given.color[2], 1.0f},
+        .range = given.range,
+        .size = given.size
+    };
     if (!mirror.world_camera) {
         mirror.lights_waiting.push_back(light);
         return;
@@ -1687,8 +1705,10 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     // Depth places a draw among the meshes, and a picture of the frame lies where the frame does.
     draw.follows_interface_size = state.depth_test == gfx::DepthTest::Always && !state.depth_write && texture.texture != gfx::kPreviousFrame && !mirror.frame_images.contains(texture.texture);
     if (draw.follows_interface_size) {
-        draw.anchor.x = centre_x < anchor.left_until ? -1 : centre_x >= anchor.right_from ? 1 : 0;
-        draw.anchor.y = centre_y < anchor.top_until ? -1 : centre_y >= anchor.bottom_from ? 1 : 0;
+        draw.anchor.x = centre_x < anchor.left_until ? -1 : centre_x >= anchor.right_from ? 1
+                                                                                          : 0;
+        draw.anchor.y = centre_y < anchor.top_until ? -1 : centre_y >= anchor.bottom_from ? 1
+                                                                                          : 0;
         draw.anchor.max_aspect = anchor.max_aspect;
         draw.anchor.moves_clip = anchor.scissor && (draw.anchor.x != 0 || draw.anchor.y != 0);
     }

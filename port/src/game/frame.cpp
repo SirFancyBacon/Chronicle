@@ -21,6 +21,7 @@
 #include "mathutil.hpp"
 #include "mglib.hpp"
 #include "render/draw3d.hpp"
+#include "render/renderer_calls.hpp"
 #include "renderinfo.hpp"
 #include "visualvu1.hpp"
 #include "vu0_ops.hpp"
@@ -48,6 +49,10 @@ void DevInit() {
 }
 
 namespace {
+
+// A face's floor, as a share of the game's own colour for it: with modern light, never darker than half of how the game showed it, so expressions read
+// at night. A first guess, for the owner to judge.
+constexpr float kFaceFloor = 0.5f;
 
 void MulFrameMatrix(sceVu0FMATRIX m0, sceVu0FMATRIX m1, sceVu0FMATRIX m2) {
     float product[4][4];
@@ -928,7 +933,15 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
             current.alpha = alpha;
         }
 
-        if (attr.use_color || attr.ambient_boost) {
+        // A face or eyes, with modern light: lit as the rest of the character is, the game's own colour a floor under the ambient (decision 2).
+        const bool lit_face = attr.use_color && !attr.ambient_boost && !info->shadow_pass && render::ModernLight() && FrameNameIsFace(name);
+        if (lit_face) {
+            sceVu0CopyMatrix(light, info->light_direction);
+            sceVu0CopyVector(ambient, info->ambient);
+            for (int i = 0; i < 3; i++) {
+                info->ambient[i] = std::max(info->ambient[i], kFaceFloor * attr.color[i]);
+            }
+        } else if (attr.use_color || attr.ambient_boost) {
             sceVu0CopyMatrix(light, info->light_direction);
             ZeroMatrix(info->light_direction);
             sceVu0CopyVector(ambient, info->ambient);
@@ -958,7 +971,7 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
             Draw3DLightScope light(!info->shadow_pass && attr.use_color && !attr.ambient_boost && !attr.fog_enable && attr.blend_mode == 0 &&
                                    FrameNameIsLight(name));
             // Self-lit (the 'C' code): its own colour, the scene's light falling on it no more than the game's lights did.
-            Draw3DSelfLitScope self_lit(!info->shadow_pass && attr.use_color && !attr.ambient_boost);
+            Draw3DSelfLitScope self_lit(!info->shadow_pass && attr.use_color && !attr.ambient_boost && !lit_face);
             visual->DrawVu1(packet, matrix, info, VU1_PROGRAM_UNKNOWN6, nullptr, 0, 0);
         }
 

@@ -6,6 +6,8 @@
 #include <random>
 #include <unordered_map>
 
+#include "frame.hpp"
+#include "objanime.hpp"
 #include "render/renderer_calls.hpp"
 
 namespace dc::game {
@@ -20,6 +22,9 @@ constexpr float kBrightness = 104.0f / 128.0f;
 constexpr float kMatchDistance = 15.0f;
 constexpr float kRange = 80.0f;
 constexpr float kSize = 3.0f; // the flame's own size: nearer, no brighter
+// A fire's light is warm, as a torch's is, about 2700 K, at the luminance the game's grey light had: where the game lit a character grey, a
+// fire's light now colours what it lights as its flame looks.
+constexpr float kWarm[3] = {1.987f, 0.788f, 0.189f};
 
 float FireScale() {
     static const float scale = [] {
@@ -60,19 +65,66 @@ float Flickering(std::uint64_t key) {
     return fire.share;
 }
 
+// A candle's flame is a tenth of a fire's as the game draws it: its light a share of a torch's, reaching less far, from a smaller flame.
+constexpr float kCandleShare = 0.15f;
+constexpr float kCandleRange = 40.0f;
+constexpr float kCandleSize = 1.0f;
+
 float LinearOf(float encoded) {
     const float c = std::max(encoded, 0.0f);
     return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
 }
 
-} // namespace
-
-void GiveFireLight(std::uint64_t key, const float *flame) {
+void GiveFlameLight(std::uint64_t key, const float *flame, float share, float range, float size) {
     if (!render::ModernLight() || FireScale() == 0.0f) {
         return;
     }
-    const float light = LinearOf(kBrightness) * kMatchDistance * kMatchDistance * FireScale() * Flickering(key);
-    render::AddPointLight({.key = key, .position = {flame[0], flame[1], flame[2]}, .color = {light, light, light}, .range = kRange, .size = kSize});
+    const float light = LinearOf(kBrightness) * kMatchDistance * kMatchDistance * FireScale() * share * Flickering(key);
+    render::AddPointLight({
+        .key = key,
+        .position = {flame[0],         flame[1],         flame[2]        },
+        .color = {light * kWarm[0], light * kWarm[1], light * kWarm[2]},
+        .range = range,
+        .size = size
+    });
+}
+
+} // namespace
+
+void GiveFireLight(std::uint64_t key, const float *flame) {
+    GiveFlameLight(key, flame, 1.0f, kRange, kSize);
+}
+
+void GiveCandleLight(std::uint64_t key, const float *flame) {
+    GiveFlameLight(key, flame, kCandleShare, kCandleRange, kCandleSize);
+}
+
+void GiveEffectLight(const EDIT_EFFECT_INFO *effect) {
+    if (effect == nullptr || effect->frame == nullptr || !render::ModernLight()) {
+        return;
+    }
+    const auto key = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(effect));
+    float      flame[4];
+    // Where DrawEditEffect draws the flame: a fire's above where it stands, a candle's 4 units lower, unless the candle has no flame.
+    switch (effect->kind) {
+        case EDIT_EFFECT_FIRE_LARGE:
+        case EDIT_EFFECT_FIRE_MEDIUM:
+        case EDIT_EFFECT_FIRE_SMALL:
+            effect->frame->GetWorldPosition(flame, const_cast<float *>(effect->offset));
+            flame[1] += kFlameRise;
+            GiveFireLight(key, flame);
+            break;
+        case EDIT_EFFECT_CANDLE:
+            if (effect->sound_no > 0.0f) {
+                break;
+            }
+            effect->frame->GetWorldPosition(flame, const_cast<float *>(effect->offset));
+            flame[1] += kFlameRise - 4.0f;
+            GiveCandleLight(key, flame);
+            break;
+        default:
+            break;
+    }
 }
 
 } // namespace dc::game

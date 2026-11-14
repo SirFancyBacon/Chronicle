@@ -37,7 +37,6 @@
 #include "dataalloc.hpp"
 #include "dataread.hpp"
 #include "dataset.hpp"
-#include "firelight.hpp"
 #include "debugfont.hpp"
 #include "dialog/npc.hpp"
 #include "dialog/script_question.hpp"
@@ -56,6 +55,7 @@
 #include "effect.hpp"
 #include "effectgroup.hpp"
 #include "effectmacro.hpp"
+#include "firelight.hpp"
 #include "fishing.hpp"
 #include "fishing/host.hpp"
 #include "frame.hpp"
@@ -719,11 +719,12 @@ bool TreantChestFlag(int flag_no) {
 
 namespace {
 
-bool IsFire(const EDIT_EFFECT_INFO *effect) {
-    return effect->kind == EDIT_EFFECT_FIRE_LARGE || effect->kind == EDIT_EFFECT_FIRE_MEDIUM || effect->kind == EDIT_EFFECT_FIRE_SMALL;
+bool IsFlame(const EDIT_EFFECT_INFO *effect) {
+    return effect->kind == EDIT_EFFECT_FIRE_LARGE || effect->kind == EDIT_EFFECT_FIRE_MEDIUM || effect->kind == EDIT_EFFECT_FIRE_SMALL ||
+           effect->kind == EDIT_EFFECT_CANDLE;
 }
 
-// A part's fires burning, as point lights (GiveFireLight), in place of the game's light on the player alone (CFakePointLight).
+// A part's fires and candles burning, as point lights (GiveEffectLight), in place of the game's light on the player alone (CFakePointLight).
 void GiveFireLights(CMapParts &part) {
     if (part.handle < 0 || part.draw_on == 0) {
         return;
@@ -734,7 +735,7 @@ void GiveFireLights(CMapParts &part) {
             break;
         }
         EDIT_EFFECT_INFO *effect = part.effect[i];
-        if (part.effect_on[i] == 0 || effect == nullptr || effect->frame == nullptr || !IsFire(effect) || CheckEditEffect(effect, NowTime) == 0) {
+        if (part.effect_on[i] == 0 || effect == nullptr || effect->frame == nullptr || !IsFlame(effect) || CheckEditEffect(effect, NowTime) == 0) {
             continue;
         }
         // Where the part stands, as CMapParts::DrawEffect sets it before reading an effect's place.
@@ -746,14 +747,11 @@ void GiveFireLights(CMapParts &part) {
             part.frame[0]->SetRotation(transform[0], transform[1], transform[2]);
             placed = true;
         }
-        float flame[4];
-        effect->frame->GetWorldPosition(flame, effect->offset);
-        flame[1] += kFlameRise;
-        GiveFireLight(static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(effect)), flame);
+        GiveEffectLight(effect);
     }
 }
 
-// Every fire on the ground that's burning, in the areas drawn, wherever the camera looks.
+// Every fire and candle on the ground that's burning, in the areas drawn, wherever the camera looks.
 void EdGiveFireLights() {
     if (!render::ModernLight() || pEditGround == nullptr) {
         return;

@@ -4,6 +4,8 @@
 
 namespace dc::game {
 
+struct EDIT_EFFECT_INFO;
+
 /**
  * @file
  * Fires as point lights, with modern light (step 7's point lights): the town's and the dungeons' fires lighting what's around them as light does.
@@ -16,6 +18,19 @@ namespace dc::game {
  * @param flame Where the flame burns, in the world.
  */
 void GiveFireLight(std::uint64_t key, const float *flame);
+
+/**
+ * Gives a candle's light for this tick, as GiveFireLight does a fire's: a small flame, a share of a torch's light reaching less far.
+ * @param key Who the candle is from tick to tick, never 0.
+ * @param flame Where its flame burns, in the world.
+ */
+void GiveCandleLight(std::uint64_t key, const float *flame);
+
+/**
+ * Gives the light of an effect the game draws as a flame (EDIT_EFFECT_INFO), a fire or a lit candle, where it burns; nothing for other effects. The
+ * effect's frame must stand where the game draws it from.
+ */
+void GiveEffectLight(const EDIT_EFFECT_INFO *effect);
 
 /** How far above where a fire stands its flame burns, as CFireOmni draws it. */
 inline constexpr float kFlameRise = 4.6f;

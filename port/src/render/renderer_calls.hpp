@@ -62,6 +62,10 @@ struct PointLightGiven {
 /** Adds a point light to this tick's scene, lighting the world's lit meshes near it with modern light (ModernLight); nothing otherwise. */
 void AddPointLight(const PointLightGiven &light);
 
+/** Whether point lights reach the meshes drawn from here on: off around surfaces whose light is painted in, as an interior's map is, so they aren't
+ * lit twice (step 7's decision 1). On unless switched off. */
+void SetPointLit(bool on);
+
 /** Lays depth of field and heat haze on the screen as drawn so far, where the game drew its own. */
 void ApplyFocus(const FocusSettings &settings);
 

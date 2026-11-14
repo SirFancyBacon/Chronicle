@@ -11,6 +11,7 @@
 #include <memory>
 #include <print>
 #include <ranges>
+#include <string>
 #include <string_view>
 
 #include "boxvu0.hpp"
@@ -325,6 +326,20 @@ void ArrangeShadowMDT(u_int *data) {
 }
 
 } // namespace
+
+bool FrameNameIsFace(const char *name) {
+    const char *codes = std::strstr(name, "__");
+    if (codes == nullptr) {
+        return false;
+    }
+    std::string stem(name, codes);
+    std::ranges::transform(stem, stem.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+    // Eyes come in pairs too: l_eye, r_eye.
+    if (stem.starts_with("l_") || stem.starts_with("r_")) {
+        stem.erase(0, 2);
+    }
+    return stem == "face" || stem == "eye";
+}
 
 bool FrameNameIsLight(const char *name) {
     const char *codes = std::strstr(name, "__");

@@ -42,6 +42,12 @@ void SetFrameAttr(CFrame *frame, int recurse);
 bool FrameNameIsLight(const char *name);
 
 /**
+ * Whether a frame's name says it's a character's face or eyes (face__c, eye__cba, l_eye__cba, r_eye__cba1...): the game shows them at their own colour whatever the light, so
+ * that expressions read; with modern light they're lit as the rest of the character is, never darker than a floor (step 7's decision 2).
+ */
+bool FrameNameIsFace(const char *name);
+
+/**
  * Receives the files that synchronous game-data reads load.
  */
 extern u_int *read_buffer;

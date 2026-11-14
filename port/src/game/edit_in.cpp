@@ -35,6 +35,7 @@
 #include "editpartsinfo.hpp"
 #include "effectgroup.hpp"
 #include "effectmacro.hpp"
+#include "firelight.hpp"
 #include "fireomni.hpp"
 #include "frame.hpp"
 #include "framevu1.hpp"
@@ -945,9 +946,13 @@ void MainDraw() {
         setTexAnim();
         sceVu0FVECTOR lod_distance = {0.0f, 1000.0f, 10000.0f, 1000000.0f};
 
+        // The interior's light is painted into its map, morning, evening and night (step 7's decision 1): the room's fires light the characters
+        // and what moves, not the map a second time.
+        render::SetPointLit(false);
         for (int i = 0; i < parts_num; i++) {
             InteriorParts[i].DrawParts(EdIn_NowTime, lod_distance, 0, 0, nullptr);
         }
+        render::SetPointLit(true);
     }
 
     sceGsTex0 frame_tex;
@@ -1025,6 +1030,7 @@ void MainDraw() {
             EDIT_EFFECT_INFO *effect = &EdInInfo->effects[i];
 
             if (CheckEditEffect(effect, EdIn_NowTime) != 0) {
+                GiveEffectLight(effect);
                 DrawEditEffect(effect, EdIn_NowCamera, &EdEffectGroup);
             }
         }
