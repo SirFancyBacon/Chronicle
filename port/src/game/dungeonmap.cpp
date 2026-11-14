@@ -17,6 +17,7 @@
 #include "dataset.hpp"
 #include "dun/gameloop.hpp"
 #include "dungeonparts.hpp"
+#include "firelight.hpp"
 #include "frame.hpp"
 #include "frameattr.hpp"
 #include "framevu1.hpp"
@@ -837,6 +838,64 @@ void CDungeonMap::FlushCheckMask() {
     for (i = 0; i < 400; i++) {
         if (this->cells[i].parts_no == MAP_PARTS_STAIR_DOWN) {
             this->mask[i] = 1;
+        }
+    }
+}
+
+namespace {
+
+// A fire's point on its part, turned as the part is turned, as the fire drawers turn it: angle is the part's turn in quarters, counted back from 4.
+void TurnFirePoint(const float *point, float angle, float *x, float *z) {
+    if (angle == 0.0f) {
+        *x = point[0];
+        *z = point[2];
+        return;
+    }
+    const float radians = (PI * (90.0f * angle)) / 180.0f;
+    *x = -(-point[2] * sinf(radians) - point[0] * cosf(radians));
+    *z = -point[0] * sinf(radians) + point[2] * cosf(radians);
+}
+
+} // namespace
+
+void CDungeonMap::GiveFireLights() {
+    if (!render::ModernLight()) {
+        return;
+    }
+    // Keys apart from the town's, which are effects' places in memory: a cell or part, and the fire on it.
+    constexpr std::uint64_t kGridFires = 1ull << 62;
+    constexpr std::uint64_t kFreeFires = 1ull << 61;
+    float flame[4];
+    if (map_type == 1) {
+        for (int cell_no = 0; cell_no < 400; cell_no++) {
+            const MAP_CELL &cell = cells[cell_no];
+            if (cell.parts_no == MAP_PARTS_NONE) {
+                continue;
+            }
+            const CDungeonParts &part = parts[cell.parts_no];
+            for (int j = 0; j < part.fire_num; j++) {
+                float x = 0.0f;
+                float z = 0.0f;
+                TurnFirePoint(part.fire_pos[j], cell.direction != 0 ? static_cast<float>(4 - cell.direction) : 0.0f, &x, &z);
+                flame[0] = 10.0f * (x + 16.0f * static_cast<float>(cell_no % 20));
+                flame[1] = 10.0f * part.fire_pos[j][1] + kFlameRise;
+                flame[2] = 10.0f * (z + 16.0f * static_cast<float>(cell_no / 20));
+                GiveFireLight(kGridFires | static_cast<std::uint64_t>(cell_no) << 8 | static_cast<std::uint64_t>(j), flame);
+            }
+        }
+        return;
+    }
+    for (int i = 0; i < static_cast<int>(std::size(parts)) && parts[i].frame[0] != nullptr; i++) {
+        const CDungeonParts &part = parts[i];
+        for (int j = 0; j < part.fire_num; j++) {
+            float       x = 0.0f;
+            float       z = 0.0f;
+            const float turn = part.frame_turn[0];
+            TurnFirePoint(part.fire_pos[j], turn != 0.0f ? 4.0f - turn : 0.0f, &x, &z);
+            flame[0] = 10.0f * (part.frame_offset[0][0] / 10.0f + x);
+            flame[1] = 10.0f * (part.fire_pos[j][1] + part.frame_offset[0][1] / 10.0f) + kFlameRise;
+            flame[2] = 10.0f * (part.frame_offset[0][2] / 10.0f + z);
+            GiveFireLight(kFreeFires | static_cast<std::uint64_t>(i) << 8 | static_cast<std::uint64_t>(j), flame);
         }
     }
 }

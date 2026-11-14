@@ -318,6 +318,12 @@ public:
     void DrawFireFreeStyle(CFrameVu1 *frame, CCameraFollow *camera);
 
     /**
+     * Gives every fire on the floor as a point light, with modern light: those the grid's cells hold or the freely placed parts, wherever the camera
+     * looks. Called once a tick, as the fires are drawn.
+     */
+    void GiveFireLights();
+
+    /**
      * Draws the fires standing on the floor's parts.
      */
     void DrawFire(CFrameVu1 *frame, CCameraFollow *camera);

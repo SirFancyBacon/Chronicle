@@ -37,6 +37,7 @@
 #include "dataalloc.hpp"
 #include "dataread.hpp"
 #include "dataset.hpp"
+#include "firelight.hpp"
 #include "debugfont.hpp"
 #include "dialog/npc.hpp"
 #include "dialog/script_question.hpp"
@@ -718,29 +719,53 @@ bool TreantChestFlag(int flag_no) {
 
 namespace {
 
-// A town fire's light on the player, flickering as a fire does: a new brightness every few ticks, eased towards each tick. The game drew a new one every
-// tick, from 80 to 127, which with light added as light (Noktus's linear scene) reads as a strobe (the owner's report, 2026-11-13). drawn is the
-// brightness the game drew this tick: taken as the next to ease towards every kFireFlickerTicks.
-constexpr int   kFireFlickerTicks = 6;
-constexpr float kFireFlickerEase = 0.25f;
+bool IsFire(const EDIT_EFFECT_INFO *effect) {
+    return effect->kind == EDIT_EFFECT_FIRE_LARGE || effect->kind == EDIT_EFFECT_FIRE_MEDIUM || effect->kind == EDIT_EFFECT_FIRE_SMALL;
+}
 
-struct FireFlickerState {
-    float brightness = 0.0f;
-    float towards = 0.0f;
-    int   ticks = 0;
-};
+// A part's fires burning, as point lights (GiveFireLight), in place of the game's light on the player alone (CFakePointLight).
+void GiveFireLights(CMapParts &part) {
+    if (part.handle < 0 || part.draw_on == 0) {
+        return;
+    }
+    bool placed = false;
+    for (int i = 0; i < MAP_PARTS_EFFECT_MAX; i++) {
+        if (part.effect_on[i] < 0) {
+            break;
+        }
+        EDIT_EFFECT_INFO *effect = part.effect[i];
+        if (part.effect_on[i] == 0 || effect == nullptr || effect->frame == nullptr || !IsFire(effect) || CheckEditEffect(effect, NowTime) == 0) {
+            continue;
+        }
+        // Where the part stands, as CMapParts::DrawEffect sets it before reading an effect's place.
+        if (!placed && part.frame[0] != nullptr) {
+            float transform[4];
+            part.GetPosition(transform);
+            part.frame[0]->SetPosition(transform);
+            part.GetRotation(transform);
+            part.frame[0]->SetRotation(transform[0], transform[1], transform[2]);
+            placed = true;
+        }
+        float flame[4];
+        effect->frame->GetWorldPosition(flame, effect->offset);
+        flame[1] += kFlameRise;
+        GiveFireLight(static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(effect)), flame);
+    }
+}
 
-float FireFlicker(const void *fire, float drawn) {
-    static std::unordered_map<const void *, FireFlickerState> fires;
-    FireFlickerState &state = fires[fire];
-    if (state.ticks == 0 && state.brightness == 0.0f) {
-        state.brightness = state.towards = drawn;
+// Every fire on the ground that's burning, in the areas drawn, wherever the camera looks.
+void EdGiveFireLights() {
+    if (!render::ModernLight() || pEditGround == nullptr) {
+        return;
     }
-    if (state.ticks++ % kFireFlickerTicks == 0) {
-        state.towards = drawn;
+    for (CMapParts &part : pEditGround->parts) {
+        if (part.area < 0 || pEditGround->area_visible[part.area] != 0) {
+            GiveFireLights(part);
+        }
     }
-    state.brightness += (state.towards - state.brightness) * kFireFlickerEase;
-    return state.brightness;
+    for (CMapParts &part : pEditGround->fixed_parts) {
+        GiveFireLights(part);
+    }
 }
 
 } // namespace
@@ -2674,13 +2699,14 @@ void EditMainDraw() {
                                 float distance = DistVector(chara_pos, light_pos);
 
                                 if (distance <= 40.0f) {
-                                    // The game drew a new brightness every tick; one call as before keeps the game's random numbers in step. Eased
-                                    // with modern light, where the steps read as a strobe; the game's own with it off.
+                                    // The game drew a new brightness every tick; one call as before keeps the game's random numbers in step. With
+                                    // modern light the fire is a point light of its own (EdGiveFireLights), lighting the player as it lights the rest.
                                     const float drawn = 80.0f + static_cast<float>(rand() % 48);
-                                    float       brightness = render::ModernLight() ? FireFlicker(effect, drawn) : drawn;
 
-                                    light_pos[3] = distance;
-                                    Chara->SetPointLight(light_pos, 5.0f, 40.0f, brightness, brightness, brightness, 128.0f);
+                                    if (!render::ModernLight()) {
+                                        light_pos[3] = distance;
+                                        Chara->SetPointLight(light_pos, 5.0f, 40.0f, drawn, drawn, drawn, 128.0f);
+                                    }
                                 }
                             }
                         }
@@ -2792,6 +2818,7 @@ void EditMainDraw() {
                 case ED_MODE_RETURN_MENU_WALK:
                 case ED_MODE_RETURN_MENU_GEORAMA:
                     EditEffectStep2();
+                    EdGiveFireLights();
                     pEditGround->DrawEffect(static_cast<CCameraFollow *>(NowCamera), NowTime, &EdEffectGroup);
                     EdEffectGroup.Draw();
                     break;

@@ -104,6 +104,9 @@ using namespace dc::platform;
 namespace {
 
 /* The weapon each character starts with. */
+// The Atlamillia's point light, the one there is: apart from the fires' keys (GiveFireLight).
+constexpr std::uint64_t kAtlamilliaLight = 1ull << 60;
+
 constexpr std::array<s32, 6> defWeapon__6 = {ITEM_WEAPON_DAGGER_BROKEN, ITEM_WEAPON_WOODENSLINGSHOT_BROKEN, ITEM_WEAPON_MALLET_BROKEN, ITEM_WEAPON_GOLD_RING_BROKEN, ITEM_WEAPON_FIGHTING_STICK_BROKEN, ITEM_WEAPON_MACHINE_GUN_BROKEN};
 
 /**
@@ -2040,8 +2043,24 @@ void Draw_MainUnit() {
     sceVu0CopyMatrix(saved_light, light);
     sceVu0CopyMatrix(saved_colour, colour);
 
-    // The Atlamillia lights the player from wherever its effect stands.
-    if (atraGetStatus != 0) {
+    // The Atlamillia lights the player from wherever its effect stands. With modern light, it lights what's around it as well, as a point light: the
+    // game's light already fell off with the square of the distance, 500 times its colour over it, which is kept, its colour taken as light.
+    if (atraGetStatus != 0 && render::ModernLight()) {
+        CFrame *lamp = shortAtraEffect.frame->SearchFrame("light01");
+
+        sceVu0CopyMatrix(place, lamp->local);
+        up[0] = place[3][0];
+        up[1] = place[3][1];
+        up[2] = place[3][2];
+        lamp->GetWorldPosition(world, up);
+        const auto  linear = [](float encoded) { return encoded <= 0.04045f ? encoded / 12.92f : std::pow((encoded + 0.055f) / 1.055f, 2.4f); };
+        const float strength = 500.0f * atraGetStatusRate__2 / 128.0f;
+        render::AddPointLight({.key = kAtlamilliaLight,
+                               .position = {world[0], world[1], world[2]},
+                               .color = {strength * linear(0.8359375f), strength * linear(0.9765625f), strength * linear(0.66015625f)},
+                               .range = 150.0f,
+                               .size = 2.0f});
+    } else if (atraGetStatus != 0) {
         CFrame *lamp = shortAtraEffect.frame->SearchFrame("light01");
 
         sceVu0CopyMatrix(place, lamp->local);
@@ -2364,6 +2383,8 @@ void DunMainDraw() {
     sceVu0CopyVector(raster_pos, CharaFrame->position);
     TexManager.ReloadTexture(Vif1Packet, 0xE);
     NowDngMap->DrawRaster(CharaFrame);
+
+    NowDngMap->GiveFireLights();
 
     if (NowDngMap->map_type == 1) {
         NowDngMap->DrawFire(CharaFrame, NowCamera__3);

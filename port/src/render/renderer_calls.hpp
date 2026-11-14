@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <string>
@@ -48,6 +49,18 @@ void SetOutdoorLight(bool outdoors);
 
 /** Whether the scene is outdoors (SetOutdoorLight). */
 bool OutdoorLight();
+
+/** A small light with a place in the world, as a fire or a lamp is: see AddPointLight. */
+struct PointLightGiven {
+    std::uint64_t key = 0;       // who this is from tick to tick, so it moves between ticks: one light keeps one key, 0 for none
+    float         position[3] = {};
+    float         color[3] = {}; // its intensity in linear light, as the light it gives a surface facing it squarely one unit away
+    float         range = 0.0f;  // past this distance it gives nothing
+    float         size = 1.0f;   // its own size: nearer than this, it gives no more than there
+};
+
+/** Adds a point light to this tick's scene, lighting the world's lit meshes near it with modern light (ModernLight); nothing otherwise. */
+void AddPointLight(const PointLightGiven &light);
 
 /** Lays depth of field and heat haze on the screen as drawn so far, where the game drew its own. */
 void ApplyFocus(const FocusSettings &settings);

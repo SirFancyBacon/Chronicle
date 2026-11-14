@@ -114,6 +114,12 @@ struct Mirror {
     std::mutex                                               lock;
     bool                                                     open = false;
     noktus::SceneLight                                       scene_light; // the scene light last given
+    // Point lights wait for the world's camera, the first lit draw of the world in the tick: the scene they light is the one Noktus is given them in.
+    std::vector<noktus::PointLight>                          lights_waiting;
+    std::optional<noktus::Camera>                            world_camera; // this tick's, once a lit draw of the world has set it
+    std::optional<noktus::Camera>                            camera;       // the camera last given, put back after a point light's
+    std::optional<noktus::Pass>                              pass;
+    bool                                                     on_screen = true;
     std::uint64_t                                            drawn = 0;
     std::uint64_t                                            skipped = 0;
     std::uint64_t                                            elsewhere = 0;
@@ -695,6 +701,15 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
         mirror.scene_light = wanted;
     }
     mirror.renderer->SetCamera(scene.camera);
+    mirror.camera = scene.camera;
+    const bool world_pass = mirror.pass == noktus::Pass::Ground || mirror.pass == noktus::Pass::Characters || mirror.pass == noktus::Pass::MovingParts;
+    if (!mirror.world_camera && world_pass && mirror.on_screen && scene.draw.material.lit && !Draw3DSelfLit()) {
+        mirror.world_camera = scene.camera;
+        for (const noktus::PointLight &light : mirror.lights_waiting) {
+            mirror.renderer->AddPointLight(light);
+        }
+        mirror.lights_waiting.clear();
+    }
     draw = std::move(scene.draw);
     draw.key = mirror.key;
     draw.still = mirror.still;
@@ -825,6 +840,7 @@ void MirrorSetPass(Pass pass) {
     std::scoped_lock guard(mirror.lock);
     if (mirror.renderer) {
         mirror.renderer->SetPass(*named);
+        mirror.pass = *named;
     }
 }
 
@@ -878,6 +894,34 @@ void SetOutdoorLight(bool outdoors) {
 
 bool OutdoorLight() {
     return g_outdoors;
+}
+
+void AddPointLight(const PointLightGiven &given) {
+    if (!ModernLight()) {
+        return;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (!mirror.open || !mirror.renderer) {
+        return;
+    }
+    const noktus::PointLight light = {.key = static_cast<noktus::ObjectKey>(given.key),
+                                      .position = {given.position[0], given.position[1], given.position[2]},
+                                      .color = {given.color[0], given.color[1], given.color[2], 1.0f},
+                                      .range = given.range,
+                                      .size = given.size};
+    if (!mirror.world_camera) {
+        mirror.lights_waiting.push_back(light);
+        return;
+    }
+    // Given in the world's camera, then the camera as it was, for what's recorded next.
+    Guarded([&] {
+        mirror.renderer->SetCamera(*mirror.world_camera);
+        mirror.renderer->AddPointLight(light);
+        if (mirror.camera) {
+            mirror.renderer->SetCamera(*mirror.camera);
+        }
+    });
 }
 
 void ApplyFocus(const FocusSettings &settings) {
@@ -1170,6 +1214,9 @@ void MirrorEndTick() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (mirror.open) {
+        // Lights given in a tick with no lit draw of the world light nothing.
+        mirror.lights_waiting.clear();
+        mirror.world_camera.reset();
         Guarded([&] { mirror.renderer->EndTick(); });
         mirror.open = false;
         mirror.draws_last_tick = mirror.drawn + mirror.meshes_drawn - mirror.draws_at_tick_end;
@@ -1473,6 +1520,7 @@ void MirrorSetTarget(gfx::TextureHandle target) {
     }
     const auto found = mirror.surfaces.find(target);
     mirror.target_known = target == gfx::kMainTarget || found != mirror.surfaces.end();
+    mirror.on_screen = target == gfx::kMainTarget;
     if (mirror.target_known) {
         Guarded([&] { mirror.renderer->DrawTo(target == gfx::kMainTarget ? noktus::SurfaceId::None : found->second); });
     }
