@@ -2260,6 +2260,9 @@ EdSkyLight EdSunAndMoonLight(float clock) {
 }
 
 namespace {
+// How far real shadows reach in a town, in eye distance: a town's houses and trees, across the square from the camera. A first guess, for tuning.
+constexpr float kTownShadowDistance = 1500.0f;
+
 // How much of the towns' main light falls this tick (EdSunAndMoonLight's strength): 1 but at dusk and dawn with modern light.
 float g_main_light_strength = 1.0f;
 } // namespace
@@ -2268,6 +2271,10 @@ u_char EdFadedShadow(u_char alpha) {
     // Only outdoors, where the town's light set the strength: an interior's shadows keep their darkness whatever the hour outside.
     if (!render::OutdoorLight()) {
         return alpha;
+    }
+    // Real shadows from the sun stand in for these (step 8): they darken nothing.
+    if (render::SunShadows()) {
+        return 0;
     }
     return static_cast<u_char>(std::lround(static_cast<float>(alpha) * g_main_light_strength));
 }
@@ -2363,6 +2370,8 @@ void EdSetLightParam(float clock, int fixed, EDIT_MAP_INFO *info, CFrameVu1 *sky
         sceVu0ScaleVector(colour[0], colour[0], sky_light.strength);
         g_main_light_strength = sky_light.strength;
     }
+    // The main light is the sun's or the moon's: with modern light, it casts real shadows (step 8).
+    render::SetSunShadows(kTownShadowDistance);
     sceVu0Normalize(direction[0], direction[0]);
     sceVu0Normalize(direction[1], direction[1]);
     sceVu0Normalize(direction[2], direction[2]);

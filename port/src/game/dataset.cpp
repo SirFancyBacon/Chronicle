@@ -341,6 +341,19 @@ bool FrameNameIsFace(const char *name) {
     return stem == "face" || stem == "eye";
 }
 
+bool FrameNameIsShade(const char *name) {
+    // Asked of every frame drawn, so it reads the name in place: "kage" (shadow) anywhere before the codes, in any case, but not "tukikage"
+    // (moonlight), which is a light. Every other such name in the game's data is a shadow card.
+    const auto lower = [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); };
+    for (const char *at = name; at[0] != '\0' && !(at[0] == '_' && at[1] == '_'); at++) {
+        if (lower(at[0]) == 'k' && lower(at[1]) == 'a' && lower(at[2]) == 'g' && lower(at[3]) == 'e') {
+            const bool moonlight = at - name >= 4 && lower(at[-4]) == 't' && lower(at[-3]) == 'u' && lower(at[-2]) == 'k' && lower(at[-1]) == 'i';
+            return !moonlight;
+        }
+    }
+    return false;
+}
+
 bool FrameNameIsLight(const char *name) {
     const char *codes = std::strstr(name, "__");
     // The sky domes of the title (sky__CFS) and the attract movie (tenkyu__CFS, the celestial sphere) are named self-lit and unfogged too, and every

@@ -62,6 +62,14 @@ struct PointLightGiven {
 /** Adds a point light to this tick's scene, lighting the world's lit meshes near it with modern light (ModernLight); nothing otherwise. */
 void AddPointLight(const PointLightGiven &light);
 
+/** Says that this tick's main light (light 0) is the sun's or the moon's, casting real shadows out to this eye distance (step 8): the world's solid
+ * draws cast, and the game's own shadows give way (SunShadows). Nothing without modern light or with DC_NOKTUS_SHADOWS=0. */
+void SetSunShadows(float distance);
+
+/** Whether real shadows from the sun stand in for the game's own: with modern light, outdoors in a town where a sun was given this tick or the one
+ * before, unless DC_NOKTUS_SHADOWS=0. Past the sun's shadow distance there are then none: the game's far shadows go too. */
+bool SunShadows();
+
 /** Whether point lights reach the meshes drawn from here on: off around surfaces whose light is painted in, as an interior's map is, so they aren't
  * lit twice (step 7's decision 1). On unless switched off. */
 void SetPointLit(bool on);

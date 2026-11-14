@@ -124,6 +124,9 @@ struct Mirror {
     std::vector<noktus::PointLight>                          lights_waiting;
     std::optional<noktus::Camera>                            world_camera; // this tick's, once a lit draw of the world has set it
     std::optional<noktus::Camera>                            camera;       // the camera last given, put back after a point light's
+    float                                                                           sun_distance = 0.0f; // this tick's sun's shadow distance (SetSunShadows), 0 for no sun
+    std::optional<noktus::Vec3>                                                     sun;                 // its direction, once the first lit draw of the world has given it
+    bool                                                                            sun_before = false;  // the tick before had a sun: the game's shadows stay given way
     std::optional<noktus::Pass>                              pass;
     bool                                                     on_screen = true;
     std::uint64_t                                            drawn = 0;
@@ -715,14 +718,38 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
     mirror.camera = scene.camera;
     const bool world_pass = mirror.pass == noktus::Pass::Ground || mirror.pass == noktus::Pass::Characters || mirror.pass == noktus::Pass::MovingParts ||
                             mirror.pass == noktus::Pass::Opening;
-    if (!mirror.world_camera && world_pass && mirror.on_screen && scene.draw.material.lit && !Draw3DSelfLit()) {
+    const bool of_the_world = world_pass && mirror.on_screen && scene.draw.material.lit && !Draw3DSelfLit();
+    if (!mirror.world_camera && of_the_world) {
         mirror.world_camera = scene.camera;
         for (const noktus::PointLight &light : mirror.lights_waiting) {
             mirror.renderer->AddPointLight(light);
         }
         mirror.lights_waiting.clear();
     }
+    // The sun: the direction of the first lit draw of the world's main light, the very one each draw is lit by.
+    if (of_the_world && mirror.sun_distance > 0.0f && !mirror.sun && scene.draw.lighting.light_count > 0) {
+        const noktus::Vec3 &towards = scene.draw.lighting.lights[0].direction;
+        // A draw whose main light is switched off (Georama's dimmed cursor) can't say where the sun is.
+        if (towards.x * towards.x + towards.y * towards.y + towards.z * towards.z > 1e-6f) {
+            mirror.sun = towards;
+            mirror.renderer->SetSun({.direction = towards, .distance = mirror.sun_distance});
+        }
+    }
     draw = std::move(scene.draw);
+    if (mirror.sun) {
+        // A draw's light that falls as the sun's does is the sun's, shadowed; the world's solid draws cast.
+        const auto unit = [](const noktus::Vec3 &v) {
+            const float length = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+            return length > 1e-6f ? noktus::Vec3{v.x / length, v.y / length, v.z / length} : noktus::Vec3{};
+        };
+        const noktus::Vec3 sun = unit(*mirror.sun);
+        for (int i = 0; i < std::min(draw.lighting.light_count, noktus::kMaxDirectionalLights); i++) {
+            noktus::DirectionalLight &light = draw.lighting.lights[static_cast<std::size_t>(i)];
+            const noktus::Vec3        towards = unit(light.direction);
+            light.shadowed = towards.x * sun.x + towards.y * sun.y + towards.z * sun.z > 0.9995f;
+        }
+        draw.casts_shadow = of_the_world;
+    }
     draw.point_lit = g_point_lit;
     draw.key = mirror.key;
     draw.still = mirror.still;
@@ -899,6 +926,36 @@ bool ModernFocus() {
 
 bool ModernLight() {
     return g_linear && !KazarovDraws() && MirrorOn();
+}
+
+// Real shadows from the sun, unless DC_NOKTUS_SHADOWS=0: for comparing with the game's own.
+bool ShadowsWanted() {
+    static const bool wanted = [] {
+        const char *asked = std::getenv("DC_NOKTUS_SHADOWS");
+        return asked == nullptr || std::strcmp(asked, "0") != 0;
+    }();
+    return wanted;
+}
+
+void SetSunShadows(float distance) {
+    if (!ModernLight() || !ShadowsWanted() || !(distance > 0.0f)) {
+        return;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.open) {
+        mirror.sun_distance = distance;
+    }
+}
+
+bool SunShadows() {
+    if (!ModernLight() || !ShadowsWanted() || !OutdoorLight()) {
+        return false;
+    }
+    // Only where a sun was given, this tick or the one before: the game's shadows may be drawn before this tick's is found.
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    return mirror.sun.has_value() || mirror.sun_before;
 }
 
 void SetPointLit(bool on) {
@@ -1236,6 +1293,9 @@ void MirrorEndTick() {
         // Lights given in a tick with no lit draw of the world light nothing.
         mirror.lights_waiting.clear();
         mirror.world_camera.reset();
+        mirror.sun_distance = 0.0f;
+        mirror.sun_before = mirror.sun.has_value();
+        mirror.sun.reset();
         Guarded([&] { mirror.renderer->EndTick(); });
         mirror.open = false;
         mirror.draws_last_tick = mirror.drawn + mirror.meshes_drawn - mirror.draws_at_tick_end;

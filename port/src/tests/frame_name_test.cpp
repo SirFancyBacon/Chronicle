@@ -7,6 +7,7 @@ namespace {
 
 using dc::game::FrameNameIsFace;
 using dc::game::FrameNameIsLight;
+using dc::game::FrameNameIsShade;
 
 TEST(FrameName, FacesAndEyes) {
     EXPECT_TRUE(FrameNameIsFace("face__c"));
@@ -20,6 +21,17 @@ TEST(FrameName, FacesAndEyes) {
     EXPECT_FALSE(FrameNameIsFace("eyelid__c"));
     EXPECT_FALSE(FrameNameIsFace("face"));
     EXPECT_FALSE(FrameNameIsFace("sky__c"));
+}
+
+TEST(FrameName, Shade) {
+    EXPECT_TRUE(FrameNameIsShade("kage__A01z"));
+    EXPECT_TRUE(FrameNameIsShade("e02h10kage__a01z"));
+    EXPECT_TRUE(FrameNameIsShade("rou1kage__a01z"));
+    EXPECT_TRUE(FrameNameIsShade("kage"));
+    EXPECT_FALSE(FrameNameIsShade("face__c"));
+    EXPECT_FALSE(FrameNameIsShade("ka__ge"));
+    EXPECT_FALSE(FrameNameIsShade("tukikage__a7f")); // moonlight
+    EXPECT_TRUE(FrameNameIsShade("2Fkage__a01zn"));
 }
 
 TEST(FrameName, Lights) {

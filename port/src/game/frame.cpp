@@ -904,7 +904,9 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
         info->clip_flags |= 4;
     }
 
-    if (visual && visible && attr.draw_on) {
+    // Shadow cards give way to real shadows where they stand in (decision 8).
+    const bool shade_given_way = !info->shadow_pass && FrameNameIsShade(name) && render::SunShadows();
+    if (visual && visible && attr.draw_on && !shade_given_way) {
         if (!info->shadow_pass) {
             if (attr.alpha_ref >= 0) {
                 test.bits.aref = attr.alpha_ref;

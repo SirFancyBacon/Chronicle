@@ -48,6 +48,12 @@ bool FrameNameIsLight(const char *name);
 bool FrameNameIsFace(const char *name);
 
 /**
+ * Whether a frame's name says it's painted shade, a shadow card (kage__a01, e02h10kage__a01z, rou1kage__a01z...): shadows the game laid on the ground by
+ * hand, which real shadows stand in for (step 8's decision 8).
+ */
+bool FrameNameIsShade(const char *name);
+
+/**
  * Receives the files that synchronous game-data reads load.
  */
 extern u_int *read_buffer;
