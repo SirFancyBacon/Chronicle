@@ -22,6 +22,7 @@
 #include "effect.hpp"
 #include "effectgroup.hpp"
 #include "effectmacro.hpp"
+#include "firelight.hpp"
 #include "fireomni.hpp"
 #include "frame.hpp"
 #include "framevu1.hpp"
@@ -2298,6 +2299,7 @@ void OpC_DrawProcess() {
                 CFire.pos[3] = 1.0f;
 
                 int fire_flag = OP_FireFlg[i];
+                GiveOpeningFireLight(i, CFire.pos, fire_flag);
 
                 if (fire_flag == 1) {
                     CFire.DrawFire(1, 1, &OP_MainCamera, eye, OP_FireScale[i], 3, static_cast<float>(15.0 * OP_FireScale[i]));
@@ -2321,6 +2323,7 @@ void OpC_DrawProcess() {
                 CFire.pos[3] = 1.0f;
 
                 int fire_flag = OP_FireFlg[i];
+                GiveOpeningFireLight(i, CFire.pos, fire_flag);
 
                 if (fire_flag == 1) {
                     CFire.DrawFire(1, 1, &OP_MainCamera, eye, OP_FireScale[i], 3, 15.0f);

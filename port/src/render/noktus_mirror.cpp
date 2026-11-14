@@ -713,7 +713,8 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
     }
     mirror.renderer->SetCamera(scene.camera);
     mirror.camera = scene.camera;
-    const bool world_pass = mirror.pass == noktus::Pass::Ground || mirror.pass == noktus::Pass::Characters || mirror.pass == noktus::Pass::MovingParts;
+    const bool world_pass = mirror.pass == noktus::Pass::Ground || mirror.pass == noktus::Pass::Characters || mirror.pass == noktus::Pass::MovingParts ||
+                            mirror.pass == noktus::Pass::Opening;
     if (!mirror.world_camera && world_pass && mirror.on_screen && scene.draw.material.lit && !Draw3DSelfLit()) {
         mirror.world_camera = scene.camera;
         for (const noktus::PointLight &light : mirror.lights_waiting) {

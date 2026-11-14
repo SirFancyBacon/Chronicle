@@ -99,6 +99,18 @@ void GiveCandleLight(std::uint64_t key, const float *flame) {
     GiveFlameLight(key, flame, kCandleShare, kCandleRange, kCandleSize);
 }
 
+void GiveOpeningFireLight(int index, const float *pos, int fire_flag) {
+    // Keys apart from the town's (effects' places in memory), the dungeons' and the Atlamillia's.
+    constexpr std::uint64_t kOpeningFireKeys = 1ull << 59;
+    // The burning village moves the fires it puts out to -100 (times 10).
+    constexpr float kHidden = -500.0f;
+    if (fire_flag != 1 || pos[1] < kHidden) {
+        return;
+    }
+    const float flame[3] = {pos[0], pos[1] + kFlameRise, pos[2]};
+    GiveFireLight(kOpeningFireKeys | static_cast<std::uint64_t>(index), flame);
+}
+
 void GiveEffectLight(const EDIT_EFFECT_INFO *effect) {
     if (effect == nullptr || effect->frame == nullptr || !render::ModernLight()) {
         return;

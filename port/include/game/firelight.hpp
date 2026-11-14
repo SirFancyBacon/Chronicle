@@ -32,6 +32,15 @@ void GiveCandleLight(std::uint64_t key, const float *flame);
  */
 void GiveEffectLight(const EDIT_EFFECT_INFO *effect);
 
+/**
+ * Gives one of the opening's fires as a light, as it's drawn this tick. Only a fire drawn whole (its flag 1) gives one: the lamps drawn as a halo alone
+ * glow the magic's purple, which a flame's warm light would fight, and a fire the game has hidden far underground gives none.
+ * @param index Its place in OP_FirePosition, which keys it.
+ * @param pos Where it stands, as CFireOmni::pos holds it.
+ * @param fire_flag Its OP_FireFlg.
+ */
+void GiveOpeningFireLight(int index, const float *pos, int fire_flag);
+
 /** How far above where a fire stands its flame burns, as CFireOmni draws it. */
 inline constexpr float kFlameRise = 4.6f;
 
