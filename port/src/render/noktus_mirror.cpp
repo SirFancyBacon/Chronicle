@@ -602,6 +602,10 @@ void Start(Mirror &mirror) {
     }
     // The game's world is about ten units to a metre (Toan stands about 14): water's waves are sized by it.
     host.world_units_per_metre = 10.0f;
+    // Water's reflections: planar unless DC_NOKTUS_REFLECTIONS=screen asks for screen-space ones, for comparing.
+    if (const char *reflections = std::getenv("DC_NOKTUS_REFLECTIONS")) {
+        host.planar_reflections = std::string_view(reflections) != "screen";
+    }
     if (const char *toe = std::getenv("DC_NOKTUS_TONE_TOE")) {
         host.tone_map_toe = std::strtof(toe, nullptr);
     }
