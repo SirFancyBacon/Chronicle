@@ -470,7 +470,21 @@ void ApplySupersampling(Mirror &mirror, bool settings_changed) {
     }
     const int most = Temporal(g_settings.anti_aliasing) ? mirror.most_temporal_samples : mirror.most_samples;
     const int samples = std::min(std::clamp(g_settings.supersampling, 1, 4), most);
-    const float scale = MirrorRenderScale(g_settings, room.window_width, room.window_height, samples);
+    // DC_NOKTUS_RENDER_SCALE, read once: a number, or it's ignored.
+    static const std::optional<float> forced = [] -> std::optional<float> {
+        const char *const asked = std::getenv("DC_NOKTUS_RENDER_SCALE");
+        if (asked == nullptr) {
+            return std::nullopt;
+        }
+        char       *end = nullptr;
+        const float value = std::strtof(asked, &end);
+        return end != asked && *end == '\0' && std::isfinite(value) ? std::optional<float>(value) : std::nullopt;
+    }();
+    MirrorSettings settings = g_settings;
+    if (forced) {
+        settings.render_scale = *forced;
+    }
+    const float scale = MirrorRenderScale(settings, room.window_width, room.window_height, samples);
     if (samples == mirror.drawn_samples && scale == mirror.drawn_scale) {
         return;
     }
