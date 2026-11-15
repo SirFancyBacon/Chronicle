@@ -596,6 +596,10 @@ void Start(Mirror &mirror) {
     if (const char *bloom = std::getenv("DC_NOKTUS_BLOOM")) {
         host.bloom = std::strtof(bloom, nullptr);
     }
+    // Water's colour by depth (Noktus's VulkanHost::water_clarity); DC_NOKTUS_WATER_CLARITY sets it, in the world's units, 0 for water as the game drew it.
+    if (const char *clarity = std::getenv("DC_NOKTUS_WATER_CLARITY")) {
+        host.water_clarity = std::strtof(clarity, nullptr);
+    }
     if (const char *toe = std::getenv("DC_NOKTUS_TONE_TOE")) {
         host.tone_map_toe = std::strtof(toe, nullptr);
     }

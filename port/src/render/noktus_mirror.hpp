@@ -29,6 +29,7 @@ enum class Step : std::uint8_t;
 // supersampling off: the motion is at the picture's size and the pictures at the window's.
 // DC_NOKTUS_MOTION_VIEW=1 shows the motion in place of the picture, screenshots included: direction as hue, length as brightness, reactive in magenta.
 // DC_NOKTUS_ANTI_ALIASING=off, smaa, smaa_t2x or taa overrides the anti-aliasing setting for a run, for scripted tests.
+// DC_NOKTUS_WATER_CLARITY=<units> sets how deep water must be to tint what's behind once more (0 for water as the game drew it), for comparing.
 // DC_NOKTUS_RENDER_SCALE=<0.25 to 1> overrides the Render Resolution setting for a run, for scripted tests.
 // DC_NOKTUS_WORKERS=<n> sets the threads sharing the work, and DC_NOKTUS_PARALLEL_FROM=<draws> how many mesh draws a tick needs before they're shared.
 
