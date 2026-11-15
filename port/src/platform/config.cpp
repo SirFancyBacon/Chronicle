@@ -724,6 +724,9 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "video.cloth") {
         return ReadChoice(value, "original", "enhanced", config.enhanced_cloth);
     }
+    if (name == "video.reflections") {
+        return ReadChoice(value, "screen", "planar", config.planar_reflections);
+    }
     if (name == "audio.soundtrack") {
         return ReadChoice(value, "ps2", "custom", config.soundtrack);
     }
@@ -882,6 +885,7 @@ std::string ConfigSerialize(const Config &config) {
     root["video"]["hdr_peak"] = config.hdr_peak;
     root["video"]["soft_focus"] = options.soft_focus;
     root["video"]["cloth"] = config.enhanced_cloth ? "enhanced" : "original";
+    root["video"]["reflections"] = config.planar_reflections ? "planar" : "screen";
     root["audio"]["master_volume"] = Shortest(config.master_volume);
     root["audio"]["sound"] = SoundName(config);
     root["audio"]["soundtrack"] = config.soundtrack ? "custom" : "ps2";

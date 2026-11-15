@@ -478,13 +478,14 @@ render::MirrorSettings MirrorSettingsOf(const Config &config) {
             .anti_aliasing = config.anti_aliasing == ConfigAntiAliasing::Taa       ? render::MirrorAntiAliasing::Taa
                              : config.anti_aliasing == ConfigAntiAliasing::SmaaT2x ? render::MirrorAntiAliasing::SmaaT2x
                              : config.anti_aliasing == ConfigAntiAliasing::Smaa    ? render::MirrorAntiAliasing::Smaa
-                                                                                    : render::MirrorAntiAliasing::Off,
+                                                                                   : render::MirrorAntiAliasing::Off,
             .supersampling = config.supersampling,
             .render_scale = render_scale,
             .render_height = render_height,
             .hdr = hdr,
             .paper_white = static_cast<float>(config.hdr_paper_white),
-            .peak = static_cast<float>(config.hdr_peak)};
+            .peak = static_cast<float>(config.hdr_peak),
+            .planar_reflections = config.planar_reflections};
 }
 
 GamePresentSettings PresentSettings(const Config &config) {

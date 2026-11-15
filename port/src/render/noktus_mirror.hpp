@@ -62,6 +62,7 @@ struct MirrorSettings {
     float            paper_white = 0.0f; // nits; 0 takes what the system says
     float            peak = 0.0f;        // nits; 0 takes what the system says
     bool             force_hdr = false;  // DC_NOKTUS_HDR_FORCE: the display is in HDR, whatever the system says
+    bool               planar_reflections = true; // water's reflections planar, or screen-space
 };
 
 /** What goes to the window, once the settings have met what the system says. */

@@ -193,7 +193,8 @@ key is optional; these are the defaults:
         "hdr_paper_white": 0,       // nits SDR's white is shown at; 0 takes the system's
         "hdr_peak": 0,              // the most nits to send; 0 takes the system's
         "soft_focus": true,         // depth of field; drawn by Noktus, off is none at all (retail's off dropped only the far plane)
-        "cloth": "original"         // original: the PS2's cloth; enhanced: also kept out of the body (docs/MODEL_FRAMEWORK.md)
+        "cloth": "original",        // original: the PS2's cloth; enhanced: also kept out of the body (docs/MODEL_FRAMEWORK.md)
+        "reflections": "planar"     // water's reflections: planar (the scene mirrored in it) or screen (what's on the screen, cheaper); DC_NOKTUS_REFLECTIONS overrides
     },
     "audio": {
         "master_volume": 1.0,       // 0 to 1

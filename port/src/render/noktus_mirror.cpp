@@ -453,6 +453,14 @@ noktus::DisplayOutput ToDisplayOutput(MirrorHdr mode) {
                                                                                               : noktus::DisplayOutput::Sdr;
 }
 
+// Water's reflections as the settings say, unless DC_NOKTUS_REFLECTIONS (planar or screen) asks otherwise, for comparing.
+bool PlanarReflections(const MirrorSettings &settings) {
+    if (const char *reflections = std::getenv("DC_NOKTUS_REFLECTIONS")) {
+        return std::string_view(reflections) != "screen";
+    }
+    return settings.planar_reflections;
+}
+
 bool Temporal(MirrorAntiAliasing mode) {
     return mode == MirrorAntiAliasing::Taa || mode == MirrorAntiAliasing::SmaaT2x;
 }
@@ -602,10 +610,7 @@ void Start(Mirror &mirror) {
     }
     // The game's world is about ten units to a metre (Toan stands about 14): water's waves are sized by it.
     host.world_units_per_metre = 10.0f;
-    // Water's reflections: planar unless DC_NOKTUS_REFLECTIONS=screen asks for screen-space ones, for comparing.
-    if (const char *reflections = std::getenv("DC_NOKTUS_REFLECTIONS")) {
-        host.planar_reflections = std::string_view(reflections) != "screen";
-    }
+    host.planar_reflections = PlanarReflections(g_settings);
     if (const char *toe = std::getenv("DC_NOKTUS_TONE_TOE")) {
         host.tone_map_toe = std::strtof(toe, nullptr);
     }
@@ -901,6 +906,7 @@ void MirrorApply(const MirrorSettings &settings) {
         noktus::SetFrameLimit(*mirror.renderer, settings.max_fps);
         noktus::SetAnisotropy(*mirror.renderer, settings.anisotropy);
         noktus::SetAntiAliasing(*mirror.renderer, ToAntiAliasing(settings.anti_aliasing));
+        noktus::SetPlanarReflections(*mirror.renderer, PlanarReflections(settings));
         ApplySupersampling(mirror, true);
         if (mirror.window != nullptr) {
             const HdrOutput output = HdrForWindow(mirror);
