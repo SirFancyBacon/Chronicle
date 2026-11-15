@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <memory>
 #include <span>
 #include <string_view>
@@ -167,43 +168,36 @@ TEST(MenuOption, ResolutionListKeepsConfiguredSize) {
     ASSERT_EQ(list.front().width, 0);
 }
 
-// In fullscreen the row offers Desktop, then sizes of the display's own shape below it: a 16:10 laptop's 1920 x 1200 among them, no 16:9 sizes.
-TEST(MenuOption, FullscreenResolutionsKeepTheDisplaysShape) {
-    std::vector<OptionResolution> list = OptionFullscreenResolutionList(3840, 2400, 0, 0);
-    ASSERT_EQ(list.front().width, 0);
-    ASSERT_EQ(list.front().height, 0);
-    for (const auto &[width, height] : {std::pair(1280, 800), std::pair(1440, 900), std::pair(1680, 1050), std::pair(1920, 1200), std::pair(2560, 1600),
-                                        std::pair(2880, 1800)}) {
-        EXPECT_TRUE(Has(list, width, height)) << width << " x " << height;
-    }
-    EXPECT_EQ(list.size(), 7u);
-    EXPECT_FALSE(Has(list, 1920, 1080));
-    EXPECT_FALSE(Has(list, 3840, 2400)) << "the display's own size is Desktop";
-    for (size_t i = 2; i < list.size(); ++i) {
-        ASSERT_LT(list[i - 1].width * list[i - 1].height, list[i].width * list[i].height);
-    }
-
-    list = OptionFullscreenResolutionList(2560, 1440, 0, 0);
-    EXPECT_TRUE(Has(list, 1280, 720));
-    EXPECT_TRUE(Has(list, 1920, 1080));
-    EXPECT_TRUE(Has(list, 1706, 960)) << "two thirds";
-    EXPECT_FALSE(Has(list, 1920, 1200));
-    EXPECT_FALSE(Has(list, 2560, 1440));
-
-    list = OptionFullscreenResolutionList(3440, 1440, 0, 0);
-    EXPECT_TRUE(Has(list, 2580, 1080)) << "three quarters";
-    EXPECT_TRUE(Has(list, 1720, 720));
-    EXPECT_FALSE(Has(list, 2560, 1080)) << "64:27, not quite the display's shape";
+bool HasHeight(const std::vector<OptionRenderStep> &steps, int height, float scale) {
+    return std::ranges::any_of(steps, [&](const OptionRenderStep &step) { return step.height == height && std::abs(step.scale - scale) < 1e-4f; });
 }
 
-// A size config.json holds stays listed, in place of a size a pixel or two from it.
-TEST(MenuOption, FullscreenResolutionsKeepTheConfiguredSize) {
-    std::vector<OptionResolution> list = OptionFullscreenResolutionList(3840, 2400, 1920, 1080);
-    EXPECT_TRUE(Has(list, 1920, 1080));
-    EXPECT_TRUE(Has(list, 1920, 1200));
-    list = OptionFullscreenResolutionList(2560, 1440, 1707, 960);
-    EXPECT_TRUE(Has(list, 1707, 960));
-    EXPECT_FALSE(Has(list, 1706, 960));
+// Render Resolution: shares from a quarter to the whole, and the named heights below the window's among them, in order.
+TEST(MenuOption, RenderStepsNameTheHeights) {
+    std::vector<OptionRenderStep> steps = OptionRenderSteps(2160);
+    EXPECT_TRUE(HasHeight(steps, 720, 1.0f / 3.0f));
+    EXPECT_TRUE(HasHeight(steps, 1080, 0.5f));
+    EXPECT_TRUE(HasHeight(steps, 1440, 2.0f / 3.0f));
+    EXPECT_FALSE(HasHeight(steps, 0, 0.5f)) << "50% is 1080p on a 4K screen";
+    EXPECT_FALSE(std::ranges::any_of(steps, [](const OptionRenderStep &step) { return step.height == 2160; })) << "the window's own height is 100%";
+    EXPECT_TRUE(HasHeight(steps, 0, 0.25f));
+    EXPECT_TRUE(HasHeight(steps, 0, 1.0f));
+    EXPECT_EQ(steps.size(), 18u);
+    for (size_t i = 1; i < steps.size(); ++i) {
+        ASSERT_LT(steps[i - 1].scale, steps[i].scale);
+    }
+
+    steps = OptionRenderSteps(2400); // a 16:10 laptop
+    EXPECT_TRUE(HasHeight(steps, 1080, 0.45f));
+    EXPECT_TRUE(HasHeight(steps, 2160, 0.9f));
+    EXPECT_FALSE(HasHeight(steps, 0, 0.45f));
+
+    steps = OptionRenderSteps(1080);
+    EXPECT_TRUE(HasHeight(steps, 720, 2.0f / 3.0f));
+    EXPECT_FALSE(std::ranges::any_of(steps, [](const OptionRenderStep &step) { return step.height >= 1080; }));
+
+    steps = OptionRenderSteps(0);
+    EXPECT_EQ(steps.size(), 16u) << "no window: the shares alone";
 }
 
 TEST(MenuOption, ZoomResetPresetsPreserveOtherBindingsAndRestoreDefault) {

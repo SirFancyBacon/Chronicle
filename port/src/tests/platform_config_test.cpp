@@ -281,7 +281,7 @@ TEST(PlatformConfig, SerializeRoundTrips) {
     Config config = ConfigParse(R"({
         "game": {"tick_rate": 60, "debug_mode": false},
         "video": {"present_mode": "mailbox", "aspect": "4:3", "ui_scale": 1.5, "render_scale": 0.7, "width": 1920, "max_fps": 144,
-                  "fullscreen_width": 1920, "fullscreen_height": 1200},
+                  "render_height": 1080},
         "audio": {"master_volume": 0.5},
         "input": {"mouse_release": [], "bindings": {"cross": ["Space", "Z"], "start": "Return"}}
     })");
@@ -292,7 +292,7 @@ TEST(PlatformConfig, SerializeRoundTrips) {
 #ifndef __SWITCH__
     ASSERT_EQ(again.render_scale, 0.7f);
 #endif
-    ASSERT_TRUE(again.fullscreen_width == 1920 && again.fullscreen_height == 1200);
+    ASSERT_EQ(again.render_height, 1080);
     ASSERT_TRUE(again.max_fps == 144.0 && again.master_volume == 0.5f);
     ASSERT_TRUE(again.mouse_release_keys.empty());
     ASSERT_TRUE(again.key_bindings.size() == 2 && again.key_bindings[0].action == "cross");

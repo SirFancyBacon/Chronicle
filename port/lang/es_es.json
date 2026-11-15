@@ -66,7 +66,7 @@
     "options.video.fullscreen.choice.0": "Ventana",
     "options.video.fullscreen.choice.1": "Completa",
     "options.video.width.label": "Resolución",
-    "options.video.width.help": "\"Resolución\"\nEn ventana, su tamaño.\nEn completa, el de la\nimagen, ampliada a\ntoda la pantalla.",
+    "options.video.width.help": "\"Resolución\"\nTamaño de la ventana.\nCompleta y Escritorio\nusan todo el monitor.",
     "options.video.present_mode.label": "V-Sync",
     "options.video.present_mode.help": "\"V-Sync\"\nSí: sin cortes.\nRápido: menos retraso.\nNo: puede haber cortes.",
     "options.video.present_mode.choice.0": "Sí",

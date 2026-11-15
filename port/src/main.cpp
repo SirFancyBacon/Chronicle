@@ -462,14 +462,13 @@ gfx::PresentMode PresentMode(ConfigPresentMode mode) {
 
 
 render::MirrorSettings MirrorSettingsOf(const Config &config) {
-    // Fullscreen's window is the screen's own size, and the resolution chosen for it is the picture's. A window given on the command line or none at all
-    // is drawn at its size. Android's render scale is Kazarov's, to 200%.
+    // Android's render scale is Kazarov's, to 200%.
 #if defined(__ANDROID__) || defined(__SWITCH__)
-    const bool  picture = false;
     const float render_scale = 1.0f;
+    const int   render_height = 0;
 #else
-    const bool  picture = (config.fullscreen || (config.window_width == 0 && config.window_height == 0)) && !g_options.headless && g_options.width <= 0 && g_options.height <= 0;
     const float render_scale = config.render_scale;
+    const int   render_height = config.render_height;
 #endif
     const render::MirrorHdr hdr = config.hdr == ConfigHdr::Hdr10 ? render::MirrorHdr::Hdr10 : config.hdr == ConfigHdr::ScRgb ? render::MirrorHdr::ScRgb : render::MirrorHdr::Off;
     return {.interpolate = config.interpolation,
@@ -481,9 +480,8 @@ render::MirrorSettings MirrorSettingsOf(const Config &config) {
                              : config.anti_aliasing == ConfigAntiAliasing::Smaa    ? render::MirrorAntiAliasing::Smaa
                                                                                     : render::MirrorAntiAliasing::Off,
             .supersampling = config.supersampling,
-            .picture_width = picture ? config.fullscreen_width : 0,
-            .picture_height = picture ? config.fullscreen_height : 0,
             .render_scale = render_scale,
+            .render_height = render_height,
             .hdr = hdr,
             .paper_white = static_cast<float>(config.hdr_paper_white),
             .peak = static_cast<float>(config.hdr_peak)};

@@ -29,7 +29,7 @@ enum class Step : std::uint8_t;
 // supersampling off: the motion is at the picture's size and the pictures at the window's.
 // DC_NOKTUS_MOTION_VIEW=1 shows the motion in place of the picture, screenshots included: direction as hue, length as brightness, reactive in magenta.
 // DC_NOKTUS_ANTI_ALIASING=off, smaa, smaa_t2x or taa overrides the anti-aliasing setting for a run, for scripted tests.
-// DC_NOKTUS_RENDER_SCALE=<0.5 to 1> overrides the Render Resolution setting for a run, for scripted tests.
+// DC_NOKTUS_RENDER_SCALE=<0.25 to 1> overrides the Render Resolution setting for a run, for scripted tests.
 // DC_NOKTUS_WORKERS=<n> sets the threads sharing the work, and DC_NOKTUS_PARALLEL_FROM=<draws> how many mesh draws a tick needs before they're shared.
 
 /** What's sent to a display in HDR. */
@@ -55,9 +55,8 @@ struct MirrorSettings {
     int              anisotropy = 0;
     MirrorAntiAliasing anti_aliasing = MirrorAntiAliasing::Off;
     int              supersampling = 1; // samples a pixel: 1, 2 or 4
-    int              picture_width = 0;  // the resolution chosen for fullscreen, drawn at most at the window's size and scaled up to fill it; 0 by 0 draws at the window's
-    int              picture_height = 0;
-    float            render_scale = 1.0f; // of that resolution each way, 0.5 to 1, scaled up to fill the window
+    float            render_scale = 1.0f; // the world's size by the window's each way, a quarter to 1, scaled up to fill it; the interface stays at the window's
+    int              render_height = 0;   // a height the world is drawn at in place of render_scale, held to the window's; 0 for none
     MirrorHdr        hdr = MirrorHdr::Off;
     float            paper_white = 0.0f; // nits; 0 takes what the system says
     float            peak = 0.0f;        // nits; 0 takes what the system says
@@ -88,10 +87,10 @@ struct MirrorHdrPatch {
 HdrOutput ChooseHdr(const MirrorSettings &settings, bool display_hdr, float white, float headroom);
 
 /**
- * The picture's size by the window's, each way, as Noktus's render scale. A chosen resolution keeps the window's shape, at least its size each way, never past
- * the window's; the render scale shrinks that, and supersampling's samples a pixel enlarge it.
+ * The picture's size by the window's, each way, as Noktus's render scale: the render height by the window's, never past 1, or the render scale, held to a
+ * quarter to 1; supersampling's samples a pixel enlarge it.
  */
-float MirrorRenderScale(const MirrorSettings &settings, std::uint32_t window_width, std::uint32_t window_height, int samples);
+float MirrorRenderScale(const MirrorSettings &settings, std::uint32_t window_height, int samples);
 
 /** What DC_RENDERER's value asks for: only "kazarov" means Kazarov's renderer. */
 bool KazarovAsked(const char *setting);

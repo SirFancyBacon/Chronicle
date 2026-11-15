@@ -178,9 +178,8 @@ key is optional; these are the defaults:
         "width": 0,                 // window size in pixels; 0: the monitor's resolution. Both 0: fullscreen on the
         "height": 0,                //   monitor, so "aspect": "auto" takes the monitor's shape; headless: 1280x960
         "fullscreen": false,        // the whole screen, borderless at its own size; width and height stay the window's for when it's left
-        "fullscreen_width": 0,      // fullscreen's picture size, scaled up to fill the screen, never past it; it keeps the screen's shape,
-        "fullscreen_height": 0,     //   at least this size each way. Both 0: the screen's size
-        "render_scale": 1.0,        // 0.5 to 1: the picture drawn smaller each way and scaled up (Catmull-Rom); interface included
+        "render_scale": 1.0,        // 0.25 to 1: the world drawn smaller each way and scaled up (Catmull-Rom); the interface stays at the window's size
+        "render_height": 0,         // a height the world is drawn at (Render Resolution's 720p, 1080p...), held to the window's; 0: by render_scale
         "aspect": "auto",           // auto: the world fills the window, the HUD in its corners, other 2D in the centred 4:3 frame; 4:3: letterboxed
         "ui_scale": 1.0,            // 0.25 to 4: the HUD and menus scaled about the window's centre (not the Options screen)
         "show_fps": true,           // the FPS counter at the window's top-left corner (headless: --show-fps)

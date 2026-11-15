@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <SDL3/SDL_events.h>
+#include <SDL3/SDL_video.h>
 
 #include "localize/localize.hpp"
 #include "options/menu_option.hpp"
@@ -172,35 +173,33 @@ void SetMap(Config &config, int choice) {
     config.options.map = choice == kMapOff ? 0 : choice + 1;
 }
 
-int ResolutionCount(const Config & /*config*/) {
-    return static_cast<int>(std::ssize(g_sizes));
-}
-
 int Fullscreen(const Config &config) {
     return config.fullscreen || Desktop(config) ? 1 : 0;
 }
 
-// In fullscreen the row is the picture's size, and in a window the window's.
-bool PictureSize(const Config &config) {
+// In fullscreen the window is the screen's own size: the row shows it, and Render Resolution sets the size the world is drawn at.
+bool ScreenSized(const Config &config) {
 #if defined(__ANDROID__) || defined(__SWITCH__)
+    static_cast<void>(config);
     return false;
 #else
     return Fullscreen(config) == 1;
 #endif
 }
 
-OptionResolution ResolutionOf(const Config &config) {
-    return PictureSize(config) ? OptionResolution{config.fullscreen_width, config.fullscreen_height}
-                               : OptionResolution{config.window_width, config.window_height};
+int ResolutionCount(const Config &config) {
+    return ScreenSized(config) ? 1 : static_cast<int>(std::ssize(g_sizes));
 }
 
 int ResolutionChoice(const Config &config) {
-    const OptionResolution chosen = ResolutionOf(config);
-    double                 area = static_cast<double>(chosen.width) * chosen.height;
-    int                    best = 0;
+    if (ScreenSized(config)) {
+        return 0;
+    }
+    double area = static_cast<double>(config.window_width) * config.window_height;
+    int    best = 0;
     for (int i = 0; i < std::ssize(g_sizes); ++i) {
         const OptionResolution &size = g_sizes[i];
-        if (size.width == chosen.width && size.height == chosen.height) {
+        if (size.width == config.window_width && size.height == config.window_height) {
             return i;
         }
         double here = static_cast<double>(size.width) * size.height;
@@ -213,9 +212,7 @@ int ResolutionChoice(const Config &config) {
 }
 
 void SetResolution(Config &config, int choice) {
-    if (PictureSize(config)) {
-        config.fullscreen_width = g_sizes[choice].width;
-        config.fullscreen_height = g_sizes[choice].height;
+    if (ScreenSized(config)) {
         return;
     }
     config.window_width = g_sizes[choice].width;
@@ -223,8 +220,12 @@ void SetResolution(Config &config, int choice) {
 }
 
 std::string ResolutionText(const Config &config) {
-    const OptionResolution chosen = ResolutionOf(config);
-    return chosen.width == 0 && chosen.height == 0 ? "Desktop" : std::format("{} x {}", chosen.width, chosen.height);
+    int width = 0;
+    int height = 0;
+    if (ScreenSized(config) && WindowDisplaySize(width, height, false)) {
+        return std::format("{} x {}", width, height);
+    }
+    return Desktop(config) ? "Desktop" : std::format("{} x {}", config.window_width, config.window_height);
 }
 
 // A window left from Desktop takes the largest size that fits beside the desktop's panels.
@@ -411,24 +412,71 @@ int UiScaleCount(const Config & /*config*/) {
     return 16;
 }
 
-#ifndef __SWITCH__
-// In tenths from 50%: to 200% on Android, to 100% elsewhere, where supersampling is the larger picture.
 #ifdef __ANDROID__
-constexpr int kRenderScales = 16;
-#else
-constexpr int kRenderScales = 6;
-#endif
-
+// 50% to 200% in tenths, Kazarov's render scale.
 int RenderScaleChoice(const Config &config) {
-    return std::clamp(static_cast<int>(std::lround(config.render_scale * 10.0f)) - 5, 0, kRenderScales - 1);
+    return std::clamp(static_cast<int>(std::lround(config.render_scale * 10.0f)) - 5, 0, 15);
 }
 
-int RenderScaleCount(const Config & /*config*/) { return kRenderScales; }
+int RenderScaleCount(const Config & /*config*/) { return 16; }
 
 void SetRenderScale(Config &config, int choice) { config.render_scale = (choice + 5) / 10.0f; }
 
 std::string RenderScaleText(const Config &config) {
     return std::format("{}%", static_cast<int>(std::lround(config.render_scale * 100.0f)));
+}
+#elif !defined(__SWITCH__)
+// The steps for the window's height in pixels, which ListResolutions keeps: a share of it, or a named height (720p, 1080p...), kept as that height.
+std::vector<OptionRenderStep> g_render_steps = OptionRenderSteps(0);
+int                           g_render_window_height = 0;
+
+int WindowPixelHeight() {
+    int width = 0;
+    int height = 0;
+    return WindowHandle() != nullptr && SDL_GetWindowSizeInPixels(WindowHandle(), &width, &height) ? height : 0;
+}
+
+// The share it draws at: a named height's by the window's, never past the whole.
+float RenderShare(const Config &config) {
+    if (config.render_height > 0 && g_render_window_height > 0) {
+        return std::min(1.0f, static_cast<float>(config.render_height) / static_cast<float>(g_render_window_height));
+    }
+    return config.render_scale;
+}
+
+int RenderScaleCount(const Config & /*config*/) { return static_cast<int>(std::ssize(g_render_steps)); }
+
+int RenderScaleChoice(const Config &config) {
+    const float share = RenderShare(config);
+    int         best = 0;
+    for (int i = 0; i < std::ssize(g_render_steps); ++i) {
+        const OptionRenderStep &step = g_render_steps[i];
+        if (config.render_height > 0 && step.height == config.render_height) {
+            return i;
+        }
+        if (std::abs(step.scale - share) < std::abs(g_render_steps[best].scale - share)) {
+            best = i;
+        }
+    }
+    return best;
+}
+
+void SetRenderScale(Config &config, int choice) {
+    const OptionRenderStep &step = g_render_steps[choice];
+    config.render_scale = std::round(step.scale * 1000.0f) / 1000.0f;
+    config.render_height = step.height;
+}
+
+// "1080p (45%)" for a named height, "70% (1680p)" for a share; the size it gives when the window's height is known.
+std::string RenderScaleText(const Config &config) {
+    const float share = RenderShare(config);
+    const int   percent = static_cast<int>(std::lround(share * 100.0f));
+    if (config.render_height > 0) {
+        const int height = g_render_window_height > 0 ? std::min(config.render_height, g_render_window_height) : config.render_height;
+        return g_render_window_height > 0 ? std::format("{}p ({}%)", height, percent) : std::format("{}p", height);
+    }
+    return g_render_window_height > 0 ? std::format("{}% ({}p)", percent, static_cast<int>(std::lround(share * static_cast<float>(g_render_window_height))))
+                                      : std::format("{}%", percent);
 }
 #endif
 
@@ -769,7 +817,7 @@ constexpr Row kDisplayRows[] = {
     SettingRow("video.fullscreen", "Window Mode", "\"Window Mode\"\nPlay in a window or\non the whole screen.", Two,
                Fullscreen, SetFullscreen, nullptr, "Windowed|Fullscreen", RestoreFullscreen),
     SettingRow("video.width", "Resolution",
-               "\"Resolution\"\nWindowed: the window's.\nFullscreen: the picture's,\nscaled up to fill\nthe screen.", ResolutionCount,
+               "\"Resolution\"\nThe window's size.\nFullscreen and Desktop\nuse the whole monitor.", ResolutionCount,
                ResolutionChoice, SetResolution, ResolutionText),
 #if !defined(__ANDROID__) && !defined(__SWITCH__)
     kRenderScaleRow,
@@ -1171,10 +1219,8 @@ void ListResolutions() {
     int           height = 0;
     bool          known = WindowDisplaySize(width, height, !config.fullscreen && !Desktop(config));
 #if !defined(__ANDROID__) && !defined(__SWITCH__)
-    if (known && PictureSize(config)) {
-        g_sizes = OptionFullscreenResolutionList(width, height, config.fullscreen_width, config.fullscreen_height);
-        return;
-    }
+    g_render_window_height = WindowPixelHeight();
+    g_render_steps = OptionRenderSteps(g_render_window_height);
 #endif
     g_sizes = OptionResolutionList(DisplayModes(), config.window_width, config.window_height, known, width,
                                    height);

@@ -2,9 +2,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
-#include <cstdlib>
-#include <iterator>
 #include <span>
 #include <utility>
 
@@ -108,53 +107,24 @@ std::vector<OptionResolution> OptionResolutionList(std::span<const DisplayModeSi
     return listed;
 }
 
-std::vector<OptionResolution> OptionFullscreenResolutionList(int display_width, int display_height, int configured_width, int configured_height) {
-    // Sizes of 16:9, 16:10, 21:9, 3:2 and 4:3 displays, besides the fractions of the display's own.
-    constexpr OptionResolution kKnown[] = {
-        {1280, 720 }, {1600, 900 }, {1920, 1080}, {2560, 1440}, {3200, 1800}, {3840, 2160}, {1280, 800 }, {1440, 900 }, {1680, 1050}, {1920, 1200},
-        {2560, 1600}, {2880, 1800}, {2560, 1080}, {3440, 1440}, {1920, 1280}, {2160, 1440}, {2256, 1504}, {1024, 768 }, {1280, 960 }, {1440, 1080},
-        {1600, 1200}, {2048, 1536},
-    };
-    std::vector<OptionResolution> sizes(std::begin(kKnown), std::end(kKnown));
-    for (const int part : {2, 3, 4}) {
-        const int numerator = part == 2 ? 1 : part - 1; // a half, two thirds, three quarters
-        const int height = display_height * numerator / part;
-        sizes.push_back({.width = (display_width * numerator / part) / 2 * 2, .height = height / 2 * 2});
+std::vector<OptionRenderStep> OptionRenderSteps(int window_height) {
+    std::vector<OptionRenderStep> steps;
+    for (int percent = 25; percent <= 100; percent += 5) {
+        steps.push_back({.scale = static_cast<float>(percent) / 100.0f, .height = 0});
     }
-    // Of the display's shape to within a pixel's width, and smaller than it.
-    const auto shaped = [&](const OptionResolution &size) {
-        const long long across = static_cast<long long>(size.width) * display_height;
-        const long long down = static_cast<long long>(size.height) * display_width;
-        return size.width >= kMinWidth && size.height >= kMinHeight && size.width < display_width && size.height < display_height &&
-               std::abs(across - down) <= static_cast<long long>(display_height) * 2;
-    };
-    std::vector<OptionResolution> listed;
-    for (const OptionResolution &size : sizes) {
-        if (shaped(size)) {
-            listed.push_back(size);
-        }
-    }
-    const bool configured = configured_width > 0 && configured_height > 0 && (configured_width != display_width || configured_height != display_height);
-    if (configured) {
-        listed.push_back({.width = configured_width, .height = configured_height});
-    }
-    std::ranges::sort(listed, [](const OptionResolution &lhs, const OptionResolution &rhs) {
-        return std::pair(lhs.width * lhs.height, lhs.width) < std::pair(rhs.width * rhs.height, rhs.width);
-    });
-    // Sizes a pixel or two apart, a fraction beside a known size, are one.
-    std::vector<OptionResolution> unique = {{.width = 0, .height = 0}};
-    for (const OptionResolution &size : listed) {
-        const OptionResolution &last = unique.back();
-        const bool configured_one = configured && size.width == configured_width && size.height == configured_height;
-        if (last.width != 0 && std::abs(last.width - size.width) <= 2 && std::abs(last.height - size.height) <= 2) {
-            if (configured_one) {
-                unique.back() = size;
+    if (window_height > 0) {
+        for (const int height : {720, 1080, 1440, 2160}) {
+            const float scale = static_cast<float>(height) / static_cast<float>(window_height);
+            if (height >= window_height || scale < 0.25f) {
+                continue;
             }
-            continue;
+            // A share the named height lands on is that height.
+            std::erase_if(steps, [&](const OptionRenderStep &step) { return step.height == 0 && std::abs(step.scale - scale) < 0.005f; });
+            steps.push_back({.scale = scale, .height = height});
         }
-        unique.push_back(size);
     }
-    return unique;
+    std::ranges::sort(steps, {}, &OptionRenderStep::scale);
+    return steps;
 }
 
 bool MenuOptionOpen() {

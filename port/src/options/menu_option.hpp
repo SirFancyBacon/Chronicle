@@ -71,11 +71,18 @@ std::vector<OptionResolution> OptionResolutionList(std::span<const DisplayModeSi
                                                    int display_height);
 
 /**
- * Returns the sizes the Resolution row steps through in fullscreen, where the window is the display's own size and the size chosen is the picture's,
- * scaled up to fill it: Desktop (the display's size) first, then the well-known sizes and a half, two thirds and three quarters of the display's, each
- * of the display's shape and smaller than it, from the smallest up, and the configured size if it isn't among them.
+ * A step of the Render Resolution row: the world's size by the window's each way, and the named height (720p, 1080p, 1440p, 2160p) it's for, or 0.
  */
-std::vector<OptionResolution> OptionFullscreenResolutionList(int display_width, int display_height, int configured_width, int configured_height);
+struct OptionRenderStep {
+    float scale;
+    int   height;
+};
+
+/**
+ * Returns the steps Render Resolution goes through, smallest first: 25% to 100% in fives, and each named height below the window's (whose height in
+ * pixels, 0 when unknown, gives the shares), which takes the place of a share it lands on.
+ */
+std::vector<OptionRenderStep> OptionRenderSteps(int window_height);
 
 /**
  * The Controls row's zoom reset presets: Middle Mouse, Mouse4, Mouse5, Home and Disabled, followed

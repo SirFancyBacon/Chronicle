@@ -595,12 +595,11 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         return true;
 #endif
     }
-    if (name == "video.fullscreen_width" || name == "video.fullscreen_height") {
-        if (!value.is_number_integer() || value.get<std::int64_t>() < 0 ||
-            value.get<std::int64_t>() > std::numeric_limits<int>::max()) {
+    if (name == "video.render_height") {
+        if (!value.is_number_integer() || value.get<std::int64_t>() < 0 || value.get<std::int64_t>() > 100000) {
             return false;
         }
-        (name == "video.fullscreen_width" ? config.fullscreen_width : config.fullscreen_height) = value.get<int>();
+        config.render_height = value.get<int>();
         return true;
     }
     if (name == "video.fullscreen") {
@@ -640,10 +639,10 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         return true;
     }
 #elif !defined(__SWITCH__)
-    // Of the resolution: supersampling is the larger picture.
+    // Of the window's size: supersampling is the larger picture.
     if (name == "video.render_scale") {
         float scale = 0.0f;
-        if (!ReadNumber(value, scale) || !(scale >= 0.5f && scale <= 1.0f)) {
+        if (!ReadNumber(value, scale) || !(scale >= 0.25f && scale <= 1.0f)) {
             return false;
         }
         config.render_scale = scale;
@@ -862,8 +861,7 @@ std::string ConfigSerialize(const Config &config) {
     root["video"]["width"] = config.window_width;
     root["video"]["height"] = config.window_height;
     root["video"]["fullscreen"] = config.fullscreen;
-    root["video"]["fullscreen_width"] = config.fullscreen_width;
-    root["video"]["fullscreen_height"] = config.fullscreen_height;
+    root["video"]["render_height"] = config.render_height;
     root["video"]["aspect"] = config.aspect == ConfigAspect::FourThree ? "4:3" : "auto";
     root["video"]["ui_scale"] = Shortest(config.ui_scale);
 #ifndef __SWITCH__

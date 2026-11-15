@@ -483,8 +483,9 @@ void ApplySupersampling(Mirror &mirror, bool settings_changed) {
     MirrorSettings settings = g_settings;
     if (forced) {
         settings.render_scale = *forced;
+        settings.render_height = 0;
     }
-    const float scale = MirrorRenderScale(settings, room.window_width, room.window_height, samples);
+    const float scale = MirrorRenderScale(settings, room.window_height, samples);
     if (samples == mirror.drawn_samples && scale == mirror.drawn_scale) {
         return;
     }
@@ -858,14 +859,15 @@ bool MirrorDepthProbe() {
     return probe;
 }
 
-float MirrorRenderScale(const MirrorSettings &settings, std::uint32_t window_width, std::uint32_t window_height, int samples) {
-    float picture = 1.0f;
-    if (settings.picture_width > 0 && settings.picture_height > 0 && window_width > 0 && window_height > 0) {
-        picture = std::min(1.0f, std::max(static_cast<float>(settings.picture_width) / static_cast<float>(window_width),
-                                          static_cast<float>(settings.picture_height) / static_cast<float>(window_height)));
+// Noktus draws no smaller than a quarter each way.
+constexpr float kLeastRenderScale = 0.25f;
+
+float MirrorRenderScale(const MirrorSettings &settings, std::uint32_t window_height, int samples) {
+    float scale = std::isfinite(settings.render_scale) ? std::clamp(settings.render_scale, kLeastRenderScale, 1.0f) : 1.0f;
+    if (settings.render_height > 0 && window_height > 0) {
+        scale = std::clamp(static_cast<float>(settings.render_height) / static_cast<float>(window_height), kLeastRenderScale, 1.0f);
     }
-    const float scale = std::isfinite(settings.render_scale) ? std::clamp(settings.render_scale, 0.5f, 1.0f) : 1.0f;
-    return picture * scale * std::sqrt(static_cast<float>(std::clamp(samples, 1, 4)));
+    return scale * std::sqrt(static_cast<float>(std::clamp(samples, 1, 4)));
 }
 
 int MirrorMostSupersampling(MirrorAntiAliasing anti_aliasing) {
