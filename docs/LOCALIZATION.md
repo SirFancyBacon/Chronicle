@@ -310,9 +310,9 @@ the plate and draws the name over it from the font at the screen's own resolutio
 lettering is sharp at any window size and a better plate (a hand-redrawn or upscaled one) improves every language
 at once. The names are `area.<card>` in the language's JSON (`area.mt01`...), shipped for every language. Without a
 plate or the font the card is the language's picture as above, or the disc's. However it's drawn, the card eases in
-over 1.25 seconds and is gone 5 seconds after it showed (later if a town took more than 2.25 seconds to load), its opacity taken
+over 1.25 seconds and is gone 5 seconds after it showed (later if a town took more than 1.75 seconds to load), its opacity taken
 from the clock at each display frame (`AreaCardAlpha` in `nowload.cpp`). A town's card stays over the town once it has
-loaded, its black ground clear, the black behind it held 1.5 seconds and faded over 0.75; a dungeon's runs on the loading
+loaded, its black ground clear, the black behind it held 2 seconds and faded over 1; a dungeon's runs on the loading
 screen. Retail's ran 6.3 seconds on black.
 
 **Shadows.** The pictures carry no shadow of their own; the port casts it when it loads one, so it can be set

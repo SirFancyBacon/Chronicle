@@ -42,16 +42,16 @@ TEST(NowLoadCardFade, EasesInAndIsGoneFiveSecondsAfterItShowed) {
     EXPECT_EQ(last, 0);
 }
 
-// While the area is still loading the card holds, however long; once it has loaded late, it holds 1.5 seconds more, as the black behind it
+// While the area is still loading the card holds, however long; once it has loaded late, it holds 2 seconds more, as the black behind it
 // does, then eases out over 1.25.
 TEST(NowLoadCardFade, HoldsWhileLoadingAndEasesOutAfterALateLoad) {
     EXPECT_EQ(AreaCardAlpha(4.5, kLoading), 0x80);
     EXPECT_EQ(AreaCardAlpha(30.0, kLoading), 0x80);
-    EXPECT_EQ(AreaCardAlpha(8.5, 7.0), 0x80);
-    EXPECT_EQ(AreaCardAlpha(9.125, 7.0), 0x40);
-    EXPECT_EQ(AreaCardAlpha(9.75, 7.0), 0);
-    // Loaded at 3 seconds, the black lifts from 4.5, and the card eases out from then rather than at 3.75.
-    EXPECT_EQ(AreaCardAlpha(4.4, 3.0), 0x80);
+    EXPECT_EQ(AreaCardAlpha(9.0, 7.0), 0x80);
+    EXPECT_EQ(AreaCardAlpha(9.625, 7.0), 0x40);
+    EXPECT_EQ(AreaCardAlpha(10.25, 7.0), 0);
+    // Loaded at 3 seconds, the black lifts from 5, and the card eases out from then rather than at 3.75.
+    EXPECT_EQ(AreaCardAlpha(4.9, 3.0), 0x80);
     // Loaded before it had even eased in, it still eases in before it eases out.
     EXPECT_EQ(AreaCardAlpha(0.625, 0.1), 0x40);
 }

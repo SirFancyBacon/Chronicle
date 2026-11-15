@@ -73,8 +73,8 @@ int hold_count;
 constexpr double kCardIn = 1.25;
 constexpr double kCardOut = 1.25;
 constexpr double kCardTotal = 5.0;
-constexpr double kBlackHold = 1.5; // the owner, 2026-11-15: the black held this long once the town has loaded, then faded
-constexpr double kBlackOut = 0.75;
+constexpr double kBlackHold = 2.0; // the owner, 2026-11-15: the black held this long once the town has loaded, then faded over a second
+constexpr double kBlackOut = 1.0;
 
 // When the card starts to ease out: so as to be gone 5 seconds after it showed, but not before the black behind it starts to lift, so a town
 // that loads late isn't left with its card fading on black.

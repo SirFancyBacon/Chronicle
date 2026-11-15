@@ -7,8 +7,8 @@ story-event durations are unchanged. The area name card is not shortened to
 improve a loading measurement; it changed on the project owner's decision of
 2026-11-15, as a presentation choice: a town's card no longer holds the game for
 retail's 6.3 seconds of black. The town loads behind it; once loaded the black
-holds 1.5 seconds more and fades over 0.75, and the card is gone 5 seconds after
-it showed. A town taking more than 2.25 seconds to load keeps its card until
+holds 2 seconds more and fades over 1, and the card is gone 5 seconds after it
+showed. A town taking more than 1.75 seconds to load keeps its card until
 the black starts to lift, so it never fades on black. A dungeon's card runs
 those 5 seconds on the loading screen, since its floor select draws the frame
 before as its backdrop. See `AreaCardAlpha` and `HandOverLoadingCard` in
