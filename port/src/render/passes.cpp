@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "render/noktus_adapter.hpp"
@@ -168,6 +169,20 @@ Layer2D CurrentLayer2D() {
 Layer2DScope::Layer2DScope(Layer2D layer, bool differs_from_rule) : previous_(g_layer), previous_differs_(g_layer_differs) {
     g_layer = static_cast<int>(layer);
     g_layer_differs = differs_from_rule;
+}
+
+namespace {
+bool g_refracting = false;
+} // namespace
+
+RefractionScope::RefractionScope() : previous_(std::exchange(g_refracting, true)) {}
+
+RefractionScope::~RefractionScope() {
+    g_refracting = previous_;
+}
+
+bool Refracting() {
+    return g_refracting;
 }
 
 Layer2DScope::~Layer2DScope() {

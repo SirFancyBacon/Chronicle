@@ -320,7 +320,19 @@ extern "C" int DrawVu1__6CWaterFP10RenderInfoP13sceVif1PacketP1(CWater *water, R
         }
         render::DrawState state = Draw3DState(*info, false);
         Refraction     refraction;
-        if (PrepareRefraction(refraction)) {
+        if (render::ModernFocus()) {
+            // Noktus draws water from what's behind it itself: the rippled surface once, its shifts as screen-placed uvs.
+            render::RefractionScope refracting;
+            constants.flags = render::kMeshVertexColor | render::kMeshScreenUv;
+            render::DrawState surface = state;
+            surface.texa_aem = false;
+            surface.texa_ta0 = 0x80;
+            render::TextureBinding none;
+            none.filter = render::Filter::Linear;
+            none.wrap_u = render::Wrap::Clamp;
+            none.wrap_v = render::Wrap::Clamp;
+            render::DrawMeshImmediate(RippledVertices(*water, visual->vertices), visual->indices, constants, none, surface, &transform);
+        } else if (PrepareRefraction(refraction)) {
             DrawRefracted(*water, refraction, *visual, constants, transform, state);
         } else {
             PortTextureRef      copy = FrameCopy();

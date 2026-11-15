@@ -721,6 +721,7 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
     } else {
         scene.draw.material.albedo = noktus::TextureId::None;
     }
+    scene.draw.refracts = Refracting();
     if (Draw3DIsLight()) {
         const float share = LightShare();
         scene.draw.material.emissive = {share, share, share, 1.0f};

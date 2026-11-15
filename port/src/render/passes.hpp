@@ -126,6 +126,24 @@ private:
     bool previous_differs_;
 };
 
+/**
+ * The meshes drawn inside it are water drawn from what's behind it on the screen (noktus::MeshDraw::refracts), where Noktus draws: their screen-placed
+ * uvs (kMeshScreenUv) are the ripple's shift, and their own texture isn't used.
+ */
+class RefractionScope {
+public:
+    RefractionScope();
+    ~RefractionScope();
+    RefractionScope(const RefractionScope &) = delete;
+    RefractionScope &operator=(const RefractionScope &) = delete;
+
+private:
+    bool previous_;
+};
+
+/** Whether the meshes drawn now are water drawn from what's behind it (RefractionScope). */
+bool Refracting();
+
 /** Counts a draw or copy against the current pass while a trace runs. */
 void CountDraw();
 void CountCopy();
