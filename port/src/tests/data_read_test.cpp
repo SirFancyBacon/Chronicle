@@ -432,6 +432,73 @@ TEST(DataArchive, Slicing8MatchesIndependentIeeeOracle) {
     fs::remove_all(dir);
 }
 
+// ZIP64 as other writers make it: the entry's offset and every end-record field saturated, the real values in a ZIP64 field and end record.
+TEST(DataArchive, ReadsZip64Records) {
+    const Bytes       content{1, 2, 3};
+    const std::string name = "a.bin";
+    Bytes             zip;
+    const auto        put = [&](std::uint64_t value, int bytes) {
+        for (int i = 0; i < bytes; ++i) {
+            zip.push_back(static_cast<std::uint8_t>(value >> (8 * i)));
+        }
+    };
+    const std::uint32_t crc = IeeeCrc32(content);
+    put(0x04034B50, 4), put(20, 2), put(1U << 11, 2), put(0, 2), put(0, 2), put(0x21, 2), put(crc, 4), put(3, 4), put(3, 4);
+    put(name.size(), 2), put(0, 2);
+    zip.insert(zip.end(), name.begin(), name.end());
+    zip.insert(zip.end(), content.begin(), content.end());
+    const std::uint64_t central = zip.size();
+    put(0x02014B50, 4), put(45, 2), put(45, 2), put(1U << 11, 2), put(0, 2), put(0, 2), put(0x21, 2), put(crc, 4), put(3, 4), put(3, 4);
+    put(name.size(), 2), put(12, 2), put(0, 2), put(0, 2), put(0, 2), put(0, 4), put(0xFFFFFFFF, 4);
+    zip.insert(zip.end(), name.begin(), name.end());
+    put(1, 2), put(8, 2), put(0, 8);
+    const std::uint64_t central_size = zip.size() - central;
+    const std::uint64_t record = zip.size();
+    put(0x06064B50, 4), put(44, 8), put(45, 2), put(45, 2), put(0, 4), put(0, 4), put(1, 8), put(1, 8), put(central_size, 8), put(central, 8);
+    put(0x07064B50, 4), put(0, 4), put(record, 8), put(1, 4);
+    put(0x06054B50, 4), put(0, 2), put(0, 2), put(0xFFFF, 2), put(0xFFFF, 2), put(0xFFFFFFFF, 4), put(0xFFFFFFFF, 4), put(0, 2);
+    const fs::path dir = TempDir("archive_zip64");
+    WriteBytes(dir / "data.zip", zip);
+    {
+        DataArchive archive(dir / "data.zip");
+        ASSERT_EQ(archive.Count(), 1U);
+        ASSERT_EQ(archive.GetEntry(0).name, name);
+        Bytes output(content.size());
+        ASSERT_TRUE(archive.Read(0, output));
+        EXPECT_EQ(output, content);
+    }
+    // Saturated with no locator before the end record, the archive is refused rather than misread.
+    Bytes broken = zip;
+    broken[record + 56] ^= 0xFF;
+    WriteBytes(dir / "broken.zip", broken);
+    EXPECT_THROW({ DataArchive archive(dir / "broken.zip"); }, std::runtime_error);
+    fs::remove_all(dir);
+}
+
+// Past 65,534 files the writer adds ZIP64's end records, and the reader finds every file.
+TEST(DataArchive, PacksAndReadsPastClassicEntryLimit) {
+    const fs::path        dir = TempDir("archive_many");
+    constexpr std::size_t kFiles = 0x10004;
+    for (std::size_t i = 0; i < kFiles; ++i) {
+        const std::string number = std::format("{:05x}", i);
+        WriteBytes(dir / "source" / number.substr(0, 2) / (number + ".bin"), Bytes{static_cast<std::uint8_t>(i), static_cast<std::uint8_t>(i >> 8)});
+    }
+    dcdata::PackDirectory(dir / "source", dir / "data.zip", 4);
+    {
+        DataArchive archive(dir / "data.zip");
+        ASSERT_EQ(archive.Count(), kFiles);
+        for (const std::size_t index : {std::size_t{0}, std::size_t{0xFFFE}, std::size_t{0xFFFF}, kFiles - 1}) {
+            SCOPED_TRACE(index);
+            const std::string &entry = archive.GetEntry(index).name;
+            const std::size_t  number = std::stoul(entry.substr(3, 5), nullptr, 16);
+            Bytes              output(2);
+            ASSERT_TRUE(archive.Read(index, output));
+            EXPECT_EQ(output, (Bytes{static_cast<std::uint8_t>(number), static_cast<std::uint8_t>(number >> 8)}));
+        }
+    }
+    fs::remove_all(dir);
+}
+
 TEST(DataArchive, SequentialIndexReadsCentralExtrasCommentsAndDirectories) {
     ASSERT_EQ(dc::test::SetEnv("DC_ARCHIVE_SEQUENTIAL_INDEX", "1", 1), 0);
     auto              fixture = MakeStoredIndexFixture(3, 21);

@@ -1320,7 +1320,7 @@ struct ZipEntry {
     std::string name;
     std::uint32_t crc = 0;
     std::uint32_t size = 0;
-    std::uint32_t offset = 0;
+    std::uint64_t offset = 0;
 };
 
 inline void ZipPut16(std::ostream &stream, std::uint16_t value) {
@@ -1332,6 +1332,11 @@ inline void ZipPut32(std::ostream &stream, std::uint32_t value) {
     const std::array<char, 4> bytes = {static_cast<char>(value), static_cast<char>(value >> 8),
                                        static_cast<char>(value >> 16), static_cast<char>(value >> 24)};
     stream.write(bytes.data(), bytes.size());
+}
+
+inline void ZipPut64(std::ostream &stream, std::uint64_t value) {
+    ZipPut32(stream, static_cast<std::uint32_t>(value));
+    ZipPut32(stream, static_cast<std::uint32_t>(value >> 32));
 }
 
 constexpr std::array<std::uint32_t, 256> MakeZipCrcTable() {
@@ -1356,11 +1361,13 @@ inline std::uint32_t ZipCrcUpdate(std::uint32_t crc, std::span<const unsigned ch
 }
 
 /**
- * Writes a deterministic ZIP_STORED archive of the files under `source`.
+ * Writes a deterministic ZIP_STORED archive of the files under `source`, for the game to read in place of loose files (one file opened, not one
+ * per read: on Windows, each open is scanned by the antivirus).
  *
- * The classic ZIP limits keep the output readable by the game's bounded native ZIP reader.
+ * Classic ZIP while the archive fits it; past 4 GiB or 65,534 files, ZIP64 records are added where needed, which the game's reader takes
+ * (platform/data_archive). Each file stays under 2 GiB.
  */
-inline void PackDirectory(const fs::path &source, const fs::path &output) {
+inline void PackDirectory(const fs::path &source, const fs::path &output, unsigned workers = 1) {
     std::error_code error;
     if (!fs::is_directory(source, error)) {
         Fail("{} is not a data directory", source.string());
@@ -1409,9 +1416,6 @@ inline void PackDirectory(const fs::path &source, const fs::path &output) {
     if (entries.empty()) {
         Fail("{} contains no files", source.string());
     }
-    if (entries.size() >= 0xFFFF) {
-        Fail("{} has too many files for classic ZIP", entries.size());
-    }
     std::sort(entries.begin(), entries.end(), [](const ZipEntry &left, const ZipEntry &right) {
         return left.name < right.name;
     });
@@ -1422,24 +1426,43 @@ inline void PackDirectory(const fs::path &source, const fs::path &output) {
         }
     }
 
+    // Checksums first, on the workers, since the central directory follows the files; the copy checks them again as it goes.
     std::vector<unsigned char> buffer(1 << 20);
-    std::uint64_t total_bytes = 0;
-    for (ZipEntry &entry : entries) {
-        std::ifstream input(entry.source, std::ios::binary);
-        if (!input) {
-            Fail("cannot open {}", entry.source.string());
-        }
-        std::uint32_t crc = 0xFFFFFFFF;
-        while (input) {
-            input.read(reinterpret_cast<char *>(buffer.data()), buffer.size());
-            const std::streamsize count = input.gcount();
-            crc = ZipCrcUpdate(crc, std::span(buffer.data(), static_cast<std::size_t>(count)));
-        }
-        if (!input.eof()) {
-            Fail("cannot read {}", entry.source.string());
-        }
-        entry.crc = ~crc;
+    std::uint64_t              total_bytes = 0;
+    for (const ZipEntry &entry : entries) {
         total_bytes += entry.size;
+    }
+    {
+        std::atomic<std::size_t> next = 0;
+        std::mutex               failed_mutex;
+        std::string              failed;
+        const auto               checksum = [&] {
+            std::vector<unsigned char> chunk(1 << 20);
+            for (std::size_t index = next++; index < entries.size(); index = next++) {
+                ZipEntry     &entry = entries[index];
+                std::ifstream input(entry.source, std::ios::binary);
+                std::uint32_t crc = 0xFFFFFFFF;
+                while (input) {
+                    input.read(reinterpret_cast<char *>(chunk.data()), static_cast<std::streamsize>(chunk.size()));
+                    crc = ZipCrcUpdate(crc, std::span(chunk.data(), static_cast<std::size_t>(input.gcount())));
+                }
+                if (!input.eof()) {
+                    std::scoped_lock lock(failed_mutex);
+                    failed = entry.source.string();
+                    return;
+                }
+                entry.crc = ~crc;
+            }
+        };
+        std::vector<std::jthread> threads;
+        for (unsigned i = 1; i < std::max(workers, 1u); i++) {
+            threads.emplace_back(checksum);
+        }
+        checksum();
+        threads.clear();
+        if (!failed.empty()) {
+            Fail("cannot read {}", failed);
+        }
     }
 
     if (!output.parent_path().empty()) {
@@ -1456,10 +1479,10 @@ inline void PackDirectory(const fs::path &source, const fs::path &output) {
         }
         for (ZipEntry &entry : entries) {
             const std::streamoff offset = archive.tellp();
-            if (offset < 0 || static_cast<std::uint64_t>(offset) > UINT32_MAX) {
-                Fail("archive exceeds the 4 GiB classic ZIP limit");
+            if (offset < 0) {
+                Fail("write error on {}", temporary.string());
             }
-            entry.offset = static_cast<std::uint32_t>(offset);
+            entry.offset = static_cast<std::uint64_t>(offset);
             ZipPut32(archive, 0x04034B50);
             ZipPut16(archive, 20);
             ZipPut16(archive, 1U << 11);
@@ -1494,14 +1517,16 @@ inline void PackDirectory(const fs::path &source, const fs::path &output) {
             }
         }
         const std::streamoff central_offset_stream = archive.tellp();
-        if (central_offset_stream < 0 || static_cast<std::uint64_t>(central_offset_stream) > UINT32_MAX) {
-            Fail("archive exceeds the 4 GiB classic ZIP limit");
+        if (central_offset_stream < 0) {
+            Fail("write error on {}", temporary.string());
         }
-        const std::uint32_t central_offset = static_cast<std::uint32_t>(central_offset_stream);
+        const std::uint64_t central_offset = static_cast<std::uint64_t>(central_offset_stream);
         for (const ZipEntry &entry : entries) {
+            // An offset past what 32 bits hold is saturated, and given in full in a ZIP64 field.
+            const bool far = entry.offset >= UINT32_MAX;
             ZipPut32(archive, 0x02014B50);
-            ZipPut16(archive, 20);
-            ZipPut16(archive, 20);
+            ZipPut16(archive, far ? 45 : 20);
+            ZipPut16(archive, far ? 45 : 20);
             ZipPut16(archive, 1U << 11);
             ZipPut16(archive, 0);
             ZipPut16(archive, 0);
@@ -1510,26 +1535,51 @@ inline void PackDirectory(const fs::path &source, const fs::path &output) {
             ZipPut32(archive, entry.size);
             ZipPut32(archive, entry.size);
             ZipPut16(archive, static_cast<std::uint16_t>(entry.name.size()));
-            ZipPut16(archive, 0);
+            ZipPut16(archive, far ? 12 : 0);
             ZipPut16(archive, 0);
             ZipPut16(archive, 0);
             ZipPut16(archive, 0);
             ZipPut32(archive, 0);
-            ZipPut32(archive, entry.offset);
+            ZipPut32(archive, far ? UINT32_MAX : static_cast<std::uint32_t>(entry.offset));
             archive.write(entry.name.data(), static_cast<std::streamsize>(entry.name.size()));
+            if (far) {
+                ZipPut16(archive, 1);
+                ZipPut16(archive, 8);
+                ZipPut64(archive, entry.offset);
+            }
         }
         const std::streamoff central_end_stream = archive.tellp();
-        if (central_end_stream < 0 || static_cast<std::uint64_t>(central_end_stream) > UINT32_MAX) {
-            Fail("archive exceeds the 4 GiB classic ZIP limit");
+        if (central_end_stream < 0) {
+            Fail("write error on {}", temporary.string());
         }
-        const std::uint32_t central_size = static_cast<std::uint32_t>(central_end_stream) - central_offset;
+        const std::uint64_t central_size = static_cast<std::uint64_t>(central_end_stream) - central_offset;
+        const std::uint64_t count = entries.size();
+        // Past the classic end record's fields: a ZIP64 end record and its locator before it, the classic fields saturated.
+        const bool zip64 = count >= 0xFFFF || central_offset >= UINT32_MAX || central_size >= UINT32_MAX;
+        if (zip64) {
+            const std::uint64_t record_offset = static_cast<std::uint64_t>(central_end_stream);
+            ZipPut32(archive, 0x06064B50);
+            ZipPut64(archive, 44);
+            ZipPut16(archive, 45);
+            ZipPut16(archive, 45);
+            ZipPut32(archive, 0);
+            ZipPut32(archive, 0);
+            ZipPut64(archive, count);
+            ZipPut64(archive, count);
+            ZipPut64(archive, central_size);
+            ZipPut64(archive, central_offset);
+            ZipPut32(archive, 0x07064B50);
+            ZipPut32(archive, 0);
+            ZipPut64(archive, record_offset);
+            ZipPut32(archive, 1);
+        }
         ZipPut32(archive, 0x06054B50);
         ZipPut16(archive, 0);
         ZipPut16(archive, 0);
-        ZipPut16(archive, static_cast<std::uint16_t>(entries.size()));
-        ZipPut16(archive, static_cast<std::uint16_t>(entries.size()));
-        ZipPut32(archive, central_size);
-        ZipPut32(archive, central_offset);
+        ZipPut16(archive, zip64 ? 0xFFFF : static_cast<std::uint16_t>(count));
+        ZipPut16(archive, zip64 ? 0xFFFF : static_cast<std::uint16_t>(count));
+        ZipPut32(archive, zip64 ? UINT32_MAX : static_cast<std::uint32_t>(central_size));
+        ZipPut32(archive, zip64 ? UINT32_MAX : static_cast<std::uint32_t>(central_offset));
         ZipPut16(archive, 0);
         archive.close();
         if (!archive) {

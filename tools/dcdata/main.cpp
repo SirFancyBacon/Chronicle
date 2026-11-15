@@ -77,10 +77,9 @@ void RunOnKazarov(std::vector<dcdata::ClassJob> jobs) {
     kazarov::job_set_run(std::move(set), WorkerCount());
 }
 
+// dcdata's own writer rather than Kazarov's classic one: the data with its baked textures and models passes 4 GiB, which needs ZIP64.
 void Pack(const fs::path &source, const fs::path &output) {
-    const kazarov::PackReport report =
-        kazarov::pack_directory_stored(Utf8Path(source), Utf8Path(output), WorkerCount());
-    dcdata::Log(stdout, "packed {} files ({} bytes) into {}\n", report.files, report.bytes, Utf8Path(output));
+    dcdata::PackDirectory(source, output, WorkerCount());
 }
 
 class TextureStage {
