@@ -600,6 +600,8 @@ void Start(Mirror &mirror) {
     if (const char *clarity = std::getenv("DC_NOKTUS_WATER_CLARITY")) {
         host.water_clarity = std::strtof(clarity, nullptr);
     }
+    // The game's world is about ten units to a metre (Toan stands about 14): water's waves are sized by it.
+    host.world_units_per_metre = 10.0f;
     if (const char *toe = std::getenv("DC_NOKTUS_TONE_TOE")) {
         host.tone_map_toe = std::strtof(toe, nullptr);
     }
