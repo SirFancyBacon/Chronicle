@@ -73,7 +73,14 @@ int hold_count;
 constexpr double kCardIn = 1.25;
 constexpr double kCardOut = 1.25;
 constexpr double kCardTotal = 5.0;
+constexpr double kBlackHold = 1.5; // the owner, 2026-11-15: the black held this long once the town has loaded, then faded
 constexpr double kBlackOut = 0.75;
+
+// When the card starts to ease out: so as to be gone 5 seconds after it showed, but not before the black behind it starts to lift, so a town
+// that loads late isn't left with its card fading on black.
+double CardOutFrom(double loaded) {
+    return std::max(kCardTotal - kCardOut, loaded + kBlackHold);
+}
 
 // The game's ticks the card has been showing for, and when the first was.
 int                                                card_ticks = 0;
@@ -95,7 +102,7 @@ u_char AreaCardAlpha(double seconds, double loaded) {
         t = std::clamp(t, 0.0, 1.0);
         return t * t * (3 - 2 * t);
     };
-    const double out_from = std::max(kCardTotal - kCardOut, loaded);
+    const double out_from = CardOutFrom(loaded);
     double       opacity = 0.0;
     if (seconds < out_from) {
         opacity = eased(seconds / kCardIn);
@@ -370,8 +377,8 @@ void DrawAreaCardOverGame() {
         return;
     }
     const double seconds = CardSeconds();
-    const double black = 1.0 - std::clamp((seconds - loaded_after) / kBlackOut, 0.0, 1.0);
-    if (black <= 0.0 && seconds >= std::max(kCardTotal - kCardOut, loaded_after) + kCardOut) {
+    const double black = 1.0 - std::clamp((seconds - loaded_after - kBlackHold) / kBlackOut, 0.0, 1.0);
+    if (black <= 0.0 && seconds >= CardOutFrom(loaded_after) + kCardOut) {
         card_over_game = false;
         return;
     }

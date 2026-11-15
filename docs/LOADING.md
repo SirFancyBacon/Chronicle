@@ -6,11 +6,13 @@ The loading changes below reduce actual asset work. Logo, fade, party-ring and
 story-event durations are unchanged. The area name card is not shortened to
 improve a loading measurement; it changed on the project owner's decision of
 2026-11-15, as a presentation choice: a town's card no longer holds the game for
-retail's 6.3 seconds of black. The town loads behind it and comes out of black
-once loaded, and the card is gone 5 seconds after it showed (later only if the
-town took longer to load). A dungeon's card runs those 5 seconds on the loading
-screen, since its floor select draws the frame before as its backdrop. See
-`AreaCardAlpha` and `HandOverLoadingCard` in `nowload.cpp`.
+retail's 6.3 seconds of black. The town loads behind it; once loaded the black
+holds 1.5 seconds more and fades over 0.75, and the card is gone 5 seconds after
+it showed. A town taking more than 2.25 seconds to load keeps its card until
+the black starts to lift, so it never fades on black. A dungeon's card runs
+those 5 seconds on the loading screen, since its floor select draws the frame
+before as its backdrop. See `AreaCardAlpha` and `HandOverLoadingCard` in
+`nowload.cpp`.
 
 The 2026-10-26 measurements in this document are PC measurements. Console build
 and runtime qualification of these new changes is pending. Earlier console
