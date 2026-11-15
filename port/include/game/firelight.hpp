@@ -41,6 +41,12 @@ void GiveEffectLight(const EDIT_EFFECT_INFO *effect);
  */
 void GiveOpeningFireLight(int index, const float *pos, int fire_flag);
 
+/**
+ * Whether a fire's shimmer would have been laid back on the screen since this was last asked: CFireOmni::DrawRaster, where the renderer draws the heat
+ * itself (render::ModernHeat) and the game's copy isn't laid back. Asking clears it.
+ */
+bool TakeShimmerShown();
+
 /** How far above where a fire stands its flame burns, as CFireOmni draws it. */
 inline constexpr float kFlameRise = 4.6f;
 

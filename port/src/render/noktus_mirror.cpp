@@ -1049,6 +1049,52 @@ void ApplyFocus(const FocusSettings &settings) {
     }
 }
 
+bool ModernHeat() {
+    static const bool wanted = [] {
+        const char *asked = std::getenv("DC_NOKTUS_HEAT");
+        return asked == nullptr || std::strcmp(asked, "0") != 0;
+    }();
+    return wanted && ModernFocus();
+}
+
+void ApplyHeat(std::span<const HeatGiven> heat) {
+    if (!ModernHeat() || heat.empty()) {
+        return;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (!mirror.open || !mirror.renderer || !mirror.world_camera) {
+        return;
+    }
+    std::vector<noktus::HeatSource> sources;
+    sources.reserve(heat.size());
+    for (const HeatGiven &given : heat) {
+        sources.push_back({
+            .position = {given.position[0], given.position[1], given.position[2]},
+              .radius = given.radius, .height = given.height, .strength = given.strength
+        });
+    }
+    // In the world's camera, then the camera as it was, for what's recorded next.
+    Guarded([&] {
+        mirror.renderer->SetCamera(*mirror.world_camera);
+        mirror.renderer->ApplyHeat(sources);
+        if (mirror.camera) {
+            mirror.renderer->SetCamera(*mirror.camera);
+        }
+    });
+}
+
+void EndLinearLight() {
+    if (!ModernFocus()) {
+        return;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (mirror.open && mirror.renderer) {
+        Guarded([&] { mirror.renderer->EndLinearLight(); });
+    }
+}
+
 void MirrorBeginStep(Step step) {
     if (!MirrorOn()) {
         return;

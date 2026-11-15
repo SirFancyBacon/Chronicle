@@ -10,6 +10,7 @@
 #include <memory>
 #include <print>
 #include <span>
+#include <vector>
 
 #include "camera.hpp"
 #include "camerafollow.hpp"
@@ -1091,7 +1092,20 @@ void CDungeonMap::DrawFire(CFrameVu1 *frame, CCameraFollow *camera) {
     }
 }
 
+namespace {
+
+// A fire's heat, in the world's units: the game's shimmer was centred 3 above the fire's point and drawn as a sprite 15 wide and 16 tall.
+constexpr float kHeatFoot = 3.0f;
+constexpr float kHeatRadius = 7.5f;
+constexpr float kHeatHeight = 20.0f;
+
+} // namespace
+
 void CDungeonMap::DrawRaster(CFrameVu1 *frame) {
+    // The game copies the screen over each fire and lays it back with its lines shifted. Noktus draws the heat itself where it draws (ModernHeat): it's
+    // told where the fires are, and the game's copy still fills the flames' glow (CFireOmni::DrawRaster) but isn't laid back.
+    const bool                     modern = render::ModernHeat();
+    std::vector<render::HeatGiven> heat;
     float pos[4];
     int   i;
     int   col;
@@ -1145,10 +1159,24 @@ void CDungeonMap::DrawRaster(CFrameVu1 *frame) {
                         this->fire.pos[2] = 10.0f * z;
                         this->fire.pos[3] = 1.0f;
                         this->fire.DrawRaster();
+                        if (modern) {
+                            // From where the game's shimmer was centred, as wide as it was, rising a little further.
+                            heat.push_back({
+                                .position = {this->fire.pos[0], this->fire.pos[1] + kHeatFoot, this->fire.pos[2]},
+                                  .radius = kHeatRadius, .height = kHeatHeight
+                            });
+                        }
                     }
                 }
             }
         }
+    }
+    render::ApplyHeat(heat);
+    // The game's shimmer, laid back on the screen, ended the frame's linear light, and the fires' glows drawn after it are tuned to that: blended into
+    // the linear scene, they wash the torch and the wall around it in orange. So it ends where a shimmer would have been laid, until the fires are
+    // Noktus's own.
+    if (TakeShimmerShown()) {
+        render::EndLinearLight();
     }
 }
 

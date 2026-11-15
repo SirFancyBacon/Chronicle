@@ -4,12 +4,15 @@
 
 #include <array>
 #include <cstdlib>
+#include <utility>
 
 #include "camera.hpp"
+#include "firelight.hpp"
 #include "mglib.hpp"
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "runeffect.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
@@ -65,6 +68,9 @@ void CFireOmni::SetTexture(CTexture *core_texture, CTexture *glow_texture) {
 }
 
 namespace {
+
+// A shimmer would have been laid back since TakeShimmerShown last asked.
+bool g_shimmer_shown = false;
 
 // Per-layer GS state: no alpha test, depth tested but not written, additive Cs * As + Cd. The sprites
 // set TEX1 themselves.
@@ -179,6 +185,10 @@ void CFireOmni::RasterStep() {
     }
 }
 
+bool TakeShimmerShown() {
+    return std::exchange(g_shimmer_shown, false);
+}
+
 void CFireOmni::DrawRaster() {
     render::Layer2DScope layer(render::Layer2D::Ui);
     sceVu0FVECTOR world;
@@ -216,7 +226,13 @@ void CFireOmni::DrawRaster() {
 
     sceGsTex0 blend = *reinterpret_cast<sceGsTex0 *>(&TexManager.GetTexture("blender", -1)->tex0);
     blendTextuerTest(Vif1Packet, blend.TBP0, blend.TBW, blend.PSM, CRect_i_(x, y >> 1, width, height), TexManager.GetTexture("alpha01", -1), CRect_i_(0, 0, width, height), CRect_i_(0, 0, 64, 64), top_left[2] >> 4, raster_phase);
-    set2DSprite(Vif1Packet, TexManager.GetTexture("blender", -1), CRect_i_(x, y, width, height * 2), CRect_i_(1, 1, width - 2, height - 2));
+    // The copy is also what the flames' glow is drawn from ("blender"), so it's always made. Laid back over the fire, it's the shimmer, which the renderer
+    // draws itself where it can (render::ModernHeat).
+    if (!render::ModernHeat()) {
+        set2DSprite(Vif1Packet, TexManager.GetTexture("blender", -1), CRect_i_(x, y, width, height * 2), CRect_i_(1, 1, width - 2, height - 2));
+    } else {
+        g_shimmer_shown = true;
+    }
 }
 
 } // namespace dc::game

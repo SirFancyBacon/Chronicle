@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -77,6 +78,24 @@ void SetPointLit(bool on);
 /** Lays depth of field and heat haze on the screen as drawn so far, where the game drew its own. */
 void ApplyFocus(const FocusSettings &settings);
 
+/** Air rising over a fire, which bends what's seen through it: see ApplyHeat. */
+struct HeatGiven {
+    float position[3] = {}; // in the world: where the heat rises from
+    float radius = 1.0f;    // how far the rising air reaches each side
+    float height = 1.0f;    // how far up it rises before it's still
+    float strength = 1.0f;  // 1: a torch's
+};
+
+/** Whether fires' heat is the renderer's own (ApplyHeat), in place of the game's shimmer (a copy of the screen laid back with its lines shifted):
+ * whenever Noktus draws, unless DC_NOKTUS_HEAT=0 asks for the game's. */
+bool ModernHeat();
+
+/** Bends what's been drawn so far behind each fire's rising air, where the game drew its own shimmer, in the world's camera. */
+void ApplyHeat(std::span<const HeatGiven> heat);
+
+/** Ends the frame's linear light here: what's drawn after it is blended on the finished picture, as the game's effects were tuned to. Nothing without
+ * the linear scene. */
+void EndLinearLight();
 
 #define DC_RENDERER_CALL(name)                                    \
     template <typename... Args>                                   \
