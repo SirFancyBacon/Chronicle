@@ -54,6 +54,9 @@ struct MirrorSettings {
     int              anisotropy = 0;
     MirrorAntiAliasing anti_aliasing = MirrorAntiAliasing::Off;
     int              supersampling = 1; // samples a pixel: 1, 2 or 4
+    int              picture_width = 0;  // the resolution chosen for fullscreen, drawn at most at the window's size and scaled up to fill it; 0 by 0 draws at the window's
+    int              picture_height = 0;
+    float            render_scale = 1.0f; // of that resolution each way, 0.5 to 1, scaled up to fill the window
     MirrorHdr        hdr = MirrorHdr::Off;
     float            paper_white = 0.0f; // nits; 0 takes what the system says
     float            peak = 0.0f;        // nits; 0 takes what the system says
@@ -82,6 +85,12 @@ struct MirrorHdrPatch {
  * A display not in HDR stays SDR whatever's saved, as it would be sent far too bright a picture, unless force_hdr says it's known to be in HDR, for when the system can't tell.
  */
 HdrOutput ChooseHdr(const MirrorSettings &settings, bool display_hdr, float white, float headroom);
+
+/**
+ * The picture's size by the window's, each way, as Noktus's render scale. A chosen resolution keeps the window's shape, at least its size each way, never past
+ * the window's; the render scale shrinks that, and supersampling's samples a pixel enlarge it.
+ */
+float MirrorRenderScale(const MirrorSettings &settings, std::uint32_t window_width, std::uint32_t window_height, int samples);
 
 /** What DC_RENDERER's value asks for: only "kazarov" means Kazarov's renderer. */
 bool KazarovAsked(const char *setting);

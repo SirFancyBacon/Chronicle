@@ -21,6 +21,22 @@ TEST(GfxHost, OnlyKazarovByNameBringsTheOldRendererBack) {
     EXPECT_FALSE(render::KazarovAsked(nullptr));
 }
 
+// The picture's size by the window's: a resolution chosen for fullscreen keeps the window's shape at least its size each way, never past the window;
+// the render scale shrinks it and supersampling enlarges it.
+TEST(RenderScale, ResolutionRenderScaleAndSamples) {
+    EXPECT_FLOAT_EQ(render::MirrorRenderScale({}, 3840, 2400, 1), 1.0f);
+    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.picture_width = 1920, .picture_height = 1200}, 3840, 2400, 1), 0.5f);
+    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.picture_width = 1920, .picture_height = 1080}, 3840, 2400, 1), 0.5f) << "a 16:9 size on a 16:10 screen";
+    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.picture_width = 1920, .picture_height = 1080}, 3440, 1440, 1), 0.75f) << "on an ultrawide";
+    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.picture_width = 3840, .picture_height = 2160}, 1920, 1080, 1), 1.0f) << "never past the window";
+    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.picture_width = 1920, .picture_height = 1200, .render_scale = 0.5f}, 3840, 2400, 1), 0.25f);
+    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.render_scale = 0.1f}, 1920, 1080, 1), 0.5f) << "held to half";
+    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.render_scale = 2.0f}, 1920, 1080, 1), 1.0f) << "supersampling is the larger picture";
+    EXPECT_NEAR(render::MirrorRenderScale({.picture_width = 1920, .picture_height = 1200}, 3840, 2400, 2), 0.70710678f, 1e-6f);
+    EXPECT_FLOAT_EQ(render::MirrorRenderScale({}, 1920, 1080, 4), 2.0f);
+    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.picture_width = 1920, .picture_height = 1200}, 0, 0, 1), 1.0f) << "no window yet";
+}
+
 TEST(HdrChoice, OffStaysOffWhateverTheDisplayIs) {
     EXPECT_EQ(render::ChooseHdr({.paper_white = 200.0f}, true, 3.0f, 4.0f).mode, render::MirrorHdr::Off);
 }

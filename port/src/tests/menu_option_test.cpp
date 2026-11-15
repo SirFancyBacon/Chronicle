@@ -5,6 +5,7 @@
 #include <memory>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "memorycardaccess.hpp"
@@ -164,6 +165,45 @@ TEST(MenuOption, ResolutionListKeepsConfiguredSize) {
     list = OptionResolutionList({}, 0, 0, false, 0, 0);
     ASSERT_TRUE(Has(list, 3840, 2160));
     ASSERT_EQ(list.front().width, 0);
+}
+
+// In fullscreen the row offers Desktop, then sizes of the display's own shape below it: a 16:10 laptop's 1920 x 1200 among them, no 16:9 sizes.
+TEST(MenuOption, FullscreenResolutionsKeepTheDisplaysShape) {
+    std::vector<OptionResolution> list = OptionFullscreenResolutionList(3840, 2400, 0, 0);
+    ASSERT_EQ(list.front().width, 0);
+    ASSERT_EQ(list.front().height, 0);
+    for (const auto &[width, height] : {std::pair(1280, 800), std::pair(1440, 900), std::pair(1680, 1050), std::pair(1920, 1200), std::pair(2560, 1600),
+                                        std::pair(2880, 1800)}) {
+        EXPECT_TRUE(Has(list, width, height)) << width << " x " << height;
+    }
+    EXPECT_EQ(list.size(), 7u);
+    EXPECT_FALSE(Has(list, 1920, 1080));
+    EXPECT_FALSE(Has(list, 3840, 2400)) << "the display's own size is Desktop";
+    for (size_t i = 2; i < list.size(); ++i) {
+        ASSERT_LT(list[i - 1].width * list[i - 1].height, list[i].width * list[i].height);
+    }
+
+    list = OptionFullscreenResolutionList(2560, 1440, 0, 0);
+    EXPECT_TRUE(Has(list, 1280, 720));
+    EXPECT_TRUE(Has(list, 1920, 1080));
+    EXPECT_TRUE(Has(list, 1706, 960)) << "two thirds";
+    EXPECT_FALSE(Has(list, 1920, 1200));
+    EXPECT_FALSE(Has(list, 2560, 1440));
+
+    list = OptionFullscreenResolutionList(3440, 1440, 0, 0);
+    EXPECT_TRUE(Has(list, 2580, 1080)) << "three quarters";
+    EXPECT_TRUE(Has(list, 1720, 720));
+    EXPECT_FALSE(Has(list, 2560, 1080)) << "64:27, not quite the display's shape";
+}
+
+// A size config.json holds stays listed, in place of a size a pixel or two from it.
+TEST(MenuOption, FullscreenResolutionsKeepTheConfiguredSize) {
+    std::vector<OptionResolution> list = OptionFullscreenResolutionList(3840, 2400, 1920, 1080);
+    EXPECT_TRUE(Has(list, 1920, 1080));
+    EXPECT_TRUE(Has(list, 1920, 1200));
+    list = OptionFullscreenResolutionList(2560, 1440, 1707, 960);
+    EXPECT_TRUE(Has(list, 1707, 960));
+    EXPECT_FALSE(Has(list, 1706, 960));
 }
 
 TEST(MenuOption, ZoomResetPresetsPreserveOtherBindingsAndRestoreDefault) {

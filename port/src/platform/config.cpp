@@ -595,6 +595,14 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         return true;
 #endif
     }
+    if (name == "video.fullscreen_width" || name == "video.fullscreen_height") {
+        if (!value.is_number_integer() || value.get<std::int64_t>() < 0 ||
+            value.get<std::int64_t>() > std::numeric_limits<int>::max()) {
+            return false;
+        }
+        (name == "video.fullscreen_width" ? config.fullscreen_width : config.fullscreen_height) = value.get<int>();
+        return true;
+    }
     if (name == "video.fullscreen") {
 #ifdef __SWITCH__
         return true;
@@ -626,6 +634,16 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "video.render_scale") {
         float scale = 0.0f;
         if (!ReadNumber(value, scale) || !(scale >= 0.5f && scale <= 2.0f)) {
+            return false;
+        }
+        config.render_scale = scale;
+        return true;
+    }
+#elif !defined(__SWITCH__)
+    // Of the resolution: supersampling is the larger picture.
+    if (name == "video.render_scale") {
+        float scale = 0.0f;
+        if (!ReadNumber(value, scale) || !(scale >= 0.5f && scale <= 1.0f)) {
             return false;
         }
         config.render_scale = scale;
@@ -844,10 +862,14 @@ std::string ConfigSerialize(const Config &config) {
     root["video"]["width"] = config.window_width;
     root["video"]["height"] = config.window_height;
     root["video"]["fullscreen"] = config.fullscreen;
+    root["video"]["fullscreen_width"] = config.fullscreen_width;
+    root["video"]["fullscreen_height"] = config.fullscreen_height;
     root["video"]["aspect"] = config.aspect == ConfigAspect::FourThree ? "4:3" : "auto";
     root["video"]["ui_scale"] = Shortest(config.ui_scale);
-#ifdef __ANDROID__
+#ifndef __SWITCH__
     root["video"]["render_scale"] = Shortest(config.render_scale);
+#endif
+#ifdef __ANDROID__
     root["video"]["touch_overlay_opacity"] = config.touch_overlay_opacity;
 #endif
     root["video"]["show_fps"] = config.show_fps;

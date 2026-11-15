@@ -79,6 +79,12 @@ struct Config : HostSettings {
 #else
     float render_scale = 1.0f;
 #endif
+    /**
+     * video.fullscreen_width and video.fullscreen_height: the picture's size in fullscreen, where the window is the screen's own size, scaled up to fill
+     * it. 0 by 0 is the screen's size. Kept apart from the window's size, which fullscreen remembers for when it's left.
+     */
+    int               fullscreen_width = 0;
+    int               fullscreen_height = 0;
     float             detail_distance = 0.0f;
     float             shadow_distance = 0.0f;
     int               anisotropy = 0;

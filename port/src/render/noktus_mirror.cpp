@@ -104,6 +104,7 @@ struct Mirror {
     std::uint32_t                                            room_width = 0;
     std::uint32_t                                            room_height = 0;
     int                                                      drawn_samples = 0;  // what the renderer was last told
+    float                                                    drawn_scale = 0.0f; // and the render scale it was told
     std::unique_ptr<noktus::Renderer>                        renderer;
     std::unordered_map<gfx::TextureHandle, noktus::TextureId> textures;
     std::unordered_map<gfx::MeshHandle, noktus::MeshId>       meshes;
@@ -452,11 +453,6 @@ noktus::DisplayOutput ToDisplayOutput(MirrorHdr mode) {
                                                                                               : noktus::DisplayOutput::Sdr;
 }
 
-// Samples a pixel as Noktus's render scale: the picture's size by the window's, each way.
-float RenderScale(int samples) {
-    return std::sqrt(static_cast<float>(std::clamp(samples, 1, 4)));
-}
-
 bool Temporal(MirrorAntiAliasing mode) {
     return mode == MirrorAntiAliasing::Taa || mode == MirrorAntiAliasing::SmaaT2x;
 }
@@ -474,18 +470,23 @@ void ApplySupersampling(Mirror &mirror, bool settings_changed) {
     }
     const int most = Temporal(g_settings.anti_aliasing) ? mirror.most_temporal_samples : mirror.most_samples;
     const int samples = std::min(std::clamp(g_settings.supersampling, 1, 4), most);
-    if (samples == mirror.drawn_samples) {
+    const float scale = MirrorRenderScale(g_settings, room.window_width, room.window_height, samples);
+    if (samples == mirror.drawn_samples && scale == mirror.drawn_scale) {
         return;
     }
-    if (samples < g_settings.supersampling) {
+    if (samples < g_settings.supersampling && samples != mirror.drawn_samples) {
         const std::string why = room.budget != 0 ? std::format("{:.0f} MB the system allows of the GPU's {:.0f}", static_cast<double>(room.budget) / 1048576.0,
                                                                static_cast<double>(room.heap) / 1048576.0)
                                                  : std::format("the GPU's {:.0f} MB, its driver giving no budget", static_cast<double>(room.heap) / 1048576.0);
         std::fprintf(stderr, "noktus: supersampling held to %dx of %dx, for a %ux%u window in %s\n", samples, g_settings.supersampling, room.window_width,
                      room.window_height, why.c_str());
     }
-    noktus::SetRenderScale(*mirror.renderer, RenderScale(samples));
+    if (scale != mirror.drawn_scale) {
+        std::fprintf(stderr, "noktus: drawn at %.0f%% of the %ux%u window\n", static_cast<double>(scale) * 100.0, room.window_width, room.window_height);
+    }
+    noktus::SetRenderScale(*mirror.renderer, scale);
     mirror.drawn_samples = samples;
+    mirror.drawn_scale = scale;
 }
 
 // The setting, unless DC_NOKTUS_ANTI_ALIASING says otherwise for a scripted run.
@@ -603,6 +604,7 @@ void Start(Mirror &mirror) {
     }
     std::fprintf(stderr, "noktus: drawing on %s, window: %s\n", noktus::RendererDeviceName(*mirror.renderer).c_str(), noktus::DescribeWindow(*mirror.renderer).c_str());
     mirror.drawn_samples = 1; // as host.render_scale started it
+    mirror.drawn_scale = 1.0f;
     ApplySupersampling(mirror, true);
     mirror.textures[gfx::kPreviousFrame] = mirror.renderer->LastFrame();
     if (const std::optional<noktus::Pass> pass = ToNoktusPass(CurrentPass())) {
@@ -840,6 +842,16 @@ bool MirrorDepthProbe() {
         return setting != nullptr && std::string_view(setting) == "1";
     }();
     return probe;
+}
+
+float MirrorRenderScale(const MirrorSettings &settings, std::uint32_t window_width, std::uint32_t window_height, int samples) {
+    float picture = 1.0f;
+    if (settings.picture_width > 0 && settings.picture_height > 0 && window_width > 0 && window_height > 0) {
+        picture = std::min(1.0f, std::max(static_cast<float>(settings.picture_width) / static_cast<float>(window_width),
+                                          static_cast<float>(settings.picture_height) / static_cast<float>(window_height)));
+    }
+    const float scale = std::isfinite(settings.render_scale) ? std::clamp(settings.render_scale, 0.5f, 1.0f) : 1.0f;
+    return picture * scale * std::sqrt(static_cast<float>(std::clamp(samples, 1, 4)));
 }
 
 int MirrorMostSupersampling(MirrorAntiAliasing anti_aliasing) {

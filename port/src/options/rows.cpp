@@ -176,12 +176,31 @@ int ResolutionCount(const Config & /*config*/) {
     return static_cast<int>(std::ssize(g_sizes));
 }
 
+int Fullscreen(const Config &config) {
+    return config.fullscreen || Desktop(config) ? 1 : 0;
+}
+
+// In fullscreen the row is the picture's size, and in a window the window's.
+bool PictureSize(const Config &config) {
+#if defined(__ANDROID__) || defined(__SWITCH__)
+    return false;
+#else
+    return Fullscreen(config) == 1;
+#endif
+}
+
+OptionResolution ResolutionOf(const Config &config) {
+    return PictureSize(config) ? OptionResolution{config.fullscreen_width, config.fullscreen_height}
+                               : OptionResolution{config.window_width, config.window_height};
+}
+
 int ResolutionChoice(const Config &config) {
-    double area = static_cast<double>(config.window_width) * config.window_height;
-    int    best = 0;
+    const OptionResolution chosen = ResolutionOf(config);
+    double                 area = static_cast<double>(chosen.width) * chosen.height;
+    int                    best = 0;
     for (int i = 0; i < std::ssize(g_sizes); ++i) {
         const OptionResolution &size = g_sizes[i];
-        if (size.width == config.window_width && size.height == config.window_height) {
+        if (size.width == chosen.width && size.height == chosen.height) {
             return i;
         }
         double here = static_cast<double>(size.width) * size.height;
@@ -194,16 +213,18 @@ int ResolutionChoice(const Config &config) {
 }
 
 void SetResolution(Config &config, int choice) {
+    if (PictureSize(config)) {
+        config.fullscreen_width = g_sizes[choice].width;
+        config.fullscreen_height = g_sizes[choice].height;
+        return;
+    }
     config.window_width = g_sizes[choice].width;
     config.window_height = g_sizes[choice].height;
 }
 
 std::string ResolutionText(const Config &config) {
-    return Desktop(config) ? "Desktop" : std::format("{} x {}", config.window_width, config.window_height);
-}
-
-int Fullscreen(const Config &config) {
-    return config.fullscreen || Desktop(config) ? 1 : 0;
+    const OptionResolution chosen = ResolutionOf(config);
+    return chosen.width == 0 && chosen.height == 0 ? "Desktop" : std::format("{} x {}", chosen.width, chosen.height);
 }
 
 // A window left from Desktop takes the largest size that fits beside the desktop's panels.
@@ -390,12 +411,19 @@ int UiScaleCount(const Config & /*config*/) {
     return 16;
 }
 
+#ifndef __SWITCH__
+// In tenths from 50%: to 200% on Android, to 100% elsewhere, where supersampling is the larger picture.
 #ifdef __ANDROID__
+constexpr int kRenderScales = 16;
+#else
+constexpr int kRenderScales = 6;
+#endif
+
 int RenderScaleChoice(const Config &config) {
-    return std::clamp(static_cast<int>(std::lround(config.render_scale * 10.0f)) - 5, 0, 15);
+    return std::clamp(static_cast<int>(std::lround(config.render_scale * 10.0f)) - 5, 0, kRenderScales - 1);
 }
 
-int RenderScaleCount(const Config & /*config*/) { return 16; }
+int RenderScaleCount(const Config & /*config*/) { return kRenderScales; }
 
 void SetRenderScale(Config &config, int choice) { config.render_scale = (choice + 5) / 10.0f; }
 
@@ -730,12 +758,22 @@ constexpr Row kGameRows[] = {
     OnOffRow<&Config::autosave>("game.autosave", "Autosave", "\"Autosave\"\nSaves on arriving in a\ntown or dungeon floor.")
 };
 
+#ifndef __SWITCH__
+constexpr Row kRenderScaleRow =
+    SettingRow("video.render_scale", "Render Resolution",
+               "\"Render Resolution\"\nThe game's internal image\nsize. Lower values improve\nspeed and battery life.",
+               RenderScaleCount, RenderScaleChoice, SetRenderScale, RenderScaleText);
+#endif
+
 constexpr Row kDisplayRows[] = {
     SettingRow("video.fullscreen", "Window Mode", "\"Window Mode\"\nPlay in a window or\non the whole screen.", Two,
                Fullscreen, SetFullscreen, nullptr, "Windowed|Fullscreen", RestoreFullscreen),
     SettingRow("video.width", "Resolution",
-               "\"Resolution\"\nThe window's size.\nFullscreen and Desktop\nuse the whole monitor.", ResolutionCount,
+               "\"Resolution\"\nWindowed: the window's.\nFullscreen: the picture's,\nscaled up to fill\nthe screen.", ResolutionCount,
                ResolutionChoice, SetResolution, ResolutionText),
+#if !defined(__ANDROID__) && !defined(__SWITCH__)
+    kRenderScaleRow,
+#endif
     SettingRow("video.present_mode", "V-Sync", "\"V-Sync\"\nOn: no tearing.\nFast: no tearing, less\ndelay. Off: may tear.",
                PresentModeCount, PresentModeChoice, SetPresentMode, nullptr, "On|Fast|Off"),
     SettingRow("video.max_fps", "Frame Limit", "\"Frame Limit\"\nThe most frames drawn\nin a second.", MaxFpsCount,
@@ -786,9 +824,7 @@ constexpr std::size_t kHdrRows = 4;
 
 #ifdef __ANDROID__
 constexpr Row kAndroidDisplayRows[] = {
-    SettingRow("video.render_scale", "Render Resolution",
-               "\"Render Resolution\"\nThe game's internal image\nsize. Lower values improve\nspeed and battery life.",
-               RenderScaleCount, RenderScaleChoice, SetRenderScale, RenderScaleText),
+    kRenderScaleRow,
     kDisplayRows[2],
     kDisplayRows[3],
     kDisplayRows[4],
@@ -1134,6 +1170,12 @@ void ListResolutions() {
     int           width = 0;
     int           height = 0;
     bool          known = WindowDisplaySize(width, height, !config.fullscreen && !Desktop(config));
+#if !defined(__ANDROID__) && !defined(__SWITCH__)
+    if (known && PictureSize(config)) {
+        g_sizes = OptionFullscreenResolutionList(width, height, config.fullscreen_width, config.fullscreen_height);
+        return;
+    }
+#endif
     g_sizes = OptionResolutionList(DisplayModes(), config.window_width, config.window_height, known, width,
                                    height);
 }

@@ -71,6 +71,13 @@ std::vector<OptionResolution> OptionResolutionList(std::span<const DisplayModeSi
                                                    int display_height);
 
 /**
+ * Returns the sizes the Resolution row steps through in fullscreen, where the window is the display's own size and the size chosen is the picture's,
+ * scaled up to fill it: Desktop (the display's size) first, then the well-known sizes and a half, two thirds and three quarters of the display's, each
+ * of the display's shape and smaller than it, from the smallest up, and the configured size if it isn't among them.
+ */
+std::vector<OptionResolution> OptionFullscreenResolutionList(int display_width, int display_height, int configured_width, int configured_height);
+
+/**
  * The Controls row's zoom reset presets: Middle Mouse, Mouse4, Mouse5, Home and Disabled, followed
  * by the configured custom binding when present. Selecting a preset changes only zoom_reset.
  */
