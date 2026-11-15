@@ -309,9 +309,10 @@ glow and underline, sampled from the disc's card). With a plate for the card and
 the plate and draws the name over it from the font at the screen's own resolution (`area_card.cpp`), so the
 lettering is sharp at any window size and a better plate (a hand-redrawn or upscaled one) improves every language
 at once. The names are `area.<card>` in the language's JSON (`area.mt01`...), shipped for every language. Without a
-plate or the font the card is the language's picture as above, or the disc's. However it's drawn, the card fades for
-retail's ticks (128 in, 120 held, 128 out: 6.3 seconds at 60 a second), eased, its opacity taken from the clock at
-each display frame (`AreaCardAlpha` in `nowload.cpp`).
+plate or the font the card is the language's picture as above, or the disc's. However it's drawn, the card eases in
+over 1.25 seconds and is gone 5 seconds after it showed (later only if a town took longer to load), its opacity taken
+from the clock at each display frame (`AreaCardAlpha` in `nowload.cpp`). A town's card stays over the town once it has
+loaded, its black ground clear; a dungeon's runs on the loading screen. Retail's ran 6.3 seconds on black.
 
 **Shadows.** The pictures carry no shadow of their own; the port casts it when it loads one, so it can be set
 per kind of text. In Options, Display page: Text Shadow (the message text), Symbol Shadow (the button symbols),

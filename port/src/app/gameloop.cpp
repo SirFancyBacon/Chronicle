@@ -1167,6 +1167,7 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
         // check_now_loading pumps the clock while the loading screen runs.
         while (check_now_loading() == 0) {
         }
+        HandOverLoadingCard();
         GameLoadTraceCheckpoint("loading_card_done");
 
         MGInitVSyncCallBack(PlayTimeCount);
@@ -1243,6 +1244,7 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
                 break;
             }
         } while (result == 0);
+        EndAreaCardOverGame();
 
         MGBeginFrame();
         MGEndFrame();

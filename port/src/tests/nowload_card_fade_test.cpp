@@ -1,42 +1,56 @@
 #include <gtest/gtest.h>
 
+#include <limits>
+
 #include "nowload.hpp"
 
 namespace dc::test {
 
 using dc::game::AreaCardAlpha;
 
-// The area card fades for retail's ticks: eased in over 128, held for 120 and eased out over 128. Clear at both ends,
-// half way through each fade at half, never brighter than full, and moving smoothly both ways, slowest at the fades'
-// ends. (How long the loading screen then stays up is the tick loop's, which no test reaches.)
-TEST(NowLoadCardFade, EasesInHoldsAndEasesOutForRetailsTicks) {
-    constexpr double in = 128.0;
-    constexpr double held = in + 120.0;
-    constexpr double out = held + 128.0;
-    EXPECT_EQ(AreaCardAlpha(0.0), 0);
-    EXPECT_EQ(AreaCardAlpha(in / 2), 0x40);
-    EXPECT_EQ(AreaCardAlpha(in), 0x80);
-    EXPECT_EQ(AreaCardAlpha(180.0), 0x80);
-    EXPECT_EQ(AreaCardAlpha(held - 0.5), 0x80);
-    EXPECT_EQ(AreaCardAlpha((held + out) / 2), 0x40);
-    EXPECT_EQ(AreaCardAlpha(out), 0);
-    EXPECT_EQ(AreaCardAlpha(600.0), 0);
-    EXPECT_LE(AreaCardAlpha(in / 12), 3); // eased: 2% a twelfth of the way in, not the 8% a straight fade would be
-    EXPECT_LE(AreaCardAlpha(out - 128.0 / 12), 3);
+namespace {
+
+constexpr double kLoading = std::numeric_limits<double>::infinity();
+
+} // namespace
+
+// The area card, the owner's choice of 2026-11-15: eased in over 1.25 seconds, and gone 5 seconds after it showed when the area loaded in time,
+// eased out over its last 1.25. Clear at both ends, half way through each fade at half, and moving smoothly both ways.
+TEST(NowLoadCardFade, EasesInAndIsGoneFiveSecondsAfterItShowed) {
+    constexpr double loaded = 0.5;
+    EXPECT_EQ(AreaCardAlpha(0.0, loaded), 0);
+    EXPECT_EQ(AreaCardAlpha(0.625, loaded), 0x40);
+    EXPECT_EQ(AreaCardAlpha(1.25, loaded), 0x80);
+    EXPECT_EQ(AreaCardAlpha(3.7, loaded), 0x80);
+    EXPECT_EQ(AreaCardAlpha(4.375, loaded), 0x40);
+    EXPECT_EQ(AreaCardAlpha(5.0, loaded), 0);
+    EXPECT_EQ(AreaCardAlpha(9.0, loaded), 0);
+    EXPECT_LE(AreaCardAlpha(1.25 / 12, loaded), 3); // eased: 2% a twelfth of the way in, not the 8% a straight fade would be
     int last = 0;
-    for (double t = 0.0; t <= in; t += 0.25) {
-        const int alpha = AreaCardAlpha(t);
+    for (double t = 0.0; t <= 1.25; t += 0.005) {
+        const int alpha = AreaCardAlpha(t, loaded);
         EXPECT_GE(alpha, last) << t;
         EXPECT_LE(alpha - last, 1) << t;
         last = alpha;
     }
-    for (double t = held; t <= out; t += 0.25) {
-        const int alpha = AreaCardAlpha(t);
+    for (double t = 3.75; t <= 5.0; t += 0.005) {
+        const int alpha = AreaCardAlpha(t, loaded);
         EXPECT_LE(alpha, last) << t;
         EXPECT_LE(last - alpha, 1) << t;
         last = alpha;
     }
     EXPECT_EQ(last, 0);
+}
+
+// While the area is still loading the card holds, however long; once it has loaded late, it eases out over 1.25 seconds from then.
+TEST(NowLoadCardFade, HoldsWhileLoadingAndEasesOutAfterALateLoad) {
+    EXPECT_EQ(AreaCardAlpha(4.5, kLoading), 0x80);
+    EXPECT_EQ(AreaCardAlpha(30.0, kLoading), 0x80);
+    EXPECT_EQ(AreaCardAlpha(7.0, 7.0), 0x80);
+    EXPECT_EQ(AreaCardAlpha(7.625, 7.0), 0x40);
+    EXPECT_EQ(AreaCardAlpha(8.25, 7.0), 0);
+    // Loaded before it had even eased in, it still eases in before it eases out.
+    EXPECT_EQ(AreaCardAlpha(0.625, 0.1), 0x40);
 }
 
 } // namespace dc::test

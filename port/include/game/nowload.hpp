@@ -108,10 +108,28 @@ extern int now_loding_off;
 extern int now_loading_vsync_end;
 
 /**
- * The area name card's opacity (0 to 0x80) a number of ticks, fractions included, after the loading screen started
- * showing it: eased in over retail's 128 ticks, held for its 120 and eased out over 128 (6.3 seconds at 60 a second),
- * after which the loading screen ends. The boot logos keep retail's timing.
+ * The area name card's opacity (0 to 0x80) a number of seconds after it first showed, the area having loaded `loaded` seconds after
+ * (infinity while it's still loading). Eased in over 1.25 seconds, held, and eased out over 1.25 so as to be gone 5 seconds after it showed,
+ * or 1.25 after the area loaded when that's later: the owner's choice of 2026-11-15, a town showing behind its card once loaded rather than
+ * waiting out retail's 6.3 seconds of black. A dungeon's card runs its 5 seconds on the loading screen (its floor select draws the frame
+ * before as its backdrop, which would keep the card). The boot logos keep retail's timing.
  */
-unsigned char AreaCardAlpha(double ticks);
+unsigned char AreaCardAlpha(double seconds, double loaded);
+
+/**
+ * Called once the game has loaded the area the card names: a town takes over, coming out of black behind the card, which stays until its
+ * time is up (AreaCardAlpha). Nothing when no town's card is up.
+ */
+void HandOverLoadingCard();
+
+/**
+ * Draws the area card over the game's own frame, with the black it fades out of, while either is still up after HandOverLoadingCard.
+ */
+void DrawAreaCardOverGame();
+
+/**
+ * Ends the area card over the game, the town it named having ended (its mode loop left).
+ */
+void EndAreaCardOverGame();
 
 } // namespace dc::game

@@ -23,6 +23,7 @@
 #include "dataset.hpp"
 #include "frame.hpp"
 #include "mathutil.hpp"
+#include "nowload.hpp"
 #include "platform/clock.hpp"
 #include "platform/hitches.hpp"
 #include "rect.hpp"
@@ -34,9 +35,9 @@
 #include "render/types.hpp"
 #include "renderinfo.hpp"
 #include "text/caption_text.hpp"
-#include "ui/framework/buttons.hpp"
 #include "text/textwipe.hpp"
 #include "texture.hpp"
+#include "ui/framework/buttons.hpp"
 #include "vu0_ops.hpp"
 
 namespace dc::game {
@@ -447,6 +448,9 @@ void MGEndFrame() {
     platform::HitchTickWorkEnds();
     if (!render::KazarovDraws()) {
         render::MirrorSetTarget(render::kMainTarget);
+    }
+    DrawAreaCardOverGame();
+    if (!render::KazarovDraws()) {
         app::GameDrawFps();
     }
     static const bool                        trace_phases = std::getenv("DC_PERF_END_FRAME") != nullptr;

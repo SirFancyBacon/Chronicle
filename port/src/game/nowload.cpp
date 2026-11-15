@@ -1,4 +1,5 @@
 #include "common.h"
+#include "dungeon.h"
 #include "language.h"
 
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <print>
@@ -19,6 +21,7 @@
 #include "app/presentation.hpp"
 #include "data/data_read.hpp"
 #include "dataread.hpp"
+#include "editmapscript.hpp"
 #include "localize/localize_texture.hpp"
 #include "mainselect.hpp"
 #include "mglib.hpp"
@@ -26,6 +29,7 @@
 #include "platform/clock.hpp"
 #include "rect.hpp"
 #include "render/gs_state.hpp"
+#include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
 #include "render/texture_registry.hpp"
 #include "render/types.hpp"
@@ -64,31 +68,39 @@ constexpr std::size_t kArchiveBytes = 320000 + 2048;
 
 int hold_count;
 
-// The area card fades in, holds and fades out for retail's ticks (128 a fade and 120 held), each fade eased and its
-// opacity taken at each display frame rather than stepped tick by tick.
-constexpr double kCardIn = 128.0;
-constexpr double kCardHold = 120.0;
-constexpr double kCardOut = 128.0;
+// The area card, in seconds (AreaCardAlpha): eased in, held, and eased out to be gone 5 seconds after it showed. Its opacity is taken at each
+// display frame rather than stepped tick by tick. Once the area has loaded, the black behind it fades to the game.
+constexpr double kCardIn = 1.25;
+constexpr double kCardOut = 1.25;
+constexpr double kCardTotal = 5.0;
+constexpr double kBlackOut = 0.75;
 
-// The game's ticks the card has been showing for, and when the first was: the end is counted in ticks, the opacity
-// drawn from the clock, so the fades are as smooth as the display's frames are many.
+// The game's ticks the card has been showing for, and when the first was.
 int                                                card_ticks = 0;
 std::optional<std::chrono::steady_clock::time_point> card_since;
+// Seconds after the card showed that the area had loaded, and whether the card is still drawn over the game's frames since.
+double loaded_after = std::numeric_limits<double>::infinity();
+bool   card_over_game = false;
+// Drawn over the game, the card's black ground is clear: on the loading screen it was black on black.
+bool card_black_clear = false;
+
+double CardSeconds() {
+    return card_since ? std::chrono::duration<double>(std::chrono::steady_clock::now() - *card_since).count() : 0.0;
+}
 
 } // namespace
 
-u_char AreaCardAlpha(double ticks) {
+u_char AreaCardAlpha(double seconds, double loaded) {
     const auto eased = [](double t) {
         t = std::clamp(t, 0.0, 1.0);
         return t * t * (3 - 2 * t);
     };
-    double opacity = 0.0;
-    if (ticks < kCardIn) {
-        opacity = eased(ticks / kCardIn);
-    } else if (ticks < kCardIn + kCardHold) {
-        opacity = 1.0;
+    const double out_from = std::max(kCardTotal - kCardOut, loaded);
+    double       opacity = 0.0;
+    if (seconds < out_from) {
+        opacity = eased(seconds / kCardIn);
     } else {
-        opacity = eased(1.0 - (ticks - kCardIn - kCardHold) / kCardOut);
+        opacity = std::min(eased(seconds / kCardIn), eased(1.0 - (seconds - out_from) / kCardOut));
     }
     return static_cast<u_char>(std::lround(opacity * 0x80));
 }
@@ -98,6 +110,17 @@ namespace {
 // Whether the area card is shown the smooth way: --fast-load keeps its few ticks.
 bool SmoothCard() {
     return map_title_no != 0x321 && !GameFastLoad();
+}
+
+// A town's card stays up over the town once it's loaded. A dungeon's doesn't: its floor select draws the frame before as its backdrop, which
+// would keep the card in it, so the card runs its time on the loading screen, as retail's did, only shorter.
+bool CardOverGame() {
+    return SmoothCard() && map_title_no >= 0 && map_title_no < DUNGEON_MAP_BASE;
+}
+
+// When the card may start to ease out: a dungeon's runs its five seconds whatever the load, a town's waits for the town (AreaCardAlpha).
+double CardLoadedAfter() {
+    return CardOverGame() ? loaded_after : 0.0;
 }
 
 // The sprite the last vertical sync would have sent; the idle hook draws it.
@@ -218,6 +241,8 @@ void Upload(CTexture *texture) {
 void DrawCardSprite(PortTextureRef ref, bool with_lettering) {
     // TEX1 MMAG is setbilinear's switch, which is on unless a mode turns it off.
     ref.binding.filter = render::Filter::Linear;
+    // The picture's alpha is full over its black ground; taken as missing, black is clear (DrawState::texa_aem).
+    ref.binding.ignore_alpha = ref.binding.ignore_alpha || card_black_clear;
     const CRect_i_ &screen = sprite.screen;
     const CRect_i_ &texel = sprite.texel;
     float           x0 = MGPortLogicalX((screen.x << 4) + 27648);
@@ -243,6 +268,25 @@ void DrawCardSprite(PortTextureRef ref, bool with_lettering) {
         texel.width == static_cast<int>(sprite.texture->width) && texel.height == static_cast<int>(sprite.texture->height)) {
         area_card::Draw(x0, y0, x1, y1, static_cast<float>(sprite.alpha) / 128.0f);
     }
+}
+
+// The black the town comes out of, over the whole frame, drawn with its own state: at a frame's end, the game's registers hold whatever it
+// drew last.
+void DrawBlack(u_char alpha) {
+    const float x0 = MGPortLogicalX(27648);
+    const float x1 = MGPortLogicalX(27648 + (640 << 4));
+    const float y0 = MGPortLogicalY(GS_Y_OFFSET);
+    const float y1 = MGPortLogicalY(GS_Y_OFFSET + (480 << 3));
+    const auto  corner = [&](float x, float y) {
+        return render::Vertex2D{
+            .x = x, .y = y, .z = 0.0f, .u = 0.0f, .v = 0.0f, .color = {0, 0, 0, alpha}
+        };
+    };
+    render::Vertex2D  quad[4] = {corner(x0, y0), corner(x1, y0), corner(x1, y1), corner(x0, y1)};
+    render::DrawState state;
+    state.blend = true;
+    state.alpha = render::GsBlend{.a = 0, .b = 1, .c = 0, .d = 1, .fix = 0};
+    render::Draw2D(render::Primitive::Quads, quad, {}, state);
 }
 
 void DrawSprite() {
@@ -273,9 +317,7 @@ void PresentLoadingFrame() {
         render::Clear(true, black, true, 0.0f);
         if (sprite.visible) {
             if (SmoothCard() && card_since.has_value()) {
-                // Between the ticks too, never past the tick's own: the card ends on the ticks' count.
-                const double since = std::chrono::duration<double>(std::chrono::steady_clock::now() - *card_since).count();
-                sprite.alpha = AreaCardAlpha(std::min(since * ClockTickRate(), static_cast<double>(card_ticks)));
+                sprite.alpha = AreaCardAlpha(CardSeconds(), CardLoadedAfter());
             }
             DrawSprite();
         }
@@ -290,10 +332,60 @@ void PresentLoadingFrame() {
 } // namespace
 
 int check_now_loading() {
+    // A town's card doesn't hold the game: it loads on, and starts with the card still up (HandOverLoadingCard).
+    if (end_flag == 0 && CardOverGame()) {
+        return 1;
+    }
     if (end_flag == 0) {
         ClockSyncV();
     }
     return end_flag;
+}
+
+void HandOverLoadingCard() {
+    if (end_flag != 0 || !CardOverGame()) {
+        return;
+    }
+    if (!card_since) {
+        card_since = std::chrono::steady_clock::now();
+    }
+    loaded_after = CardSeconds();
+    card_over_game = true;
+    end_flag = 1;
+    now_loading_vsync_end = 1;
+    ClockSetIdleHook(nullptr);
+}
+
+void EndAreaCardOverGame() {
+    card_over_game = false;
+}
+
+void DrawAreaCardOverGame() {
+    if (!card_over_game) {
+        return;
+    }
+    // A menu or Georama's editing taking the screen ends it at once: some of them draw the frame before as their backdrop, which would keep it.
+    if (GameMode >= ED_MODE_GEORAMA && GameMode <= ED_MODE_MAP_JUMP && GameMode != ED_MODE_DOOR_OPEN) {
+        card_over_game = false;
+        return;
+    }
+    const double seconds = CardSeconds();
+    const double black = 1.0 - std::clamp((seconds - loaded_after) / kBlackOut, 0.0, 1.0);
+    if (black <= 0.0 && seconds >= std::max(kCardTotal - kCardOut, loaded_after) + kCardOut) {
+        card_over_game = false;
+        return;
+    }
+    if (black > 0.0) {
+        render::PassScope pass(render::Pass::Fade);
+        DrawBlack(static_cast<u_char>(std::lround(black * 0x80)));
+    }
+    // On top of everything the game drew, menus too (the dungeons' floor select comes up behind it).
+    render::PassScope    pass(render::Pass::Menu);
+    render::Layer2DScope layer(render::Layer2D::Ui);
+    Show(&nl_tex, CRect_i_(0x80, 0xA0, 0x180, 0x80), CRect_i_(0, 0, 0x180, 0x80), AreaCardAlpha(seconds, loaded_after));
+    card_black_clear = true;
+    DrawSprite();
+    card_black_clear = false;
 }
 
 void clear_now_loading_vsync_end() {
@@ -326,6 +418,7 @@ void init_now_loading(int title_number) {
         return;
     }
 
+    card_over_game = false; // before its texture goes
     PortReleaseOwner(PortTextureOwner::Loading);
     painted_tbp = painted_cbp = 0;
     area_card::Clear();
@@ -385,6 +478,7 @@ void init_now_loading(int title_number) {
     logo_count = 0;
     card_ticks = 0;
     card_since.reset();
+    loaded_after = std::numeric_limits<double>::infinity();
     end_flag = 0;
     now_loading_vsync_end = 1;
     MGInitVSyncCallBack(VSyncCallBack_Load);
@@ -453,9 +547,9 @@ int VSyncCallBack_Load(int /*field*/) {
             if (card_ticks++ == 0) {
                 card_since = std::chrono::steady_clock::now();
             }
-            const double ticks = static_cast<double>(card_ticks - 1);
-            Show(&nl_tex, CRect_i_(0x80, 0xA0, 0x180, 0x80), CRect_i_(0, 0, 0x180, 0x80), AreaCardAlpha(ticks));
-            if (ticks >= kCardIn + kCardHold + kCardOut) {
+            // A town's: up until the game takes over (HandOverLoadingCard), however long the town takes to load. A dungeon's: its five seconds.
+            Show(&nl_tex, CRect_i_(0x80, 0xA0, 0x180, 0x80), CRect_i_(0, 0, 0x180, 0x80), AreaCardAlpha(CardSeconds(), CardLoadedAfter()));
+            if (!CardOverGame() && CardSeconds() >= kCardTotal) {
                 end_flag = 1;
             }
         } else {
