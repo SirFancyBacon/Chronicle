@@ -89,6 +89,10 @@ void SetSunShadows(float distance);
  * sun or moon, a dungeon's or an interior's main light), unless DC_NOKTUS_SHADOWS=0. Past the sun's shadow distance there are then none: the game's far shadows go too. */
 bool SunShadows();
 
+/** The way the sun's light falls for its shadows (never lower than they're cast from) and how far from the eye they reach, as this tick gave them,
+ * or the tick before while this one's isn't known yet: false with no sun (SunShadows). */
+bool SunFalling(float falling[3], float *distance);
+
 /** Whether point lights reach the meshes drawn from here on: off around surfaces whose light is painted in, as an interior's map is, so they aren't
  * lit twice (step 7's decision 1). On unless switched off. */
 void SetPointLit(bool on);

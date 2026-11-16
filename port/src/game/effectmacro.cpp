@@ -448,11 +448,30 @@ LowHaze PrepareLowHaze(render::TextureHandle snapshot, const render::LogicalRect
 // wobble starts at the front of the near focus band and ends beyond the far focus plane, with
 // planes spaced in 1/z, so foreground objects stay stable while the distant scenery gains haze
 // gradually. The two outermost columns do not wander past the edges of the image.
+namespace {
+
+// The modern depth of field's mix, of the game's alpha, and how much further than the game's its focus planes stand (see DepthOfField).
+constexpr float kFocusStrength = 0.6f;
+constexpr float kFocusFurther = 1.5f;
+
+// A scale from the environment, for tuning by eye: 1 unless it's set to a number, never below 0.
+float FocusTuned(const char *name) {
+    const char *asked = std::getenv(name);
+    if (asked == nullptr) {
+        return 1.0f;
+    }
+    char       *end = nullptr;
+    const float wanted = std::strtof(asked, &end);
+    return end != asked && *end == '\0' && std::isfinite(wanted) ? std::max(wanted, 0.0f) : 1.0f;
+}
+
+} // namespace
+
 void DepthOfField(float *focus, int level, int alpha, int blur) {
     render::PassScope pass(render::Pass::DepthOfField);
     render::StepScope step(blur > 0 ? render::Step::Haze : render::Step::DepthOfField);
     // Drawn by the renderer from the scene's depth, in place of the layered copies below, with the game's own settings: the blur beyond each focus plane
-    // over the bands its planes span (30 and 20), mixed in a tenth less than its alpha (of 128) mixes each, the far laid over the near, and spread as far as
+    // over the bands its planes span (30 and 20), mixed in at a share of its alpha (of 128) for each, the far laid over the near, and spread as far as
     // the game's half- and quarter-size copies spread at its 480 lines, about one line and two, the same share of the picture at any size; or the haze
     // over the range the copies below give it. The game's wobble, up to blur sixteenths of a pixel,
     // moved narrow columns mixed by distance and read as a shimmer; bending the whole picture that far swirls it, so the bend is about a pixel and a
@@ -461,7 +480,12 @@ void DepthOfField(float *focus, int level, int alpha, int blur) {
         render::FocusSettings settings;
         // A tenth less than the game mixes in: the PS2's blur also hid how short its view was, and a cleaner distance reads better on a sharp
         // screen. The owner's choice of 2026-11-12.
-        const float strength = 0.9f * std::clamp(static_cast<float>(alpha) / 128.0f, 0.0f, 1.0f);
+        // Then, after the owner's look on 2026-11-16 (the blur too near and too strong far off): the focus planes half as far again, and each mixed
+        // in at two thirds of that. DC_NOKTUS_FOCUS_DISTANCE and DC_NOKTUS_FOCUS scale the two, for tuning by eye.
+        static const float tuned_strength = FocusTuned("DC_NOKTUS_FOCUS");
+        static const float tuned_distance = FocusTuned("DC_NOKTUS_FOCUS_DISTANCE");
+        const float        strength = kFocusStrength * tuned_strength * std::clamp(static_cast<float>(alpha) / 128.0f, 0.0f, 1.0f);
+        const float        further = kFocusFurther * tuned_distance;
         // The Options screen's Soft Focus turns this depth of field on and off as a whole, wherever the game draws it (retail's Off dropped only the
         // far plane, leaving the near). The haze isn't soft focus and stays. The owner's choice of 2026-11-12.
         if (blur <= 0 && !options::SoftFocusOn(SaveData)) {
@@ -479,12 +503,12 @@ void DepthOfField(float *focus, int level, int alpha, int blur) {
                 settings.haze_start = settings.haze_end = 0.0f;
             }
         } else {
-            settings.near = focus[0];
+            settings.near = focus[0] * further;
             settings.near_band = 30.0f;
             settings.near_blur = strength;
             settings.near_spread = 1.0f / static_cast<float>(SCREEN_HEIGHT);
             if (level >= 2) {
-                settings.far = focus[1];
+                settings.far = focus[1] * further;
                 settings.far_band = 20.0f;
                 settings.far_blur = strength;
                 settings.far_spread = 2.0f / static_cast<float>(SCREEN_HEIGHT);

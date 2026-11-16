@@ -155,6 +155,8 @@ struct Mirror {
     std::optional<noktus::Vec3>                                                     sun;                 // its direction, once the first lit draw of the world has given it
     bool                                                                            linear_ended = false; // EndLinearLight was asked this tick: a glow given after it would come too late for bloom
     bool                                                                            sun_before = false;  // the tick before had a sun: the game's shadows stay given way
+    std::optional<noktus::Vec3>                                                     sun_falling_before;  // the way the tick before's sun's shadows fell (SunFalling)
+    float                                                                           sun_distance_before = 0.0f; // and how far they reached
     std::optional<noktus::Pass>                              pass;
     bool                                                     on_screen = true;
     std::uint64_t                                            drawn = 0;
@@ -828,6 +830,13 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
         // every floor in shade, so there only what stands and moves casts (characters, monsters, moving parts), onto the map.
         draw.casts_shadow = of_the_world && (g_outdoors || mirror.pass != noktus::Pass::Ground);
     }
+    // Out of view, given only for its shadow: nothing at all where it wouldn't cast one.
+    if (ShadowOnly()) {
+        if (!draw.casts_shadow) {
+            return false;
+        }
+        draw.shadow_only = true;
+    }
     draw.point_lit = g_point_lit;
     draw.key = mirror.key;
     draw.still = mirror.still;
@@ -1036,6 +1045,29 @@ void SetSunShadows(float distance) {
     if (mirror.open) {
         mirror.sun_distance = distance;
     }
+}
+
+bool SunFalling(float falling[3], float *distance) {
+    if (!ModernLight() || !ShadowsWanted()) {
+        return false;
+    }
+    Mirror                     &mirror = State();
+    std::scoped_lock            guard(mirror.lock);
+    std::optional<noktus::Vec3> way = mirror.sun_falling_before;
+    float                       reach = mirror.sun_distance_before;
+    if (mirror.sun) {
+        way = ShadowsFallingFrom(*mirror.sun);
+        reach = mirror.sun_distance;
+    }
+    const float length = way ? std::sqrt(way->x * way->x + way->y * way->y + way->z * way->z) : 0.0f;
+    if (!(length > 1e-6f) || !(reach > 0.0f)) {
+        return false;
+    }
+    falling[0] = way->x / length;
+    falling[1] = way->y / length;
+    falling[2] = way->z / length;
+    *distance = reach;
+    return true;
 }
 
 bool SunShadows() {
@@ -1508,6 +1540,11 @@ void MirrorEndTick() {
         mirror.contacts_waiting.clear();
         mirror.contact_keys.clear();
         mirror.world_camera.reset();
+        mirror.sun_falling_before.reset();
+        if (mirror.sun) {
+            mirror.sun_falling_before = ShadowsFallingFrom(*mirror.sun);
+        }
+        mirror.sun_distance_before = mirror.sun_distance;
         mirror.sun_distance = 0.0f;
         mirror.linear_ended = false;
         mirror.sun_before = mirror.sun.has_value();

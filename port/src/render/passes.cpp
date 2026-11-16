@@ -187,6 +187,7 @@ bool Refracting() {
 
 namespace {
 bool g_river_water = false;
+bool g_shadow_only = false;
 } // namespace
 
 RiverWaterScope::RiverWaterScope(bool on) : previous_(std::exchange(g_river_water, on)) {}
@@ -197,6 +198,16 @@ RiverWaterScope::~RiverWaterScope() {
 
 bool RiverWater() {
     return g_river_water;
+}
+
+ShadowOnlyScope::ShadowOnlyScope(bool on) : previous_(std::exchange(g_shadow_only, on)) {}
+
+ShadowOnlyScope::~ShadowOnlyScope() {
+    g_shadow_only = previous_;
+}
+
+bool ShadowOnly() {
+    return g_shadow_only;
 }
 
 Layer2DScope::~Layer2DScope() {

@@ -163,6 +163,24 @@ private:
 /** Whether the meshes drawn now are rivers or lakes (RiverWaterScope). */
 bool RiverWater();
 
+/**
+ * The meshes drawn inside it stand out of view, and are given only as the sun's casters (noktus::MeshDraw::shadow_only), never seen: their shadow
+ * falls into view (CastsIntoView in frame.cpp). One that wouldn't cast isn't given at all. Off, it leaves what's drawn inside it as it is.
+ */
+class ShadowOnlyScope {
+public:
+    explicit ShadowOnlyScope(bool on = true);
+    ~ShadowOnlyScope();
+    ShadowOnlyScope(const ShadowOnlyScope &) = delete;
+    ShadowOnlyScope &operator=(const ShadowOnlyScope &) = delete;
+
+private:
+    bool previous_;
+};
+
+/** Whether the meshes drawn now are the sun's casters alone (ShadowOnlyScope). */
+bool ShadowOnly();
+
 /** Counts a draw or copy against the current pass while a trace runs. */
 void CountDraw();
 void CountCopy();

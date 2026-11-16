@@ -22,19 +22,23 @@ constexpr float kBrightness = 104.0f / 128.0f;
 constexpr float kMatchDistance = 15.0f;
 constexpr float kRange = 80.0f;
 constexpr float kSize = 3.0f; // the flame's own size: nearer, no brighter
+// A town's fire (and the opening's) lights nothing brighter than it lit at the distance it was matched at, the game's full light for a character: nearer, at the flame's
+// size, a lamp by a door lit the wall and Toan's poncho beside it many times past white, a flat blown-out orange (the owner's report, 2026-11-16).
+// Further off, as before.
+constexpr float kTownSize = kMatchDistance;
 // A fire's light is warm, as a torch's is, about 2700 K, at the luminance the game's grey light had: where the game lit a character grey, a
 // fire's light now colours what it lights as its flame looks.
 constexpr float kWarm[3] = {1.987f, 0.788f, 0.189f};
 
-// A scale from the environment, for tuning by eye: 1 unless it's set to a number, never below 0.
-float ScaleFrom(const char *name) {
+// A scale from the environment, for tuning by eye: the default unless it's set to a number, never below 0.
+float ScaleFrom(const char *name, float otherwise = 1.0f) {
     const char *asked = std::getenv(name);
     if (asked == nullptr) {
-        return 1.0f;
+        return otherwise;
     }
     char       *end = nullptr;
     const float wanted = std::strtof(asked, &end);
-    return end != asked && *end == '\0' && std::isfinite(wanted) ? std::max(wanted, 0.0f) : 1.0f;
+    return end != asked && *end == '\0' && std::isfinite(wanted) ? std::max(wanted, 0.0f) : otherwise;
 }
 
 float FireScale() {
@@ -109,6 +113,14 @@ void GiveFlameLight(std::uint64_t key, const float *flame, float share, float ra
 // its width, hiding the flame and its lamp (the owner's look, 2026-11-16).
 constexpr float kGlowShare = 0.2f;
 constexpr float kGlowLight = 1.5f;
+// The glow's colour: the fire's light paled this share of the way to white of its brightness. At the light's own warmth a glow read as a deep orange
+// disc, too saturated for the bright heart of a flame (the owner's look, 2026-11-16). DC_NOKTUS_GLOW_PALE sets the share, 0 to 1, for tuning by eye.
+constexpr float kGlowPale = 0.4f;
+
+float GlowPale() {
+    static const float pale = std::min(ScaleFrom("DC_NOKTUS_GLOW_PALE", kGlowPale), 1.0f);
+    return pale;
+}
 int             g_halo_as_glow = 0;
 
 } // namespace
@@ -126,16 +138,22 @@ bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_th
         return false;
     }
     const float light = kGlowLight * FireScale() * GlowScale();
+    // White of the warm light's own brightness (its luminance, by Rec. 709's weights), so paling doesn't brighten it.
+    const float brightness = 0.2126f * kWarm[0] + 0.7152f * kWarm[1] + 0.0722f * kWarm[2];
+    float       colour[3];
+    for (int c = 0; c < 3; c++) {
+        colour[c] = light * (kWarm[c] + (brightness - kWarm[c]) * GlowPale());
+    }
     return render::AddGlow({
-        .position = {middle[0],        middle[1],        middle[2]       },
-        .color = {light * kWarm[0], light * kWarm[1], light * kWarm[2]},
+        .position = {middle[0], middle[1], middle[2]},
+        .color = {colour[0], colour[1], colour[2]},
         .size = 45.0f * scale * flicker * kGlowShare,
         .seen_through = seen_through
     });
 }
 
 void GiveFireLight(std::uint64_t key, const float *flame) {
-    GiveFlameLight(key, flame, 1.0f, kRange, kSize);
+    GiveFlameLight(key, flame, 1.0f, kRange, kTownSize);
 }
 
 void GiveDungeonFireLight(std::uint64_t key, const float *flame) {

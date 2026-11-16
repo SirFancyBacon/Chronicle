@@ -767,6 +767,41 @@ void ShadowClipBox(sceVu0FVECTOR *screen, sceVu0FVECTOR *corner, sceVu0FMATRIX m
     ApplyMatrixN(screen, info->view_scaled, world, 8);
 }
 
+// Whether a frame the screen test culls still casts the sun's shadow into view: its box swept the way the sun's light falls, as far as the shadows
+// reach, meets the view out to that distance. Without it, what stood just off the screen took its shadow with it as the camera turned (the owner's
+// report of 2026-11-16, shadows flickering as objects were culled). In the eye's space (view_scaled's: x right, y down, z forward, z the eye's
+// distance in the world's units, as the near test and the shadows' reach take it), against the screen test's own bounds: the box's eight corners
+// there and the same eight swept, and the sweep is out of view only when all sixteen lie outside one side. Swept the whole reach, as the ground's
+// height under a frame isn't known here: more casters than need be, measured at a tenth more draws in Matataki and Queens, the GPU's time the same.
+bool CastsIntoView(const sceVu0FVECTOR *eye_corner, const RenderInfo *info, float half_width, float half_height) {
+    float falling[3];
+    float reach = 0.0f;
+    if (!render::SunFalling(falling, &reach)) {
+        return false;
+    }
+    float way[3];
+    for (int row = 0; row < 3; row++) {
+        way[row] = reach * (info->view_scaled[0][row] * falling[0] + info->view_scaled[1][row] * falling[1] + info->view_scaled[2][row] * falling[2]);
+    }
+    unsigned outside_all = 0x3F;
+    for (int i = 0; i < 16 && outside_all != 0; i++) {
+        const float *corner = eye_corner[i % 8];
+        const float  sweep = i < 8 ? 0.0f : 1.0f;
+        const float  x = corner[0] + sweep * way[0];
+        const float  y = corner[1] + sweep * way[1];
+        const float  z = corner[2] + sweep * way[2];
+        unsigned     outside = 0;
+        outside |= x > half_width * z ? 0x01u : 0u;
+        outside |= x < -half_width * z ? 0x02u : 0u;
+        outside |= y > half_height * z ? 0x04u : 0u;
+        outside |= y < -half_height * z ? 0x08u : 0u;
+        outside |= z < info->near[2] ? 0x10u : 0u;
+        outside |= z > reach ? 0x20u : 0u;
+        outside_all &= outside;
+    }
+    return outside_all == 0;
+}
+
 } // namespace
 
 // Whether the frame's bound stands taller in the world than half its narrower width across: a waterfall rather than a river's or a lake's surface.
@@ -810,6 +845,7 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
     int           near_clip = 0;
     int           far_clip = 0;
     bool          visible = true;
+    bool          shadow_only = false; // culled, but its shadow falls into view (CastsIntoView)
     sceGsTest     test = mgPixelTest;
     sceGsZbuf     zbuf = mgZBuffer;
     sceGsAlpha    alpha;
@@ -909,6 +945,10 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
                 far_clip = 8;
             }
             visible = true;
+        }
+        if (!visible && !info->shadow_pass && CastsIntoView(screen_corner, info, half_width, half_height)) {
+            visible = true;
+            shadow_only = true;
         }
     }
 
@@ -1021,6 +1061,7 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
             const render::RiverWaterScope river_water(render::RiverWater() && !Upright(*this));
             // Self-lit (the 'C' code): its own colour, the scene's light falling on it no more than the game's lights did.
             Draw3DSelfLitScope self_lit(!info->shadow_pass && attr.use_color && !attr.ambient_boost && !lit_face && !painted);
+            const render::ShadowOnlyScope only_casting(shadow_only);
             visual->DrawVu1(packet, matrix, info, VU1_PROGRAM_UNKNOWN6, nullptr, 0, 0);
         }
 
