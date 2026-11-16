@@ -31,7 +31,6 @@ enum class ConfigAntiAliasing {
     Off,
     Smaa,
     Taa,
-    SmaaT2x,
 };
 
 /**
@@ -87,7 +86,7 @@ struct Config : HostSettings {
     float             detail_distance = 0.0f;
     float             shadow_distance = 0.0f;
     int               anisotropy = 0;
-    ConfigAntiAliasing anti_aliasing = ConfigAntiAliasing::Taa;
+    ConfigAntiAliasing anti_aliasing = ConfigAntiAliasing::Smaa; /**< The cheaper of the two, the owner's choice of 2026-11-16. */
     int               supersampling = 1; /**< video.supersampling: samples a pixel, 1 (off), 2 or 4: the picture drawn larger and filtered down. */
     ConfigHdr         hdr = ConfigHdr::Off;
     int               hdr_paper_white = 0; // nits; 0 takes what the system says

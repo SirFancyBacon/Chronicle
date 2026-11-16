@@ -313,7 +313,7 @@ void SetAnisotropy(Config &config, int choice) {
     config.anisotropy = kAnisotropy[choice];
 }
 
-constexpr ConfigAntiAliasing kAntiAliasing[] = {ConfigAntiAliasing::Off, ConfigAntiAliasing::Smaa, ConfigAntiAliasing::SmaaT2x, ConfigAntiAliasing::Taa};
+constexpr ConfigAntiAliasing kAntiAliasing[] = {ConfigAntiAliasing::Off, ConfigAntiAliasing::Smaa, ConfigAntiAliasing::Taa};
 
 int AntiAliasingCount(const Config & /*config*/) {
     return static_cast<int>(std::size(kAntiAliasing));
@@ -333,10 +333,9 @@ constexpr int kSupersampling[] = {1, 2, 4};
 
 // As far as the GPU's memory has room for at the window's size, with the anti-aliasing chosen: past that, more samples run it out.
 int SupersamplingCount(const Config &config) {
-    const render::MirrorAntiAliasing anti_aliasing = config.anti_aliasing == ConfigAntiAliasing::Taa       ? render::MirrorAntiAliasing::Taa
-                                                     : config.anti_aliasing == ConfigAntiAliasing::SmaaT2x ? render::MirrorAntiAliasing::SmaaT2x
-                                                     : config.anti_aliasing == ConfigAntiAliasing::Smaa    ? render::MirrorAntiAliasing::Smaa
-                                                                                                            : render::MirrorAntiAliasing::Off;
+    const render::MirrorAntiAliasing anti_aliasing = config.anti_aliasing == ConfigAntiAliasing::Taa    ? render::MirrorAntiAliasing::Taa
+                                                     : config.anti_aliasing == ConfigAntiAliasing::Smaa ? render::MirrorAntiAliasing::Smaa
+                                                                                                        : render::MirrorAntiAliasing::Off;
     const int most = render::MirrorMostSupersampling(anti_aliasing);
     return static_cast<int>(std::ranges::find(kSupersampling, most) - std::begin(kSupersampling)) + 1;
 }
@@ -846,8 +845,8 @@ constexpr Row kDisplayRows[] = {
                "\"Anisotropic Filter\"\nSharper textures on\nsurfaces seen at a\nslant.", AnisotropyCount,
                AnisotropyChoice, SetAnisotropy, nullptr, "Off|2x|4x|8x|16x"),
     SettingRow("video.anti_aliasing", "Anti-Aliasing",
-               "\"Anti-Aliasing\"\nSmooths jagged edges.\nSMAA: each frame alone.\nT2x: two frames.\nTAA: many frames.",
-               AntiAliasingCount, AntiAliasingChoice, SetAntiAliasing, nullptr, "Off|SMAA|SMAA T2x|TAA"),
+               "\"Anti-Aliasing\"\nSmooths jagged edges.\nSMAA: each frame alone.\nTAA: many frames.",
+               AntiAliasingCount, AntiAliasingChoice, SetAntiAliasing, nullptr, "Off|SMAA|TAA"),
     SettingRow("video.supersampling", "Supersampling",
                "\"Supersampling\"\nDraws the picture larger\nand shrinks it to fit.\nSmoothest, but costly.\nAs far as GPU memory allows.",
                SupersamplingCount, SupersamplingChoice, SetSupersampling, nullptr, "Off|2x|4x"),

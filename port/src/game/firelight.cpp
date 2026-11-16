@@ -26,16 +26,25 @@ constexpr float kSize = 3.0f; // the flame's own size: nearer, no brighter
 // fire's light now colours what it lights as its flame looks.
 constexpr float kWarm[3] = {1.987f, 0.788f, 0.189f};
 
+// A scale from the environment, for tuning by eye: 1 unless it's set to a number, never below 0.
+float ScaleFrom(const char *name) {
+    const char *asked = std::getenv(name);
+    if (asked == nullptr) {
+        return 1.0f;
+    }
+    char       *end = nullptr;
+    const float wanted = std::strtof(asked, &end);
+    return end != asked && *end == '\0' && std::isfinite(wanted) ? std::max(wanted, 0.0f) : 1.0f;
+}
+
 float FireScale() {
-    static const float scale = [] {
-        const char *asked = std::getenv("DC_NOKTUS_FIRE");
-        if (asked == nullptr) {
-            return 1.0f;
-        }
-        char       *end = nullptr;
-        const float wanted = std::strtof(asked, &end);
-        return end != asked && *end == '\0' && std::isfinite(wanted) ? std::max(wanted, 0.0f) : 1.0f;
-    }();
+    static const float scale = ScaleFrom("DC_NOKTUS_FIRE");
+    return scale;
+}
+
+// DC_NOKTUS_GLOW scales the halos' glows alone, on top of DC_NOKTUS_FIRE.
+float GlowScale() {
+    static const float scale = ScaleFrom("DC_NOKTUS_GLOW");
     return scale;
 }
 
@@ -95,9 +104,11 @@ void GiveFlameLight(std::uint64_t key, const float *flame, float share, float ra
 }
 
 // A halo's glow (HaloAsGlow): as wide as the flame the game draws inside its halo (a fifth of the halo's width each side of its middle), its middle past
-// white at the light's warmth, so bloom spreads a glow from the flame itself, the light round about being the fire's own.
+// white at the light's warmth, so bloom spreads a glow from the flame itself, the light round about being the fire's own. Its light is held so that only
+// its heart, about half its width, reaches the top of what SDR shows: at twice this (the first build) it was a flat ball of white-hot orange over most of
+// its width, hiding the flame and its lamp (the owner's look, 2026-11-16).
 constexpr float kGlowShare = 0.2f;
-constexpr float kGlowLight = 3.0f;
+constexpr float kGlowLight = 1.5f;
 int             g_halo_as_glow = 0;
 
 } // namespace
@@ -114,7 +125,7 @@ bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_th
     if (g_halo_as_glow <= 0 || !render::ModernGlow() || !(scale > 0.0f)) {
         return false;
     }
-    const float light = kGlowLight * FireScale();
+    const float light = kGlowLight * FireScale() * GlowScale();
     return render::AddGlow({
         .position = {middle[0],        middle[1],        middle[2]       },
         .color = {light * kWarm[0], light * kWarm[1], light * kWarm[2]},

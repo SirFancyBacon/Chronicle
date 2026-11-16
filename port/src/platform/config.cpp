@@ -162,12 +162,10 @@ bool ReadAntiAliasing(const Json &value, ConfigAntiAliasing &out) {
     const std::string mode = Lower(value.get<std::string>());
     if (mode == "off") {
         out = ConfigAntiAliasing::Off;
-    } else if (mode == "smaa") {
+    } else if (mode == "smaa" || mode == "smaa_t2x") { // SMAA T2x, dropped 2026-11-16, read as SMAA alone
         out = ConfigAntiAliasing::Smaa;
     } else if (mode == "taa") {
         out = ConfigAntiAliasing::Taa;
-    } else if (mode == "smaa_t2x") {
-        out = ConfigAntiAliasing::SmaaT2x;
     } else {
         return false;
     }
@@ -180,8 +178,6 @@ const char *AntiAliasingName(ConfigAntiAliasing mode) {
             return "smaa";
         case ConfigAntiAliasing::Taa:
             return "taa";
-        case ConfigAntiAliasing::SmaaT2x:
-            return "smaa_t2x";
         case ConfigAntiAliasing::Off:
             break;
     }

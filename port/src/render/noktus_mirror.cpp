@@ -489,7 +489,7 @@ bool PlanarReflections(const MirrorSettings &settings) {
 }
 
 bool Temporal(MirrorAntiAliasing mode) {
-    return mode == MirrorAntiAliasing::Taa || mode == MirrorAntiAliasing::SmaaT2x;
+    return mode == MirrorAntiAliasing::Taa;
 }
 
 // The supersampling asked for, held to what the GPU's memory has room for at the window's size. That's worked out again when the window changes size
@@ -544,15 +544,12 @@ noktus::AntiAliasing ToAntiAliasing(MirrorAntiAliasing mode) {
     if (const char *forced = std::getenv("DC_NOKTUS_ANTI_ALIASING")) {
         std::string asked = forced;
         std::ranges::transform(asked, asked.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        mode = asked == "taa" ? MirrorAntiAliasing::Taa : asked == "smaa"   ? MirrorAntiAliasing::Smaa
-                                                      : asked == "smaa_t2x" ? MirrorAntiAliasing::SmaaT2x
-                                                                            : MirrorAntiAliasing::Off;
+        mode = asked == "taa" ? MirrorAntiAliasing::Taa : asked == "smaa" ? MirrorAntiAliasing::Smaa
+                                                                          : MirrorAntiAliasing::Off;
     }
     switch (mode) {
         case MirrorAntiAliasing::Smaa:
             return noktus::AntiAliasing::Smaa;
-        case MirrorAntiAliasing::SmaaT2x:
-            return noktus::AntiAliasing::SmaaT2x;
         case MirrorAntiAliasing::Taa:
             return noktus::AntiAliasing::Taa;
         case MirrorAntiAliasing::Off:

@@ -10,7 +10,7 @@ namespace {
 // the effects' own pictures): the rise from no supersampling (1515 MB) to 2x (2993 MB), over the pixels that added, with surfaces' depth made only
 // when needed.
 constexpr double kBytesPerPixel = 170.0;
-// TAA and SMAA T2x keep frames as well: SMAA T2x, the more, added 36 bytes a pixel.
+// TAA keeps frames as well: measured with SMAA T2x (since dropped), which kept more, at 36 bytes a pixel added, kept as TAA's bound.
 constexpr double kTemporalBytesPerPixel = 206.0;
 // Headroom for what doesn't grow with the picture: textures, meshes, what the driver keeps and the room in VMA's blocks, measured at a few tens of MB,
 // and a town's or a dungeon's more.
