@@ -85,13 +85,36 @@ bool AddGlow(const GlowGiven &glow);
  * draws cast, and the game's own shadows give way (SunShadows). Nothing without modern light or with DC_NOKTUS_SHADOWS=0. */
 void SetSunShadows(float distance);
 
-/** Whether real shadows from the sun stand in for the game's own: with modern light, outdoors in a town where a sun was given this tick or the one
- * before, unless DC_NOKTUS_SHADOWS=0. Past the sun's shadow distance there are then none: the game's far shadows go too. */
+/** Whether real shadows from the sun stand in for the game's own: with modern light, where a sun was given this tick or the one before (a town's
+ * sun or moon, a dungeon's or an interior's main light), unless DC_NOKTUS_SHADOWS=0. Past the sun's shadow distance there are then none: the game's far shadows go too. */
 bool SunShadows();
 
 /** Whether point lights reach the meshes drawn from here on: off around surfaces whose light is painted in, as an interior's map is, so they aren't
  * lit twice (step 7's decision 1). On unless switched off. */
 void SetPointLit(bool on);
+
+/** Whether the self-lit map drawn from here on (its frames named 'C', showing their painted colour whatever the light) is lit by the scene's main
+ * light instead, with modern light (the owner's decision of 2026-11-16): a dungeon's map, so real shadows fall on it. Off unless switched on. */
+void SetPaintedLit(bool on);
+
+/** Whether self-lit map frames drawn now are lit (SetPaintedLit), with modern light. */
+bool PaintedLit();
+
+/** A soft darkening on the ground under something standing there: see AddContactShadow. */
+struct ContactShadowGiven {
+    std::uint64_t key = 0;          // who this is from tick to tick, so it moves between ticks: 0 for none
+    float         position[3] = {}; // where it stands on the ground
+    float         radius = 1.0f;    // how far round it reaches along the ground
+    float         strength = 0.5f;  // the share of the light it takes right under it
+};
+
+/** A character's contact shadow at its scale 1, Toan standing about 14 units tall: its reach along the ground, and its strength right under it. */
+inline constexpr float kCharacterContactRadius = 9.0f;
+inline constexpr float kCharacterContactStrength = 0.7f;
+
+/** Adds a contact shadow under a character to this tick's scene (the owner's decision of 2026-11-16), with modern light; nothing otherwise. The
+ * world's up is y. */
+void AddContactShadow(const ContactShadowGiven &shadow);
 
 /** Lays depth of field and heat haze on the screen as drawn so far, where the game drew its own. */
 void ApplyFocus(const FocusSettings &settings);

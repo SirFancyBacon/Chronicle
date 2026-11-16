@@ -53,6 +53,11 @@ namespace {
 // A face's floor, as a share of the game's own colour for it: with modern light, never darker than half of how the game showed it, so expressions read
 // at night. A first guess, for the owner to judge.
 constexpr float kFaceFloor = 0.5f;
+// A self-lit map lit by its main light instead (render::PaintedLit, the owner's decision of 2026-11-16): the share of its painted colour that light
+// gives, the rest the ambient, so a shadow takes as much as the game's dungeon shadows did (0x40 of 128). The light is made as strong as lets a floor
+// it falls on show its painted colour exactly; from no lower than this (its cosine), so a low light doesn't blow out the walls facing it.
+constexpr float kPaintedLight = 0.5f;
+constexpr float kPaintedLeastUp = 0.35f;
 
 void MulFrameMatrix(sceVu0FMATRIX m0, sceVu0FMATRIX m1, sceVu0FMATRIX m2) {
     float product[4][4];
@@ -772,6 +777,7 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
     sceVu0FMATRIX screen_matrix;
     sceVu0FMATRIX turn;
     sceVu0FMATRIX light;
+    sceVu0FMATRIX light_colour;
     sceVu0FVECTOR ambient;
     sceVu0FVECTOR direction;
     sceVu0FVECTOR world_position;
@@ -937,7 +943,25 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
 
         // A face or eyes, with modern light: lit as the rest of the character is, the game's own colour a floor under the ambient (decision 2).
         const bool lit_face = attr.use_color && !attr.ambient_boost && !info->shadow_pass && render::ModernLight() && FrameNameIsFace(name);
-        if (lit_face) {
+        // A self-lit map's frame lit by its main light, where that's asked (a dungeon's map), so real shadows fall on it: not its lamps, which are
+        // lights.
+        const bool painted = attr.use_color && !attr.ambient_boost && !info->shadow_pass && !lit_face && render::PaintedLit() && !FrameNameIsLight(name);
+        if (painted) {
+            // Light 0 is the main light, its column pointing towards it (sceVu0NormalLightMatrix); y is up.
+            sceVu0CopyMatrix(light, info->light_direction);
+            sceVu0CopyMatrix(light_colour, info->light_color);
+            sceVu0CopyVector(ambient, info->ambient);
+            const float up = std::max(info->light_direction[1][0], kPaintedLeastUp);
+            for (int i = 0; i < 4; i++) {
+                for (int c = 0; c < 4; c++) {
+                    info->light_color[i][c] = 0.0f;
+                }
+            }
+            for (int c = 0; c < 3; c++) {
+                info->ambient[c] = (1.0f - kPaintedLight) * attr.color[c];
+                info->light_color[0][c] = kPaintedLight * attr.color[c] / up;
+            }
+        } else if (lit_face) {
             sceVu0CopyMatrix(light, info->light_direction);
             sceVu0CopyVector(ambient, info->ambient);
             for (int i = 0; i < 3; i++) {
@@ -973,13 +997,16 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
             Draw3DLightScope light(!info->shadow_pass && attr.use_color && !attr.ambient_boost && !attr.fog_enable && attr.blend_mode == 0 &&
                                    FrameNameIsLight(name));
             // Self-lit (the 'C' code): its own colour, the scene's light falling on it no more than the game's lights did.
-            Draw3DSelfLitScope self_lit(!info->shadow_pass && attr.use_color && !attr.ambient_boost && !lit_face);
+            Draw3DSelfLitScope self_lit(!info->shadow_pass && attr.use_color && !attr.ambient_boost && !lit_face && !painted);
             visual->DrawVu1(packet, matrix, info, VU1_PROGRAM_UNKNOWN6, nullptr, 0, 0);
         }
 
         if (attr.use_color || attr.ambient_boost) {
             sceVu0CopyMatrix(info->light_direction, light);
             sceVu0CopyVector(info->ambient, ambient);
+        }
+        if (painted) {
+            sceVu0CopyMatrix(info->light_color, light_colour);
         }
 
         if (!info->shadow_pass) {

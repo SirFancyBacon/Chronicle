@@ -34,6 +34,7 @@
 #include "platform/config.hpp"
 #include "randomitem.hpp"
 #include "rect.hpp"
+#include "render/renderer_calls.hpp"
 #include "runscript_opcodes.hpp"
 #include "savedata.hpp"
 #include "shot_effect_pack.hpp"
@@ -935,6 +936,13 @@ void CMonstorUnit::DrawShadowMonstor() {
         character.ShadowStep();
         character.GetPosition(position);
         character.GetRotation(rotation);
+        // A soft contact shadow under it, whatever the light (the owner's decision of 2026-11-16).
+        render::AddContactShadow({
+            .key = reinterpret_cast<std::uintptr_t>(&character),
+            .position = {position[0], position[1], position[2]},
+            .radius = render::kCharacterContactRadius * character.scale[0],
+            .strength = render::kCharacterContactStrength
+        });
         character.shadow_frame->SetPosition(position);
         character.shadow_frame->SetRotation(0.0f, rotation[1], 0.0f);
         position[1] -= mon.shadow_length;

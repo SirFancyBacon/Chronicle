@@ -15,6 +15,7 @@
 #include "mathutil.hpp"
 #include "mglib.hpp"
 #include "platform/arena.hpp"
+#include "render/renderer_calls.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
 #include "textureanime.hpp"
@@ -866,6 +867,13 @@ void CCharacter::DrawShadow() {
     this->shadow_frame->SetRotation(transform[0], transform[1], transform[2]);
     GetPosition(transform);
     this->shadow_frame->SetPosition(transform);
+    // A soft contact shadow under its feet, whatever the light (the owner's decision of 2026-11-16).
+    render::AddContactShadow({
+        .key = reinterpret_cast<std::uintptr_t>(this),
+        .position = {transform[0], transform[1], transform[2]},
+        .radius = render::kCharacterContactRadius * this->scale[0],
+        .strength = render::kCharacterContactStrength
+    });
     // The shadow lies below the feet rather than inside the model.
     transform[1] -= 12.8f;
     MGDrawShadowFast(this->shadow_frame, transform, light_direction);

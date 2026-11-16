@@ -2268,13 +2268,13 @@ float g_main_light_strength = 1.0f;
 } // namespace
 
 u_char EdFadedShadow(u_char alpha) {
+    // Real shadows from the sun, or an interior's main light, stand in for these (step 8): they darken nothing.
+    if (render::SunShadows()) {
+        return 0;
+    }
     // Only outdoors, where the town's light set the strength: an interior's shadows keep their darkness whatever the hour outside.
     if (!render::OutdoorLight()) {
         return alpha;
-    }
-    // Real shadows from the sun stand in for these (step 8): they darken nothing.
-    if (render::SunShadows()) {
-        return 0;
     }
     return static_cast<u_char>(std::lround(static_cast<float>(alpha) * g_main_light_strength));
 }

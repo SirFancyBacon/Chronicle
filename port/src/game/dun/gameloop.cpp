@@ -1985,6 +1985,9 @@ int GameLoop() {
     return 0;
 }
 
+// How far from the eye the dungeon's real shadows reach: its rooms and corridors are seen no further.
+constexpr float kDungeonShadowDistance = 800.0f;
+
 void Draw_MainUnitShadow() {
     float light[4][4];
     float colour[4][4];
@@ -2017,7 +2020,8 @@ void Draw_MainUnitShadow() {
         }
     }
 
-    MGEndDrawShadow(0x40);
+    // Real shadows from the dungeon's main light stand in for these (step 8): they darken nothing.
+    MGEndDrawShadow(render::SunShadows() ? 0 : 0x40);
     sceVu0CopyMatrix(light, saved);
     MGSetPLight(light, colour);
 }
@@ -2252,11 +2256,15 @@ void DunMainDraw() {
     NowDngMap->DrawDummyModel(NowCamera__3);
     render::SetPass(render::Pass::Ground);
 
+    // The dungeon's main light casts real shadows (step 8), on its map too: lit by it, where the game showed the map's painted colour.
+    render::SetSunShadows(kDungeonShadowDistance);
+    render::SetPaintedLit(true);
     if (NowDngMap->map_type == 1) {
         NowDngMap->DrawMap(NowCamera__3, CharaFrame);
     } else {
         NowDngMap->DrawMapFreeStyle();
     }
+    render::SetPaintedLit(false);
 
     // Deliberately non-virtual: the map field's own draw, not an override.
     NowDranMapField->CDranMapField::Draw();

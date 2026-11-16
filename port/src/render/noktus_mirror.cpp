@@ -20,6 +20,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <numbers>
 #include <optional>
 #include <set>
 #include <stdexcept>
@@ -27,6 +28,7 @@
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "noktus/vulkan_renderer.hpp"
@@ -43,6 +45,24 @@ namespace dc::render {
 
 namespace {
 
+// The way the shadows fall: the main light's, but never from lower than kLowestSun above the horizon (decision 3), y being up, as the towns' sun is held
+// (EdLimitShadowLight): a dungeon's or an interior's main light can come in low, which would stretch a character's shadow across the room.
+noktus::Vec3 ShadowsFallingFrom(const noktus::Vec3 &falling) {
+    constexpr float kLowestSun = 27.0f * std::numbers::pi_v<float> / 180.0f;
+    const float     length = std::sqrt(falling.x * falling.x + falling.y * falling.y + falling.z * falling.z);
+    const float     across = std::sqrt(falling.x * falling.x + falling.z * falling.z);
+    if (!(length > 1e-6f)) {
+        return falling;
+    }
+    if (!(across > 1e-6f)) {
+        return {0.0f, -1.0f, 0.0f}; // straight up or down: from overhead
+    }
+    if (-falling.y / length >= std::sin(kLowestSun)) {
+        return falling;
+    }
+    return {falling.x / across * std::cos(kLowestSun), -std::sin(kLowestSun), falling.z / across * std::cos(kLowestSun)};
+}
+
 // How many of Noktus's depth answers to look through for one of Kazarov's: the two answer a tick or so apart.
 constexpr std::size_t kDepthAnswersKept = 4;
 constexpr float       kDepthAgrees = 0.0005f;
@@ -57,6 +77,8 @@ bool g_outdoors = false;
 
 // Whether point lights reach the meshes drawn now (SetPointLit). Game thread.
 bool g_point_lit = true;
+// Whether the self-lit map drawn now is lit (SetPaintedLit). Game thread.
+bool g_painted_lit = false;
 
 // The game's world is y up. Outdoors, the ambient from the ground below as a share of that from the sky above: half, so the undersides of things are
 // darker than what faces the sky, walls keeping the game's ambient; DC_NOKTUS_GROUND sets it, 1 for the game's ambient alike from every side, as it
@@ -125,6 +147,8 @@ struct Mirror {
     noktus::SceneLight                                       scene_light; // the scene light last given
     // Point lights wait for the world's camera, the first lit draw of the world in the tick: the scene they light is the one Noktus is given them in.
     std::vector<noktus::PointLight>                          lights_waiting;
+    std::vector<noktus::ContactShadow>                                              contacts_waiting; // contact shadows given before the world's camera was known this tick
+    std::unordered_set<std::uint64_t>                                               contact_keys;     // the contact shadows given this tick: one a character, whatever draws its shadow twice
     std::optional<noktus::Camera>                            world_camera; // this tick's, once a lit draw of the world has set it
     std::optional<noktus::Camera>                            camera;       // the camera last given, put back after a point light's
     float                                                                           sun_distance = 0.0f; // this tick's sun's shadow distance (SetSunShadows), 0 for no sun
@@ -766,6 +790,10 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
             mirror.renderer->AddPointLight(light);
         }
         mirror.lights_waiting.clear();
+        for (const noktus::ContactShadow &shadow : mirror.contacts_waiting) {
+            mirror.renderer->AddContactShadow(shadow);
+        }
+        mirror.contacts_waiting.clear();
     }
     // The sun: the direction of the first lit draw of the world's main light, the very one each draw is lit by.
     if (of_the_world && mirror.sun_distance > 0.0f && !mirror.sun && scene.draw.lighting.light_count > 0) {
@@ -773,7 +801,7 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
         // A draw whose main light is switched off (Georama's dimmed cursor) can't say where the sun is.
         if (towards.x * towards.x + towards.y * towards.y + towards.z * towards.z > 1e-6f) {
             mirror.sun = towards;
-            mirror.renderer->SetSun({.direction = towards, .distance = mirror.sun_distance});
+            mirror.renderer->SetSun({.direction = ShadowsFallingFrom(towards), .distance = mirror.sun_distance});
         }
     }
     draw = std::move(scene.draw);
@@ -789,7 +817,9 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
             const noktus::Vec3        towards = unit(light.direction);
             light.shadowed = towards.x * sun.x + towards.y * sun.y + towards.z * sun.z > 0.9995f;
         }
-        draw.casts_shadow = of_the_world;
+        // Indoors and in the dungeons the main light stands for a room's light, not a sun: their maps' ceilings, decks and canopies would put
+        // every floor in shade, so there only what stands and moves casts (characters, monsters, moving parts), onto the map.
+        draw.casts_shadow = of_the_world && (g_outdoors || mirror.pass != noktus::Pass::Ground);
     }
     draw.point_lit = g_point_lit;
     draw.key = mirror.key;
@@ -1002,7 +1032,7 @@ void SetSunShadows(float distance) {
 }
 
 bool SunShadows() {
-    if (!ModernLight() || !ShadowsWanted() || !OutdoorLight()) {
+    if (!ModernLight() || !ShadowsWanted()) {
         return false;
     }
     // Only where a sun was given, this tick or the one before: the game's shadows may be drawn before this tick's is found.
@@ -1013,6 +1043,47 @@ bool SunShadows() {
 
 void SetPointLit(bool on) {
     g_point_lit = on;
+}
+
+void SetPaintedLit(bool on) {
+    g_painted_lit = on;
+}
+
+bool PaintedLit() {
+    return g_painted_lit && ModernLight();
+}
+
+void AddContactShadow(const ContactShadowGiven &given) {
+    if (!ModernLight()) {
+        return;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    if (!mirror.open || !mirror.renderer) {
+        return;
+    }
+    if (given.key != 0 && !mirror.contact_keys.insert(given.key).second) {
+        return;
+    }
+    const noktus::ContactShadow shadow = {
+        .key = static_cast<noktus::ObjectKey>(given.key),
+        .position = {given.position[0], given.position[1], given.position[2]},
+        .up = {0.0f,              1.0f,              0.0f             },
+        .radius = given.radius,
+        .strength = given.strength
+    };
+    if (!mirror.world_camera) {
+        mirror.contacts_waiting.push_back(shadow);
+        return;
+    }
+    // Given in the world's camera, then the camera as it was, for what's recorded next.
+    Guarded([&] {
+        mirror.renderer->SetCamera(*mirror.world_camera);
+        mirror.renderer->AddContactShadow(shadow);
+        if (mirror.camera) {
+            mirror.renderer->SetCamera(*mirror.camera);
+        }
+    });
 }
 
 void SetOutdoorLight(bool outdoors) {
@@ -1427,6 +1498,8 @@ void MirrorEndTick() {
     if (mirror.open) {
         // Lights given in a tick with no lit draw of the world light nothing.
         mirror.lights_waiting.clear();
+        mirror.contacts_waiting.clear();
+        mirror.contact_keys.clear();
         mirror.world_camera.reset();
         mirror.sun_distance = 0.0f;
         mirror.linear_ended = false;

@@ -921,6 +921,9 @@ int EditInLoop() {
  * Draws the interior for one frame.
  */
 namespace {
+// How far from the eye an interior's real shadows reach: a room is seen no further.
+constexpr float kInteriorShadowDistance = 600.0f;
+
 void MainDraw() {
     render::PassScope frame(render::Pass::TextureAnimation);
     sceVu0FVECTOR position;
@@ -946,13 +949,12 @@ void MainDraw() {
         setTexAnim();
         sceVu0FVECTOR lod_distance = {0.0f, 1000.0f, 10000.0f, 1000000.0f};
 
-        // The interior's light is painted into its map, morning, evening and night (step 7's decision 1): the room's fires light the characters
-        // and what moves, not the map a second time.
-        render::SetPointLit(false);
+        // The room's light falls on its map as on what moves in it, its fires and its main light's real shadows (the owner's decision of
+        // 2026-11-16, in place of step 7's decision 1), over the light painted into its morning, evening and night textures.
+        render::SetSunShadows(kInteriorShadowDistance);
         for (int i = 0; i < parts_num; i++) {
             InteriorParts[i].DrawParts(EdIn_NowTime, lod_distance, 0, 0, nullptr);
         }
-        render::SetPointLit(true);
     }
 
     sceGsTex0 frame_tex;
