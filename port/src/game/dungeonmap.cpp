@@ -881,7 +881,7 @@ void CDungeonMap::GiveFireLights() {
                 flame[0] = 10.0f * (x + 16.0f * static_cast<float>(cell_no % 20));
                 flame[1] = 10.0f * part.fire_pos[j][1] + kFlameRise;
                 flame[2] = 10.0f * (z + 16.0f * static_cast<float>(cell_no / 20));
-                GiveFireLight(kGridFires | static_cast<std::uint64_t>(cell_no) << 8 | static_cast<std::uint64_t>(j), flame);
+                GiveDungeonFireLight(kGridFires | static_cast<std::uint64_t>(cell_no) << 8 | static_cast<std::uint64_t>(j), flame);
             }
         }
         return;
@@ -896,7 +896,7 @@ void CDungeonMap::GiveFireLights() {
             flame[0] = 10.0f * (part.frame_offset[0][0] / 10.0f + x);
             flame[1] = 10.0f * (part.fire_pos[j][1] + part.frame_offset[0][1] / 10.0f) + kFlameRise;
             flame[2] = 10.0f * (part.frame_offset[0][2] / 10.0f + z);
-            GiveFireLight(kFreeFires | static_cast<std::uint64_t>(i) << 8 | static_cast<std::uint64_t>(j), flame);
+            GiveDungeonFireLight(kFreeFires | static_cast<std::uint64_t>(i) << 8 | static_cast<std::uint64_t>(j), flame);
         }
     }
 }

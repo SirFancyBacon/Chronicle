@@ -65,6 +65,11 @@ float Flickering(std::uint64_t key) {
     return fire.share;
 }
 
+// A dungeon's torches hang on its walls a few units from what they light, where a town's burn 35 to 55 above its streets, so a dungeon's fire gives
+// a share of a town's light: the owner found the Divine Beast Cave about a tenth too bright (2026-11-15), and this share takes a tenth off its
+// picture's light there (measured on the cave's opening: 0.0985 of linear light on average, 0.0887 with it).
+constexpr float kDungeonShare = 0.45f;
+
 // A candle's flame is a tenth of a fire's as the game draws it: its light a share of a torch's, reaching less far, from a smaller flame.
 constexpr float kCandleShare = 0.15f;
 constexpr float kCandleRange = 40.0f;
@@ -93,6 +98,10 @@ void GiveFlameLight(std::uint64_t key, const float *flame, float share, float ra
 
 void GiveFireLight(std::uint64_t key, const float *flame) {
     GiveFlameLight(key, flame, 1.0f, kRange, kSize);
+}
+
+void GiveDungeonFireLight(std::uint64_t key, const float *flame) {
+    GiveFlameLight(key, flame, kDungeonShare, kRange, kSize);
 }
 
 void GiveCandleLight(std::uint64_t key, const float *flame) {

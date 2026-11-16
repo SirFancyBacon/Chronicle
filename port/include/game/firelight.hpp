@@ -20,6 +20,11 @@ struct EDIT_EFFECT_INFO;
 void GiveFireLight(std::uint64_t key, const float *flame);
 
 /**
+ * A dungeon's torch's light: as GiveFireLight, at a share of a town's, its torches hanging close to what they light.
+ */
+void GiveDungeonFireLight(std::uint64_t key, const float *flame);
+
+/**
  * Gives a candle's light for this tick, as GiveFireLight does a fire's: a small flame, a share of a torch's light reaching less far.
  * @param key Who the candle is from tick to tick, never 0.
  * @param flame Where its flame burns, in the world.
