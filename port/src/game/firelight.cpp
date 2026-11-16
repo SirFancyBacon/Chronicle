@@ -94,7 +94,34 @@ void GiveFlameLight(std::uint64_t key, const float *flame, float share, float ra
     });
 }
 
+// A halo's glow (HaloAsGlow): as wide as the flame the game draws inside its halo (a fifth of the halo's width each side of its middle), its middle past
+// white at the light's warmth, so bloom spreads a glow from the flame itself, the light round about being the fire's own.
+constexpr float kGlowShare = 0.2f;
+constexpr float kGlowLight = 3.0f;
+int             g_halo_as_glow = 0;
+
 } // namespace
+
+HaloAsGlow::HaloAsGlow() {
+    g_halo_as_glow++;
+}
+
+HaloAsGlow::~HaloAsGlow() {
+    g_halo_as_glow--;
+}
+
+bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_through) {
+    if (g_halo_as_glow <= 0 || !render::ModernGlow() || !(scale > 0.0f)) {
+        return false;
+    }
+    const float light = kGlowLight * FireScale();
+    return render::AddGlow({
+        .position = {middle[0],        middle[1],        middle[2]       },
+        .color = {light * kWarm[0], light * kWarm[1], light * kWarm[2]},
+        .size = 45.0f * scale * flicker * kGlowShare,
+        .seen_through = seen_through
+    });
+}
 
 void GiveFireLight(std::uint64_t key, const float *flame) {
     GiveFlameLight(key, flame, 1.0f, kRange, kSize);

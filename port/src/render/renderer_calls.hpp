@@ -63,6 +63,24 @@ struct PointLightGiven {
 /** Adds a point light to this tick's scene, lighting the world's lit meshes near it with modern light (ModernLight); nothing otherwise. */
 void AddPointLight(const PointLightGiven &light);
 
+/** The bright heart of a flame or lamp, seen: see AddGlow. */
+struct GlowGiven {
+    float position[3] = {};
+    float color[3] = {};       // in linear light, at its middle; past 1 it blooms
+    float size = 1.0f;         // its radius
+    float seen_through = 0.0f; // how far in front of its middle what stands there still doesn't hide it: its lamp's glass, its flame's body
+};
+
+/** Whether flames' and lamps' halos are glows (AddGlow), with the light they threw given as point lights, in place of the game's large halo sprites
+ * (the owner's decision of 2026-11-16): with modern light and bloom, unless DC_NOKTUS_HALOS=1 asks for the game's drawn halos, to compare. */
+bool ModernGlow();
+
+/** Adds a glow to this tick in the world's camera, hidden by what stands in front of it. False where it can't be (no glows, the world's camera
+ * not yet known this tick, or the scene's light already ended this tick: EndLinearLight), for the caller to draw the game's own. True means given,
+ * not drawn: Noktus still leaves out a glow past its 1024 a tick, one given while drawing into a surface, or one after the interface has split
+ * from the scene. */
+bool AddGlow(const GlowGiven &glow);
+
 /** Says that this tick's main light (light 0) is the sun's or the moon's, casting real shadows out to this eye distance (step 8): the world's solid
  * draws cast, and the game's own shadows give way (SunShadows). Nothing without modern light or with DC_NOKTUS_SHADOWS=0. */
 void SetSunShadows(float distance);

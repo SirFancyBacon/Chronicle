@@ -965,6 +965,7 @@ void CDungeonMap::DrawFireFreeStyle(CFrameVu1 *frame, CCameraFollow *camera) {
             this->fire.pos[1] = 10.0f * world_y;
             this->fire.pos[2] = 10.0f * world_z;
             this->fire.pos[3] = 1.0f;
+            const HaloAsGlow glow; // its light is given (GiveFireLights)
             this->fire.DrawFire(1, 1, camera, frame_pos, 1.0f, param, 15.0f);
 
             // The crackle comes from the fire that is nearest to the camera.
@@ -1067,6 +1068,7 @@ void CDungeonMap::DrawFire(CFrameVu1 *frame, CCameraFollow *camera) {
                         this->fire.pos[1] = 10.0f * height;
                         this->fire.pos[2] = 10.0f * rot_z;
                         this->fire.pos[3] = 1.0f;
+                        const HaloAsGlow glow; // its light is given (GiveFireLights)
                         this->fire.DrawFire(1, 1, camera, frame_pos, 1.0f, param, 15.0f);
 
                         // The crackle comes from the fire that is nearest to the camera.

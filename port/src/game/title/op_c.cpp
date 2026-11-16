@@ -2302,6 +2302,7 @@ void OpC_DrawProcess() {
                 GiveOpeningFireLight(i, CFire.pos, fire_flag);
 
                 if (fire_flag == 1) {
+                    const HaloAsGlow glow; // a fire drawn whole gives its light (GiveOpeningFireLight)
                     CFire.DrawFire(1, 1, &OP_MainCamera, eye, OP_FireScale[i], 3, static_cast<float>(15.0 * OP_FireScale[i]));
                 } else {
                     CFire.DrawFire(1, 1, &OP_MainCamera, eye, OP_FireScale[i], 2, 15.0f);
@@ -2326,6 +2327,7 @@ void OpC_DrawProcess() {
                 GiveOpeningFireLight(i, CFire.pos, fire_flag);
 
                 if (fire_flag == 1) {
+                    const HaloAsGlow glow; // a fire drawn whole gives its light (GiveOpeningFireLight)
                     CFire.DrawFire(1, 1, &OP_MainCamera, eye, OP_FireScale[i], 3, 15.0f);
                 } else {
                     CFire.DrawFire(1, 1, &OP_MainCamera, eye, OP_FireScale[i], 2, 15.0f);

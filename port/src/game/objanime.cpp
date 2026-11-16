@@ -12,6 +12,7 @@
 #include "candleeffect.hpp"
 #include "editloop.hpp"
 #include "effectmacro.hpp"
+#include "firelight.hpp"
 #include "fireomni.hpp"
 #include "frame.hpp"
 #include "snd.hpp"
@@ -497,6 +498,8 @@ void DrawEditEffect(EDIT_EFFECT_INFO *effect, CCamera *camera, CEffectGroup *gro
             }
 
             setbilinear(1);
+            // Its light is given as a point light (GiveEffectLight), so its halo can be a glow.
+            const HaloAsGlow glow;
             Fire.DrawFire(1, 1, camera, position, scale, fire_kind, 15.0f);
             break;
         }

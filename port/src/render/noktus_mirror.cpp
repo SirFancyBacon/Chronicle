@@ -49,6 +49,8 @@ constexpr float       kDepthAgrees = 0.0005f;
 
 // Whether Noktus draws the scene in linear light, where the game's light becomes modern light (ModernLight).
 std::atomic<bool> g_linear = false;
+// Whether bloom spreads light past white (VulkanHost::bloom above 0), which glows need.
+std::atomic<bool> g_bloom = false;
 
 // Whether the scene is outdoors (SetOutdoorLight). Game thread.
 bool g_outdoors = false;
@@ -127,6 +129,7 @@ struct Mirror {
     std::optional<noktus::Camera>                            camera;       // the camera last given, put back after a point light's
     float                                                                           sun_distance = 0.0f; // this tick's sun's shadow distance (SetSunShadows), 0 for no sun
     std::optional<noktus::Vec3>                                                     sun;                 // its direction, once the first lit draw of the world has given it
+    bool                                                                            linear_ended = false; // EndLinearLight was asked this tick: a glow given after it would come too late for bloom
     bool                                                                            sun_before = false;  // the tick before had a sun: the game's shadows stay given way
     std::optional<noktus::Pass>                              pass;
     bool                                                     on_screen = true;
@@ -604,6 +607,7 @@ void Start(Mirror &mirror) {
     if (const char *bloom = std::getenv("DC_NOKTUS_BLOOM")) {
         host.bloom = std::strtof(bloom, nullptr);
     }
+    g_bloom = host.bloom > 0.0f && std::isfinite(host.bloom);
     // Water's colour by depth (Noktus's VulkanHost::water_clarity); DC_NOKTUS_WATER_CLARITY sets it, in the world's units, 0 for water as the game drew it.
     if (const char *clarity = std::getenv("DC_NOKTUS_WATER_CLARITY")) {
         host.water_clarity = std::strtof(clarity, nullptr);
@@ -1049,6 +1053,41 @@ void AddPointLight(const PointLightGiven &given) {
     });
 }
 
+bool ModernGlow() {
+    static const bool halos = [] {
+        const char *asked = std::getenv("DC_NOKTUS_HALOS");
+        return asked != nullptr && std::strcmp(asked, "1") == 0;
+    }();
+    return !halos && g_bloom && ModernLight();
+}
+
+bool AddGlow(const GlowGiven &given) {
+    if (!ModernGlow()) {
+        return false;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    // After the scene's light was ended this tick (the dungeons' shimmer ends it before their fires are drawn), the game's halo stands.
+    if (!mirror.open || !mirror.renderer || !mirror.world_camera || mirror.linear_ended) {
+        return false;
+    }
+    const noktus::Glow glow = {
+        .position = {given.position[0], given.position[1], given.position[2]},
+        .color = {given.color[0], given.color[1], given.color[2], 1.0f},
+        .size = given.size,
+        .seen_through = given.seen_through
+    };
+    // In the world's camera, then the camera as it was, for what's recorded next.
+    Guarded([&] {
+        mirror.renderer->SetCamera(*mirror.world_camera);
+        mirror.renderer->AddGlow(glow);
+        if (mirror.camera) {
+            mirror.renderer->SetCamera(*mirror.camera);
+        }
+    });
+    return true;
+}
+
 void ApplyFocus(const FocusSettings &settings) {
     if (!MirrorOn()) {
         return;
@@ -1112,6 +1151,7 @@ void EndLinearLight() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (mirror.open && mirror.renderer) {
+        mirror.linear_ended = true;
         Guarded([&] { mirror.renderer->EndLinearLight(); });
     }
 }
@@ -1389,6 +1429,7 @@ void MirrorEndTick() {
         mirror.lights_waiting.clear();
         mirror.world_camera.reset();
         mirror.sun_distance = 0.0f;
+        mirror.linear_ended = false;
         mirror.sun_before = mirror.sun.has_value();
         mirror.sun.reset();
         Guarded([&] { mirror.renderer->EndTick(); });

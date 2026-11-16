@@ -52,6 +52,29 @@ void GiveOpeningFireLight(int index, const float *pos, int fire_flag);
  */
 bool TakeShimmerShown();
 
+/**
+ * While one stands, CFireOmni::DrawFire's halo (its second layer, the large flickering sprite) is a glow where the renderer draws them
+ * (render::ModernGlow): its heart past white, which bloom spreads, the light it threw on what's around being the fire's point light. Stood around the
+ * fires that give their light (GiveFireLight and the like), so a halo with no light behind it (the opening's purple lamps) stays as drawn.
+ */
+class HaloAsGlow {
+public:
+    HaloAsGlow();
+    ~HaloAsGlow();
+    HaloAsGlow(const HaloAsGlow &) = delete;
+    HaloAsGlow &operator=(const HaloAsGlow &) = delete;
+};
+
+/**
+ * Gives a fire's halo as a glow, in place of drawing it, if one stands (HaloAsGlow) and the renderer can (render::AddGlow): false for the caller to
+ * draw the game's.
+ * @param middle Where the halo's middle is, in the world.
+ * @param scale The halo's scale, as DrawFire was given it.
+ * @param flicker How wide the halo flickers this tick, 1 to 1.1.
+ * @param seen_through How far towards the eye the game drew its halo in front of the flame, so its lamp's glass and the flame's body didn't hide it.
+ */
+bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_through);
+
 /** How far above where a fire stands its flame burns, as CFireOmni draws it. */
 inline constexpr float kFlameRise = 4.6f;
 
