@@ -228,7 +228,7 @@ endif()
 
 function(dc_link_game target)
     target_sources(${target} PRIVATE $<TARGET_OBJECTS:dc_port> $<TARGET_OBJECTS:dc_ps2>)
-    target_link_libraries(${target} PRIVATE noktus_vulkan dc_options dc_host kz_port_headers SDL3::SDL3 Vulkan::Vulkan fastgltf::fastgltf nlohmann_json::nlohmann_json
+    target_link_libraries(${target} PRIVATE noktus_vulkan noktus_audio dc_options dc_host kz_port_headers SDL3::SDL3 Vulkan::Vulkan fastgltf::fastgltf nlohmann_json::nlohmann_json
         chronicle_zstd)
     target_include_directories(${target} PRIVATE ${PORT_DIR} ${CMAKE_SOURCE_DIR}/tools/dcdata)
     target_compile_options(${target} PRIVATE -Wall -Wno-mismatched-tags -Wno-unused-label

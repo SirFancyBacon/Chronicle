@@ -53,15 +53,16 @@
 #include "platform/clock.hpp"
 #include "platform/config.hpp"
 #include "platform/crash_report.hpp"
-#include "platform/hitches.hpp"
 #include "platform/data_archive.hpp"
 #include "platform/discord.hpp"
 #include "platform/display.hpp"
 #include "platform/firstrun.hpp"
+#include "platform/hitches.hpp"
 #include "platform/input.hpp"
 #include "platform/input_script.hpp"
 #include "platform/paths.hpp"
 #include "platform/settings.hpp"
+#include "platform/speaker_test.hpp"
 #include "platform/touch_overlay.hpp"
 #include "platform/window.hpp"
 #include "qol/features.hpp"
@@ -70,9 +71,9 @@
 #include "render/screen.hpp"
 #include "save/save_state.hpp"
 #include "snd.hpp"
+#include "text/glyphs.hpp"
 #include "title/opening.hpp"
 #include "title/rushmovi.hpp"
-#include "text/glyphs.hpp"
 
 namespace fs = std::filesystem;
 
@@ -644,6 +645,12 @@ int Run(int argc, const char **argv) {
                        qol::Export(directory) && georama::Export(directory)
                    ? kExitOk
                    : kExitFailure;
+    }
+    if (const char *speakers = std::getenv("DC_SPEAKER_TEST")) {
+        // Noktus's audio on the real speakers, before the game uses it; needs no disc data, no window and no game.
+        const dc::platform::SpeakerTest result = dc::platform::RunSpeakerTest(speakers);
+        return result == dc::platform::SpeakerTest::Done ? kExitOk : result == dc::platform::SpeakerTest::BadLayout ? kExitUsage
+                                                                                                                    : kExitFailure;
     }
     FirstRunIfNoData(options.headless);
     DC_ANDROID_TRACE("Run: first-run check passed");
