@@ -21,6 +21,7 @@
 #include "mathutil.hpp"
 #include "mglib.hpp"
 #include "render/draw3d.hpp"
+#include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
 #include "renderinfo.hpp"
 #include "visualvu1.hpp"
@@ -768,6 +769,25 @@ void ShadowClipBox(sceVu0FVECTOR *screen, sceVu0FVECTOR *corner, sceVu0FMATRIX m
 
 } // namespace
 
+// Whether the frame's bound stands taller in the world than half its narrower width across: a waterfall rather than a river's or a lake's surface.
+namespace {
+bool Upright(CFrameVu1 &frame) {
+    sceVu0FMATRIX to_world;
+    sceVu0FVECTOR corners[8];
+    frame.GetLWMatrix(to_world);
+    ApplyMatrixN(corners, to_world, frame.corner, 8);
+    float least[3] = {corners[0][0], corners[0][1], corners[0][2]};
+    float most[3] = {corners[0][0], corners[0][1], corners[0][2]};
+    for (const sceVu0FVECTOR &at : corners) {
+        for (int axis = 0; axis < 3; axis++) {
+            least[axis] = std::min(least[axis], at[axis]);
+            most[axis] = std::max(most[axis], at[axis]);
+        }
+    }
+    return most[1] - least[1] > 0.5f * std::min(most[0] - least[0], most[2] - least[2]);
+}
+} // namespace
+
 // Culls the frame, applies its attributes to the current GS register shadows the visual's draw
 // reads, then walks the hierarchy. The screen-bound test runs on an unsqueezed view, so its
 // vertical limit is the frame's full half-height, and its limits are what the target shows (past
@@ -996,6 +1016,9 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
             // their own colour whatever the light; with the linear scene they're lights, and bloom.
             Draw3DLightScope light(!info->shadow_pass && attr.use_color && !attr.ambient_boost && !attr.fog_enable && attr.blend_mode == 0 &&
                                    FrameNameIsLight(name));
+            // A river's or a lake's water lying flat becomes real water (render::RiverWater); standing upright, it's a waterfall, falling white water
+            // rather than a surface to see through, and stays as the game drew it, lit.
+            const render::RiverWaterScope river_water(render::RiverWater() && !Upright(*this));
             // Self-lit (the 'C' code): its own colour, the scene's light falling on it no more than the game's lights did.
             Draw3DSelfLitScope self_lit(!info->shadow_pass && attr.use_color && !attr.ambient_boost && !lit_face && !painted);
             visual->DrawVu1(packet, matrix, info, VU1_PROGRAM_UNKNOWN6, nullptr, 0, 0);

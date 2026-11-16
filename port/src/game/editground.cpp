@@ -25,6 +25,7 @@
 #include "objanime.hpp"
 #include "platform/config.hpp"
 #include "rect.hpp"
+#include "render/passes.hpp"
 #include "savedata.hpp"
 #include "vector3.hpp"
 
@@ -1101,6 +1102,8 @@ void CEditGround::DrawWaterSurface(CCamera *camera) {
 void CEditGround::DrawWater(int pass) {
     sceVu0FVECTOR position;
     sceVu0FVECTOR corner;
+    // The rivers' and lakes' water, real water where Noktus draws (the owner's decision of 2026-11-16).
+    const render::RiverWaterScope river_water;
 
     for (CMapParts &placed : parts) {
         if (suppress_water) {

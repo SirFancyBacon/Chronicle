@@ -144,6 +144,25 @@ private:
 /** Whether the meshes drawn now are water drawn from what's behind it (RefractionScope). */
 bool Refracting();
 
+/**
+ * The textured meshes drawn inside it are the towns' rivers and lakes, which become real water where Noktus draws (the owner's decision of
+ * 2026-11-16): drawn from what's behind them as CWater's surfaces are, their own scrolling texture laid over as the surface's pattern
+ * (noktus::MeshDraw::water_pattern). Off, it leaves what's drawn inside it as the game drew it.
+ */
+class RiverWaterScope {
+public:
+    explicit RiverWaterScope(bool on = true);
+    ~RiverWaterScope();
+    RiverWaterScope(const RiverWaterScope &) = delete;
+    RiverWaterScope &operator=(const RiverWaterScope &) = delete;
+
+private:
+    bool previous_;
+};
+
+/** Whether the meshes drawn now are rivers or lakes (RiverWaterScope). */
+bool RiverWater();
+
 /** Counts a draw or copy against the current pass while a trace runs. */
 void CountDraw();
 void CountCopy();

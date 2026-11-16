@@ -185,6 +185,20 @@ bool Refracting() {
     return g_refracting;
 }
 
+namespace {
+bool g_river_water = false;
+} // namespace
+
+RiverWaterScope::RiverWaterScope(bool on) : previous_(std::exchange(g_river_water, on)) {}
+
+RiverWaterScope::~RiverWaterScope() {
+    g_river_water = previous_;
+}
+
+bool RiverWater() {
+    return g_river_water;
+}
+
 Layer2DScope::~Layer2DScope() {
     g_layer = previous_;
     g_layer_differs = previous_differs_;

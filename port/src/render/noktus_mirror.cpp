@@ -769,6 +769,16 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
         scene.draw.material.albedo = noktus::TextureId::None;
     }
     scene.draw.refracts = Refracting();
+    // A river's or a lake's water, as real water: drawn from what's behind it, its own texture laid over as its pattern, lit by the sky (a waterfall,
+    // standing upright, keeps its texture as the game drew it: Noktus's water_pattern).
+    // Only its surface, as it covers or mixes over what's behind (not a layer it adds, which as water would add the screen to itself), mapped by its
+    // own uvs.
+    if (RiverWater() && !scene.draw.refracts && scene.draw.material.albedo != noktus::TextureId::None && scene.draw.uv_source == noktus::UvSource::Mesh &&
+        (scene.draw.material.blend == noktus::Blend::Opaque || scene.draw.material.blend == noktus::Blend::Alpha)) {
+        scene.draw.refracts = true;
+        scene.draw.water_pattern = scene.draw.material.albedo;
+        scene.draw.material.lit = false;
+    }
     if (Draw3DIsLight()) {
         const float share = LightShare();
         scene.draw.material.emissive = {share, share, share, 1.0f};
