@@ -608,8 +608,12 @@ void Start(Mirror &mirror) {
     if (const char *clarity = std::getenv("DC_NOKTUS_WATER_CLARITY")) {
         host.water_clarity = std::strtof(clarity, nullptr);
     }
-    // The game's world is about ten units to a metre (Toan stands about 14): water's waves are sized by it.
+    // The game's world is about ten units to a metre (Toan stands about 14): water's waves and ambient occlusion's reach are sized by it.
     host.world_units_per_metre = 10.0f;
+    // Ambient occlusion (Noktus's step 9), on; DC_NOKTUS_AO=0 leaves it out, to compare.
+    if (const char *occlusion = std::getenv("DC_NOKTUS_AO")) {
+        host.ambient_occlusion = std::string_view(occlusion) != "0";
+    }
     host.planar_reflections = PlanarReflections(g_settings);
     if (const char *toe = std::getenv("DC_NOKTUS_TONE_TOE")) {
         host.tone_map_toe = std::strtof(toe, nullptr);
