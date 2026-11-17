@@ -72,8 +72,10 @@ public:
  * @param scale The halo's scale, as DrawFire was given it.
  * @param flicker How wide the halo flickers this tick, 1 to 1.1.
  * @param seen_through How far towards the eye the game drew its halo in front of the flame, so its lamp's glass and the flame's body didn't hide it.
+ * @param open_flame Whether the game draws the flame's own core with the halo, a torch's open fire: its glow is yellower than a lamp's, whose halo
+ *                   alone shows its flame through its glass.
  */
-bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_through);
+bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_through, bool open_flame);
 
 /** How far above where a fire stands its flame burns, as CFireOmni draws it. */
 inline constexpr float kFlameRise = 4.6f;

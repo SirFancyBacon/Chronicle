@@ -121,6 +121,16 @@ float GlowPale() {
     static const float pale = std::min(ScaleFrom("DC_NOKTUS_GLOW_PALE", kGlowPale), 1.0f);
     return pale;
 }
+
+// A torch's open fire glows yellower than a lamp's paled orange (the owner's look, 2026-11-16, lamps kept as they were): its glow this share of the
+// way on to a flame's yellow of the same brightness. DC_NOKTUS_TORCH_YELLOW sets the share, 0 to 1, for tuning by eye.
+constexpr float kTorchYellow = 0.35f;
+constexpr float kFlameYellow[3] = {1.139f, 1.025f, 0.342f}; // (1, 0.9, 0.3) at a brightness of 1
+
+float TorchYellow() {
+    static const float yellow = std::min(ScaleFrom("DC_NOKTUS_TORCH_YELLOW", kTorchYellow), 1.0f);
+    return yellow;
+}
 int             g_halo_as_glow = 0;
 
 } // namespace
@@ -133,7 +143,7 @@ HaloAsGlow::~HaloAsGlow() {
     g_halo_as_glow--;
 }
 
-bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_through) {
+bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_through, bool open_flame) {
     if (g_halo_as_glow <= 0 || !render::ModernGlow() || !(scale > 0.0f)) {
         return false;
     }
@@ -142,7 +152,8 @@ bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_th
     const float brightness = 0.2126f * kWarm[0] + 0.7152f * kWarm[1] + 0.0722f * kWarm[2];
     float       colour[3];
     for (int c = 0; c < 3; c++) {
-        colour[c] = light * (kWarm[c] + (brightness - kWarm[c]) * GlowPale());
+        const float paled = kWarm[c] + (brightness - kWarm[c]) * GlowPale();
+        colour[c] = light * (open_flame ? paled + (brightness * kFlameYellow[c] - paled) * TorchYellow() : paled);
     }
     return render::AddGlow({
         .position = {middle[0], middle[1], middle[2]},

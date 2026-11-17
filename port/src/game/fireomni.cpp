@@ -152,7 +152,7 @@ void CFireOmni::DrawFire(int /*unused0*/, int /*unused1*/, CCamera *camera, floa
         world[2] = pos[2];
         world[3] = 1.0f;
 
-        if (GiveHaloGlow(world, scale, flicker_width, camera_offset)) {
+        if (GiveHaloGlow(world, scale, flicker_width, camera_offset, (layers & 1) != 0)) {
             // A glow in place of the halo: the light it threw is the fire's point light.
         } else if (MGRotTransPers3DSprite(top_left.data(), bottom_right.data(), world, 45.0f * flicker_width * scale,
                                           45.0f * flicker_height * scale / 2.0f, 1) == 1) {
