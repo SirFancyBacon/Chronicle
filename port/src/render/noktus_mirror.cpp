@@ -641,6 +641,18 @@ void Start(Mirror &mirror) {
     if (const char *occlusion = std::getenv("DC_NOKTUS_AO")) {
         host.ambient_occlusion = std::string_view(occlusion) != "0";
     }
+    // DC_NOKTUS_AO_STRENGTH (0 for none) and DC_NOKTUS_AO_RADIUS (in metres) tune it, by eye; anything but a number leaves Noktus's own.
+    const auto number = [](const char *name, float *into) {
+        if (const char *asked = std::getenv(name)) {
+            char       *end = nullptr;
+            const float wanted = std::strtof(asked, &end);
+            if (end != asked && *end == '\0') {
+                *into = wanted;
+            }
+        }
+    };
+    number("DC_NOKTUS_AO_STRENGTH", &host.occlusion_strength);
+    number("DC_NOKTUS_AO_RADIUS", &host.occlusion_radius);
     host.planar_reflections = PlanarReflections(g_settings);
     if (const char *toe = std::getenv("DC_NOKTUS_TONE_TOE")) {
         host.tone_map_toe = std::strtof(toe, nullptr);
