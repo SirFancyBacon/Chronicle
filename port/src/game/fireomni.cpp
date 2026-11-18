@@ -2,6 +2,7 @@
 
 #include <libgraph.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <utility>
@@ -16,6 +17,7 @@
 #include "runeffect.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
+#include "vu0_ops.hpp"
 
 namespace dc::game {
 
@@ -71,6 +73,17 @@ namespace {
 
 // A shimmer would have been laid back since TakeShimmerShown last asked.
 bool g_shimmer_shown = false;
+
+// How much of what stands here the fog leaves, 0 to 1, as MGRotTransPers3DSprite fogged the game's flame sprites.
+float FogAt(const float *world) {
+    float point[4];
+    vu0::Apply(point, mgRenderInfo.view_screen, const_cast<float *>(world));
+    if (!(point[3] > 0.0f)) {
+        return 1.0f;
+    }
+    const float density = std::max(std::min(mgRenderInfo.fog_a + mgRenderInfo.fog_b / point[3], mgRenderInfo.fog_near), mgRenderInfo.fog_far);
+    return std::clamp(density / 255.0f, 0.0f, 1.0f);
+}
 
 // Per-layer GS state: no alpha test, depth tested but not written, additive Cs * As + Cd. The sprites
 // set TEX1 themselves.
@@ -130,9 +143,15 @@ void CFireOmni::DrawFire(int /*unused0*/, int /*unused1*/, CCamera *camera, floa
         world[2] = pos[2];
         world[3] = 1.0f;
 
-        if (MGRotTransPers3DSprite(top_left.data(), bottom_right.data(), world, 18.0f * scale, 9.0f * scale, 1) == 1) {
+        if (GiveFlame(world, scale, FogAt(world))) {
+            // The renderer's flame in place of the game's core and flame sprites (step 11).
+        } else if (MGRotTransPers3DSprite(top_left.data(), bottom_right.data(), world, 18.0f * scale, 9.0f * scale, 1) == 1) {
             set3DSpriteFog(Vif1Packet, core, CRect_i_(0, 0, 64, 64), top_left.data(), bottom_right.data(), &white);
-            set3DSpriteFog(Vif1Packet, glow, CRect_i_(2, 2, 124, 124), top_left.data(), bottom_right.data(), &white);
+            // Its flame drawn from the screen's copy the dungeons make for it (DrawRaster), which with the renderer's flames they don't: a frame
+            // whose flame falls back to the game's (no world camera yet) shows the core alone rather than an old copy of the screen.
+            if (!render::ModernFire()) {
+                set3DSpriteFog(Vif1Packet, glow, CRect_i_(2, 2, 124, 124), top_left.data(), bottom_right.data(), &white);
+            }
         }
     }
 

@@ -59,10 +59,14 @@ bool TakeShimmerShown();
  */
 class HaloAsGlow {
 public:
-    HaloAsGlow();
+    /** @param dungeon A dungeon's fires: their glows at the share of a town's that their light is (GiveDungeonFireLight). */
+    explicit HaloAsGlow(bool dungeon = false);
     ~HaloAsGlow();
     HaloAsGlow(const HaloAsGlow &) = delete;
     HaloAsGlow &operator=(const HaloAsGlow &) = delete;
+
+private:
+    bool previous_dungeon_;
 };
 
 /**
@@ -76,6 +80,28 @@ public:
  *                   alone shows its flame through its glass.
  */
 bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_through, bool open_flame);
+
+/**
+ * Gives a fire's flame to the renderer, where it draws them (render::ModernFire), in place of CFireOmni::DrawFire's core sprites: false for the caller
+ * to draw the game's.
+ * @param middle Where the game centres its flame's sprites, in the world.
+ * @param scale The fire's scale, as DrawFire was given it.
+ * @param fog How much of it the fog leaves, 0 to 1, as the game's sprites were fogged.
+ */
+bool GiveFlame(const float *middle, float scale, float fog);
+
+/** While one stands, the flames given (GiveFlame) are this fire's, from tick to tick: a town's effect, which may stand on a part that moves. Without
+ * one, a flame is known by where it burns (a dungeon's fires, one object moved from fire to fire). */
+class FlameKey {
+public:
+    explicit FlameKey(std::uint64_t key);
+    ~FlameKey();
+    FlameKey(const FlameKey &) = delete;
+    FlameKey &operator=(const FlameKey &) = delete;
+
+private:
+    std::uint64_t previous_;
+};
 
 /** How far above where a fire stands its flame burns, as CFireOmni draws it. */
 inline constexpr float kFlameRise = 4.6f;

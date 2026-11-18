@@ -500,6 +500,7 @@ void DrawEditEffect(EDIT_EFFECT_INFO *effect, CCamera *camera, CEffectGroup *gro
             setbilinear(1);
             // Its light is given as a point light (GiveEffectLight), so its halo can be a glow.
             const HaloAsGlow glow;
+            const FlameKey   flame(reinterpret_cast<std::uintptr_t>(effect)); // its flame its own, if its part moves
             Fire.DrawFire(1, 1, camera, position, scale, fire_kind, 15.0f);
             break;
         }

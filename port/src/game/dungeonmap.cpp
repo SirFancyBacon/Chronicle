@@ -965,7 +965,7 @@ void CDungeonMap::DrawFireFreeStyle(CFrameVu1 *frame, CCameraFollow *camera) {
             this->fire.pos[1] = 10.0f * world_y;
             this->fire.pos[2] = 10.0f * world_z;
             this->fire.pos[3] = 1.0f;
-            const HaloAsGlow glow; // its light is given (GiveFireLights)
+            const HaloAsGlow glow(true); // its light is given (GiveFireLights)
             this->fire.DrawFire(1, 1, camera, frame_pos, 1.0f, param, 15.0f);
 
             // The crackle comes from the fire that is nearest to the camera.
@@ -1068,7 +1068,7 @@ void CDungeonMap::DrawFire(CFrameVu1 *frame, CCameraFollow *camera) {
                         this->fire.pos[1] = 10.0f * height;
                         this->fire.pos[2] = 10.0f * rot_z;
                         this->fire.pos[3] = 1.0f;
-                        const HaloAsGlow glow; // its light is given (GiveFireLights)
+                        const HaloAsGlow glow(true); // its light is given (GiveFireLights)
                         this->fire.DrawFire(1, 1, camera, frame_pos, 1.0f, param, 15.0f);
 
                         // The crackle comes from the fire that is nearest to the camera.
@@ -1107,6 +1107,7 @@ void CDungeonMap::DrawRaster(CFrameVu1 *frame) {
     // The game copies the screen over each fire and lays it back with its lines shifted. Noktus draws the heat itself where it draws (ModernHeat): it's
     // told where the fires are, and the game's copy still fills the flames' glow (CFireOmni::DrawRaster) but isn't laid back.
     const bool                     modern = render::ModernHeat();
+    const bool                     modern_fire = render::ModernFire();
     std::vector<render::HeatGiven> heat;
     float pos[4];
     int   i;
@@ -1160,7 +1161,10 @@ void CDungeonMap::DrawRaster(CFrameVu1 *frame) {
                         this->fire.pos[1] = 10.0f * y;
                         this->fire.pos[2] = 10.0f * z;
                         this->fire.pos[3] = 1.0f;
-                        this->fire.DrawRaster();
+                        // With the renderer's own flames (ModernFire), the game's copy of the screen fed nothing: its flame sprites aren't drawn.
+                        if (!modern_fire) {
+                            this->fire.DrawRaster();
+                        }
                         if (modern) {
                             // From where the game's shimmer was centred, as wide as it was, rising a little further.
                             heat.push_back({
@@ -1176,8 +1180,8 @@ void CDungeonMap::DrawRaster(CFrameVu1 *frame) {
     render::ApplyHeat(heat);
     // The game's shimmer, laid back on the screen, ended the frame's linear light, and the fires' glows drawn after it are tuned to that: blended into
     // the linear scene, they wash the torch and the wall around it in orange. So it ends where a shimmer would have been laid, until the fires are
-    // Noktus's own.
-    if (TakeShimmerShown()) {
+    // Noktus's own (ModernFire), when nothing ends it here and the fires near the camera glow as the towns' do.
+    if (TakeShimmerShown() && !modern_fire) {
         render::EndLinearLight();
     }
 }

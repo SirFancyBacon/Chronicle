@@ -1242,6 +1242,45 @@ void ApplyFocus(const FocusSettings &settings) {
     }
 }
 
+bool ModernFire() {
+    static const bool game = [] {
+        const char *asked = std::getenv("DC_NOKTUS_FIRE_GAME");
+        return asked != nullptr && std::strcmp(asked, "1") == 0;
+    }();
+    // With modern glows only (bloom on, the game's halos not asked for): the bridge it ends kept the game's halos from washing the dungeons orange.
+    return !game && ModernGlow();
+}
+
+bool AddFire(const FireGiven &given) {
+    if (!ModernFire()) {
+        return false;
+    }
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    // After the scene's light was ended this tick, Noktus draws no flames: the game's stand.
+    if (!mirror.open || !mirror.renderer || !mirror.world_camera || mirror.linear_ended) {
+        return false;
+    }
+    const noktus::Fire fire = {
+        .key = static_cast<noktus::ObjectKey>(given.key),
+        .position = {given.position[0], given.position[1], given.position[2]},
+        .height = given.height,
+        .width = given.width,
+        .light = {given.light[0], given.light[1], given.light[2], 1.0f},
+        .fog = given.fog,
+        .seen_through = given.seen_through
+    };
+    // In the world's camera, then the camera as it was, for what's recorded next.
+    Guarded([&] {
+        mirror.renderer->SetCamera(*mirror.world_camera);
+        mirror.renderer->AddFire(fire);
+        if (mirror.camera) {
+            mirror.renderer->SetCamera(*mirror.camera);
+        }
+    });
+    return true;
+}
+
 bool ModernHeat() {
     static const bool wanted = [] {
         const char *asked = std::getenv("DC_NOKTUS_HEAT");

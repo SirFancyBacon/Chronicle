@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <random>
 #include <unordered_map>
+#include <utility>
 
 #include "frame.hpp"
 #include "objanime.hpp"
@@ -132,22 +133,40 @@ float TorchYellow() {
     return yellow;
 }
 int             g_halo_as_glow = 0;
+bool            g_halo_dungeon = false;
+std::uint64_t   g_flame_key = 0;
+
+// The renderer's flame (render::AddFire) over the game's sprite of it (18 units across at scale 1, centred on the flame's middle): its foot in its
+// torch's head, below that middle, its tip where the sprite's top was. Its heart's light past white, for
+// bloom; DC_NOKTUS_FLAME scales it, for tuning by eye, on top of DC_NOKTUS_FIRE.
+constexpr float kFlameFoot = 6.0f;
+constexpr float kFlameHeight = 15.0f;
+constexpr float kFlameWidth = 10.0f;
+constexpr float kFlameLight = 1.4f;
+
+float FlameScale() {
+    static const float scale = ScaleFrom("DC_NOKTUS_FLAME");
+    return scale;
+}
 
 } // namespace
 
-HaloAsGlow::HaloAsGlow() {
+HaloAsGlow::HaloAsGlow(bool dungeon) : previous_dungeon_(std::exchange(g_halo_dungeon, dungeon)) {
     g_halo_as_glow++;
 }
 
 HaloAsGlow::~HaloAsGlow() {
     g_halo_as_glow--;
+    g_halo_dungeon = previous_dungeon_;
 }
 
 bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_through, bool open_flame) {
     if (g_halo_as_glow <= 0 || !render::ModernGlow() || !(scale > 0.0f)) {
         return false;
     }
-    const float light = kGlowLight * FireScale() * GlowScale();
+    // A dungeon's fire glows at the share of a town's its light is (kDungeonShare): its torches hang close to what they light, and at a town's
+    // its lanterns were balls of pale light where the game's halos were warm and small (step 11, once the dungeons' fires glow).
+    const float light = kGlowLight * FireScale() * GlowScale() * (g_halo_dungeon ? kDungeonShare : 1.0f);
     // White of the warm light's own brightness (its luminance, by Rec. 709's weights), so paling doesn't brighten it.
     const float brightness = 0.2126f * kWarm[0] + 0.7152f * kWarm[1] + 0.0722f * kWarm[2];
     float       colour[3];
@@ -160,6 +179,32 @@ bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_th
         .color = {colour[0], colour[1], colour[2]},
         .size = 45.0f * scale * flicker * kGlowShare,
         .seen_through = seen_through
+    });
+}
+
+FlameKey::FlameKey(std::uint64_t key) : previous_(std::exchange(g_flame_key, key)) {}
+
+FlameKey::~FlameKey() {
+    g_flame_key = previous_;
+}
+
+bool GiveFlame(const float *middle, float scale, float fog) {
+    if (!(scale > 0.0f) || !render::ModernFire()) {
+        return false;
+    }
+    // Who it is: the fire's own (FlameKey), or from where it burns (a dungeon's fires are one object, moved from fire to fire), so each flickers as
+    // its own.
+    const auto place = [](float at) { return static_cast<std::uint64_t>(static_cast<std::int64_t>(std::lround(at * 4.0f)) & 0x1FFFFF); };
+    const std::uint64_t key = g_flame_key != 0 ? g_flame_key : (1ull << 63) | place(middle[0]) << 42 | place(middle[1]) << 21 | place(middle[2]);
+    const float         light = kFlameLight * FireScale() * FlameScale();
+    return render::AddFire({
+        .key = key,
+        .position = {middle[0], middle[1] - kFlameFoot * scale, middle[2]},
+        .height = kFlameHeight * scale,
+        .width = kFlameWidth * scale,
+        .light = {light, light, light},
+        .fog = fog,
+        .seen_through = 0.0f
     });
 }
 

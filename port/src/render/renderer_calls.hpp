@@ -134,6 +134,25 @@ struct HeatGiven {
 /** Whether water is real water where the renderer draws it (Noktus's water_clarity above 0): the rivers and lakes too (RiverWaterScope). */
 bool ModernWater();
 
+/** A fire's flame, drawn by the renderer (AddFire): Noktus's Fire. */
+struct FireGiven {
+    std::uint64_t key = 0;     // who it is from tick to tick, so its flicker is its own
+    float position[3] = {};    // in the world: its flame's foot
+    float height = 1.0f;       // how tall its flame stands
+    float width = 0.5f;        // how wide it is at its widest
+    float light[3] = {};       // in linear light, what its heart gives
+    float fog = 1.0f;          // how much of it the fog leaves, 0 to 1
+    float seen_through = 0.0f; // how far in front of its foot what stands there still doesn't hide it
+};
+
+/** Whether fires' flames are the renderer's own (AddFire), in place of the game's sprites (step 11, the owner's decision of 2026-11-18): with modern
+ * glows (ModernGlow), unless DC_NOKTUS_FIRE_GAME=1 asks for the game's, to compare. */
+bool ModernFire();
+
+/** Gives a fire's flame to the renderer for this tick, if it draws them (ModernFire) and the scene's light hasn't ended: false for the caller to
+ * draw the game's. */
+bool AddFire(const FireGiven &fire);
+
 /** Whether fires' heat is the renderer's own (ApplyHeat), in place of the game's shimmer (a copy of the screen laid back with its lines shifted):
  * whenever Noktus draws, unless DC_NOKTUS_HEAT=0 asks for the game's. */
 bool ModernHeat();
