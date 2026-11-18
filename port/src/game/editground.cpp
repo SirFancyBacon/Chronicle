@@ -26,6 +26,7 @@
 #include "platform/config.hpp"
 #include "rect.hpp"
 #include "render/passes.hpp"
+#include "render/renderer_calls.hpp"
 #include "savedata.hpp"
 #include "vector3.hpp"
 
@@ -1039,10 +1040,22 @@ void CEditGround::DrawWaterSurface(CCamera *camera) {
     dir[1] = 0.0f;
     sceVu0Normalize(dir, dir);
 
+    // Whether the map has water of its own, the fixed parts DrawWater draws in the water's pass (as EditLoop asks for it).
+    constexpr int kWaterPass = 0x15;
+    const bool    map_water = std::ranges::any_of(fixed_parts, [](const CMapParts &fixed) { return fixed.category_no == kWaterPass; });
+
     for (CGroundWater &water_surface : water_surfaces) {
         CGroundWater *surface = &water_surface;
 
         if (surface->draw == 0) {
+            continue;
+        }
+
+        // A ripple surface of its own, neither a map part's nor following the eye, over a map with water of its own (Matataki's pool): where rivers
+        // and lakes are real water, the map's water beneath it is the lake already, and this drew a second body of water over part of it, its edge a
+        // seam across the pool and its reflections bright patches (the owner's look, 2026-11-17). Where the map has no water of its own (the sunken
+        // ship's entrance, the Divine Beast Cave), the surface is the only water there, and stays.
+        if (surface->parts_no < 0 && surface->follow[0] == 0 && surface->follow[1] == 0 && surface->follow[2] == 0 && map_water && render::ModernWater()) {
             continue;
         }
 

@@ -131,6 +131,9 @@ struct HeatGiven {
     float strength = 1.0f;  // 1: a torch's
 };
 
+/** Whether water is real water where the renderer draws it (Noktus's water_clarity above 0): the rivers and lakes too (RiverWaterScope). */
+bool ModernWater();
+
 /** Whether fires' heat is the renderer's own (ApplyHeat), in place of the game's shimmer (a copy of the screen laid back with its lines shifted):
  * whenever Noktus draws, unless DC_NOKTUS_HEAT=0 asks for the game's. */
 bool ModernHeat();

@@ -71,6 +71,7 @@ constexpr float       kDepthAgrees = 0.0005f;
 std::atomic<bool> g_linear = false;
 // Whether bloom spreads light past white (VulkanHost::bloom above 0), which glows need.
 std::atomic<bool> g_bloom = false;
+std::atomic<bool> g_real_water = false;
 
 // Whether the scene is outdoors (SetOutdoorLight). Game thread.
 bool g_outdoors = false;
@@ -635,6 +636,7 @@ void Start(Mirror &mirror) {
     if (const char *clarity = std::getenv("DC_NOKTUS_WATER_CLARITY")) {
         host.water_clarity = std::strtof(clarity, nullptr);
     }
+    g_real_water = host.water_clarity > 0.0f && std::isfinite(host.water_clarity);
     // The game's world is about ten units to a metre (Toan stands about 14): water's waves and ambient occlusion's reach are sized by it.
     host.world_units_per_metre = 10.0f;
     // Ambient occlusion (Noktus's step 9), on; DC_NOKTUS_AO=0 leaves it out, to compare.
@@ -1038,6 +1040,10 @@ bool ModernFocus() {
 
 bool ModernLight() {
     return g_linear && !KazarovDraws() && MirrorOn();
+}
+
+bool ModernWater() {
+    return g_real_water && !KazarovDraws() && MirrorOn();
 }
 
 // Real shadows from the sun, unless DC_NOKTUS_SHADOWS=0: for comparing with the game's own.
