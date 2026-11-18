@@ -656,6 +656,10 @@ void Start(Mirror &mirror) {
     number("DC_NOKTUS_AO_STRENGTH", &host.occlusion_strength);
     number("DC_NOKTUS_AO_RADIUS", &host.occlusion_radius);
     host.planar_reflections = PlanarReflections(g_settings);
+    // Step 11: what's solid fogged in light; DC_NOKTUS_FOG_LIGHT=0 mixes it in the display's encoding as before, to compare.
+    if (const char *fog = std::getenv("DC_NOKTUS_FOG_LIGHT")) {
+        host.fog_in_light = std::string_view(fog) != "0";
+    }
     if (const char *toe = std::getenv("DC_NOKTUS_TONE_TOE")) {
         host.tone_map_toe = std::strtof(toe, nullptr);
     }
