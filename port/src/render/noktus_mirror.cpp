@@ -822,7 +822,8 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
         // A draw whose main light is switched off (Georama's dimmed cursor) can't say where the sun is.
         if (towards.x * towards.x + towards.y * towards.y + towards.z * towards.z > 1e-6f) {
             mirror.sun = towards;
-            mirror.renderer->SetSun({.direction = ShadowsFallingFrom(towards), .distance = mirror.sun_distance});
+            // Indoors and in the dungeons the map casts nothing (below), so ambient occlusion takes the main light there too.
+            mirror.renderer->SetSun({.direction = ShadowsFallingFrom(towards), .distance = mirror.sun_distance, .world_casts = g_outdoors});
         }
     }
     draw = std::move(scene.draw);
