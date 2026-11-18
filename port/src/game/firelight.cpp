@@ -108,15 +108,18 @@ void GiveFlameLight(std::uint64_t key, const float *flame, float share, float ra
     });
 }
 
-// A halo's glow (HaloAsGlow): as wide as the flame the game draws inside its halo (a fifth of the halo's width each side of its middle), its middle past
-// white at the light's warmth, so bloom spreads a glow from the flame itself, the light round about being the fire's own. Its light is held so that only
-// its heart, about half its width, reaches the top of what SDR shows: at twice this (the first build) it was a flat ball of white-hot orange over most of
-// its width, hiding the flame and its lamp (the owner's look, 2026-11-16).
-constexpr float kGlowShare = 0.2f;
-constexpr float kGlowLight = 1.5f;
-// The glow's colour: the fire's light paled this share of the way to white of its brightness. At the light's own warmth a glow read as a deep orange
-// disc, too saturated for the bright heart of a flame (the owner's look, 2026-11-16). DC_NOKTUS_GLOW_PALE sets the share, 0 to 1, for tuning by eye.
-constexpr float kGlowPale = 0.4f;
+// A halo's glow (HaloAsGlow): a little wider than the flame the game draws inside its halo (a fifth of the halo's width each side of its middle), its
+// middle past white at the light's warmth, so bloom spreads a glow from the flame itself, the light round about being the fire's own. Its light falls
+// away from its heart as glare does (glow.frag), so it has no edge: the first shape, light held over most of its width, read as a pale ball round the
+// lamp rather than its light (the owner's look, 2026-11-18). At its width and light before (0.2, 1.5) the new shape was barely a glow; at twice its
+// width a haze of orange over the lamp.
+constexpr float kGlowShare = 0.26f;
+constexpr float kGlowLight = 2.25f;
+// The glow's colour: the fire's light paled this share of the way to white of its brightness. At the light's own warmth the first shape read as a deep
+// orange disc, too saturated for the bright heart of a flame (the owner's look, 2026-11-16), so it was paled 0.4; the glare's heart, past white,
+// eases towards white in the tone map anyway, so it's warmer now, its fall the fire's colour (2026-11-18). DC_NOKTUS_GLOW_PALE sets the share, 0 to 1,
+// for tuning by eye.
+constexpr float kGlowPale = 0.2f;
 
 float GlowPale() {
     static const float pale = std::min(ScaleFrom("DC_NOKTUS_GLOW_PALE", kGlowPale), 1.0f);
