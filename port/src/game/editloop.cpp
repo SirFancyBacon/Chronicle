@@ -2439,6 +2439,7 @@ void EditMainDraw() {
     const GameDrawTrace draw_trace;
     auto                far_marks = std::make_unique<int[]>(10);
     bool                far_drawn = false;
+    int                 focus_after_characters = 0; // the depth of field's level, asked for once the characters are drawn (0: not deferred)
 
     if (EdDrawOffFlag == 0) {
         if (EdPauseFlag != 0 || GameMode == ED_MODE_RETURN_MENU_WALK || GameMode == ED_MODE_RETURN_MENU_GEORAMA) {
@@ -2570,7 +2571,15 @@ void EditMainDraw() {
                     dof_level = 1;
                 }
 
-                EdDrawDOF(dof_level);
+                // The renderer's depth of field blurs the characters too, by their own distance, once they're drawn (the owner, 2026-11-18): asked
+                // for after the moving parts, before the effects. The camera's own character stands far nearer than the blur begins. Its heat haze,
+                // which shares the call, bends far characters as it does what stands behind them. Not in an event, whose backdrop is drawn before the
+                // characters, nor with the game's own.
+                if (render::ModernFocus() && GameMode != ED_MODE_EVENT) {
+                    focus_after_characters = dof_level;
+                } else {
+                    EdDrawDOF(dof_level);
+                }
                 draw_trace.Finish(GameDrawPhase::DofRecord, dof_start);
                 draw_trace.Finish(GameDrawPhase::FarDof, far_dof_start);
             }
@@ -2774,6 +2783,11 @@ void EditMainDraw() {
             MotionParts[i].Draw();
         }
         draw_trace.Finish(GameDrawPhase::MotionParts, motion_parts_start);
+
+        if (focus_after_characters != 0) {
+            render::SetPass(render::Pass::DepthOfField);
+            EdDrawDOF(focus_after_characters);
+        }
 
         if (EdDrawOffMap == 0) {
             render::SetPass(render::Pass::Effects);
