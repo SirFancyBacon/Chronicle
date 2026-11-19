@@ -143,6 +143,7 @@ struct FireGiven {
     float light[3] = {};       // in linear light, what its heart gives
     float fog = 1.0f;          // how much of it the fog leaves, 0 to 1
     float seen_through = 0.0f; // how far in front of its foot what stands there still doesn't hide it
+    float glow = 0.0f;         // how much of its light it gives off round about, from its own shape, for bloom to spread (noktus::Fire::glow)
 };
 
 /** Whether fires' flames are the renderer's own (AddFire), in place of the game's sprites (step 11, the owner's decision of 2026-11-18): with modern

@@ -87,8 +87,13 @@ bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_th
  * @param middle Where the game centres its flame's sprites, in the world.
  * @param scale The fire's scale, as DrawFire was given it.
  * @param fog How much of it the fog leaves, 0 to 1, as the game's sprites were fogged.
+ * @param glows Whether it glows from its own shape, for bloom to spread, in place of the game's halo round it (HaloGlowWanted).
  */
-bool GiveFlame(const float *middle, float scale, float fog);
+bool GiveFlame(const float *middle, float scale, float fog, bool glows = false);
+
+/** Whether a fire's halo is given as light where it's drawn (a HaloAsGlow stands, with the renderer's glows): a fire whose flame is given
+ *  (GiveFlame) then glows from the flame itself, its halo left out. */
+bool HaloGlowWanted();
 
 /** While one stands, the flames given (GiveFlame) are this fire's, from tick to tick: a town's effect, which may stand on a part that moves. Without
  * one, a flame is known by where it burns (a dungeon's fires, one object moved from fire to fire). */

@@ -146,6 +146,9 @@ constexpr float kFlameFoot = 6.0f;
 constexpr float kFlameHeight = 15.0f;
 constexpr float kFlameWidth = 10.0f;
 constexpr float kFlameLight = 1.4f;
+// How much of its light a flame gives off round about from its own shape, for bloom to spread, in place of the halo's glow: the flame itself glowing,
+// as a modern game's emitters do, where a glow beside it read as a glowing ball giving the light (the owner, 2026-11-18). DC_NOKTUS_GLOW scales it.
+constexpr float kFlameGlow = 4.0f;
 
 float FlameScale() {
     static const float scale = ScaleFrom("DC_NOKTUS_FLAME");
@@ -191,7 +194,11 @@ FlameKey::~FlameKey() {
     g_flame_key = previous_;
 }
 
-bool GiveFlame(const float *middle, float scale, float fog) {
+bool HaloGlowWanted() {
+    return g_halo_as_glow > 0 && render::ModernGlow();
+}
+
+bool GiveFlame(const float *middle, float scale, float fog, bool glows) {
     if (!(scale > 0.0f) || !render::ModernFire()) {
         return false;
     }
@@ -200,6 +207,8 @@ bool GiveFlame(const float *middle, float scale, float fog) {
     const auto place = [](float at) { return static_cast<std::uint64_t>(static_cast<std::int64_t>(std::lround(at * 4.0f)) & 0x1FFFFF); };
     const std::uint64_t key = g_flame_key != 0 ? g_flame_key : (1ull << 63) | place(middle[0]) << 42 | place(middle[1]) << 21 | place(middle[2]);
     const float         light = kFlameLight * FireScale() * FlameScale();
+    // Its glow, from the flame itself, as a modern game's emitters glow: a dungeon's at the share of a town's its light is, as its halo's was.
+    const float         glow = glows ? kFlameGlow * GlowScale() * (g_halo_dungeon ? kDungeonShare : 1.0f) : 0.0f;
     return render::AddFire({
         .key = key,
         .position = {middle[0], middle[1] - kFlameFoot * scale, middle[2]},
@@ -207,7 +216,8 @@ bool GiveFlame(const float *middle, float scale, float fog) {
         .width = kFlameWidth * scale,
         .light = {light, light, light},
         .fog = fog,
-        .seen_through = 0.0f
+        .seen_through = 0.0f,
+        .glow = glow
     });
 }
 

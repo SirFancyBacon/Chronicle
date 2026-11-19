@@ -134,6 +134,9 @@ void CFireOmni::DrawFire(int /*unused0*/, int /*unused1*/, CCamera *camera, floa
     sceVu0Normalize(camera_direction, camera_direction);
     sceVu0ScaleVector(camera_direction, camera_direction, camera_offset);
     spRGBA white = {.r = 0x80, .g = 0x80, .b = 0x80, .a = 0x80};
+    // A flame given with its halo wanted as light glows from itself, its halo left out.
+    const bool flame_glows = (layers & 2) != 0 && HaloGlowWanted();
+    bool       flame_given = false;
 
     if (layers & 1) {
         SetLayerRegisters();
@@ -143,7 +146,8 @@ void CFireOmni::DrawFire(int /*unused0*/, int /*unused1*/, CCamera *camera, floa
         world[2] = pos[2];
         world[3] = 1.0f;
 
-        if (GiveFlame(world, scale, FogAt(world))) {
+        flame_given = GiveFlame(world, scale, FogAt(world), flame_glows);
+        if (flame_given) {
             // The renderer's flame in place of the game's core and flame sprites (step 11).
         } else if (MGRotTransPers3DSprite(top_left.data(), bottom_right.data(), world, 18.0f * scale, 9.0f * scale, 1) == 1) {
             set3DSpriteFog(Vif1Packet, core, CRect_i_(0, 0, 64, 64), top_left.data(), bottom_right.data(), &white);
@@ -171,7 +175,9 @@ void CFireOmni::DrawFire(int /*unused0*/, int /*unused1*/, CCamera *camera, floa
         world[2] = pos[2];
         world[3] = 1.0f;
 
-        if (GiveHaloGlow(world, scale, flicker_width, camera_offset, (layers & 1) != 0)) {
+        if (flame_given && flame_glows) {
+            // The flame glows from itself (GiveFlame).
+        } else if (GiveHaloGlow(world, scale, flicker_width, camera_offset, (layers & 1) != 0)) {
             // A glow in place of the halo: the light it threw is the fire's point light.
         } else if (MGRotTransPers3DSprite(top_left.data(), bottom_right.data(), world, 45.0f * flicker_width * scale,
                                           45.0f * flicker_height * scale / 2.0f, 1) == 1) {
