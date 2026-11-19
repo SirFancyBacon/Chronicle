@@ -129,6 +129,159 @@ std::shared_ptr<audio::Bank> LoadBank(const std::string &document) {
     return audio::Bank::CreateFromJsonCandidates(*text, [](const std::filesystem::path &sample) { return Candidates(sample.generic_string()); });
 }
 
+namespace {
+
+// A WAV of 16-bit samples, one channel: its rate and values as floats (a value times 32768 is the 16-bit one). Nothing for anything else.
+std::optional<noktus::audio::Samples> ReadWav(const std::vector<std::uint8_t> &bytes) {
+    const auto word = [&](std::size_t at) { return static_cast<std::uint32_t>(bytes[at] | bytes[at + 1] << 8 | bytes[at + 2] << 16 | bytes[at + 3] << 24); };
+    const auto half = [&](std::size_t at) { return static_cast<std::uint16_t>(bytes[at] | bytes[at + 1] << 8); };
+    if (bytes.size() < 12 || std::string_view(reinterpret_cast<const char *>(bytes.data()), 4) != "RIFF" ||
+        std::string_view(reinterpret_cast<const char *>(bytes.data()) + 8, 4) != "WAVE") {
+        return std::nullopt;
+    }
+    int         rate = 0;
+    bool        fitting = false;
+    std::size_t at = 12;
+    while (at + 8 <= bytes.size()) {
+        const std::string_view id(reinterpret_cast<const char *>(bytes.data()) + at, 4);
+        const std::size_t      size = word(at + 4);
+        const std::size_t      body = at + 8;
+        if (body + size > bytes.size()) {
+            return std::nullopt;
+        }
+        if (id == "fmt " && size >= 16) {
+            fitting = half(body) == 1 && half(body + 2) == 1 && half(body + 14) == 16;
+            rate = static_cast<int>(word(body + 4));
+        } else if (id == "data") {
+            if (!fitting || rate <= 0) {
+                return std::nullopt;
+            }
+            noktus::audio::Samples samples;
+            samples.rate = rate;
+            samples.channels = 1;
+            samples.data.resize(size / 2);
+            for (std::size_t i = 0; i < samples.data.size(); i++) {
+                samples.data[i] = static_cast<float>(static_cast<std::int16_t>(half(body + i * 2))) / 32768.0f;
+            }
+            return samples;
+        }
+        at = body + size + (size & 1);
+    }
+    return std::nullopt;
+}
+
+std::shared_ptr<const noktus::audio::Bank> NoktusBankFromJsonOrThrow(std::string_view                                                                    text,
+                                                                     const std::function<std::optional<std::vector<std::uint8_t>>(const std::string &)> &read) {
+    namespace na = noktus::audio;
+    const Json root = Json::parse(text, nullptr, false);
+    if (root.is_discarded() || !root.is_object() || root.value("kind", "") != "bank") {
+        return nullptr;
+    }
+    auto       bank = std::make_shared<na::Bank>();
+    const auto number = [](const Json &object, const char *key, int otherwise) {
+        const auto found = object.find(key);
+        return found != object.end() && found->is_number_integer() ? found->get<int>() : otherwise;
+    };
+    for (const Json &p : root.value("programs", Json::array())) {
+        na::BankProgram &program = bank->programs.emplace_back();
+        if (!p.is_object()) {
+            continue;
+        }
+        program.present = p.value("present", false);
+        if (!program.present) {
+            continue;
+        }
+        program.transpose = number(p, "transpose", 0);
+        program.detune = number(p, "detune", 0);
+        program.volume = number(p, "volume", 128);
+        program.pan = number(p, "pan", 64);
+        for (const Json &s : p.value("splits", Json::array())) {
+            program.splits.push_back({.key_low = number(s, "key_low", 0),
+                                      .key_high = number(s, "key_high", 127),
+                                      .sample_set = number(s, "sample_set", -1),
+                                      .transpose = number(s, "transpose", 0),
+                                      .detune = number(s, "detune", 0),
+                                      .volume = number(s, "volume", 128),
+                                      .pan = number(s, "pan", 64),
+                                      .bend_low = number(s, "bend_low", 0),
+                                      .bend_high = number(s, "bend_high", 0)});
+        }
+    }
+    for (const Json &s : root.value("sample_sets", Json::array())) {
+        na::BankSampleSet &set = bank->sample_sets.emplace_back();
+        set.velocity_low = number(s, "vel_low", 0);
+        set.velocity_high = number(s, "vel_high", 127);
+        set.velocity_curve = number(s, "vel_curve", 0);
+        for (const Json &index : s.value("samples", Json::array())) {
+            set.samples.push_back(index.is_number_integer() ? index.get<int>() : -1);
+        }
+    }
+    for (const Json &s : root.value("samples", Json::array())) {
+        na::BankSample &sample = bank->samples.emplace_back();
+        sample.wave = number(s, "vag", -1);
+        sample.base_note = number(s, "base_note", 60);
+        sample.detune = number(s, "detune", 0);
+        sample.volume = number(s, "volume", 128);
+        sample.pan = number(s, "pan", 64);
+        sample.adsr1 = static_cast<std::uint16_t>(number(s, "adsr1", 0x00FF));
+        sample.adsr2 = static_cast<std::uint16_t>(number(s, "adsr2", 0));
+        sample.spu_attribute = static_cast<std::uint8_t>(number(s, "spu_attr", 0));
+        sample.velocity_low = number(s, "vel_low", 0);
+        sample.velocity_high = number(s, "vel_high", 127);
+    }
+    for (const Json &v : root.value("vags", Json::array())) {
+        na::BankWave &wave = bank->waves.emplace_back();
+        if (!v.is_object() || !v.contains("wav") || !v["wav"].is_string()) {
+            continue;
+        }
+        // A path within the data, never out of it.
+        const std::filesystem::path relative = v["wav"].get<std::string>();
+        if (relative.is_absolute() || std::ranges::any_of(relative, [](const std::filesystem::path &part) { return part == ".."; })) {
+            return nullptr;
+        }
+        const std::optional<std::vector<std::uint8_t>> bytes = read(relative.generic_string());
+        std::optional<na::Samples>                     samples = bytes ? ReadWav(*bytes) : std::nullopt;
+        const int                                      loop_start = number(v, "loop_start", 0);
+        const int                                      loop_end = number(v, "loop_end", 0);
+        if (!samples || loop_end <= 0 || static_cast<std::size_t>(loop_end) > samples->data.size() || loop_start < 0 || loop_start >= loop_end) {
+            return nullptr;
+        }
+        samples->data.resize(static_cast<std::size_t>(loop_end)); // the waveform ends where its loop does
+        wave.samples = std::make_shared<const na::Samples>(std::move(*samples));
+        wave.loop_start = static_cast<std::size_t>(loop_start);
+        wave.loops = v.value("loops", false);
+    }
+    return bank;
+}
+
+} // namespace
+
+// A bank document from a datapack may be anything: a key of the wrong kind throws in the reading, which here means no bank.
+std::shared_ptr<const noktus::audio::Bank> NoktusBankFromJson(std::string_view                                                                    text,
+                                                              const std::function<std::optional<std::vector<std::uint8_t>>(const std::string &)> &read) {
+    try {
+        return NoktusBankFromJsonOrThrow(text, read);
+    } catch (const nlohmann::json::exception &) {
+        return nullptr;
+    }
+}
+
+std::shared_ptr<const noktus::audio::Bank> LoadNoktusBank(const std::string &document) {
+    const std::optional<std::string> text = Text(document);
+    if (!text) {
+        return nullptr;
+    }
+    return NoktusBankFromJson(*text, [](const std::string &sample) -> std::optional<std::vector<std::uint8_t>> {
+        for (const vfs::Ref &file : Candidates(sample)) {
+            std::vector<std::uint8_t> bytes;
+            if (vfs::Read(file, bytes)) {
+                return bytes;
+            }
+        }
+        return std::nullopt;
+    });
+}
+
 std::shared_ptr<audio::SqFile> LoadSequence(const std::string &document) {
     const std::optional<std::string> text = Text(document);
     return text ? audio::SqFile::CreateFromJson(*text) : nullptr;

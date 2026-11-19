@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -10,6 +12,7 @@
 
 #include "audio/hdbank.hpp"
 #include "audio/sq.hpp"
+#include "noktus/synth.hpp"
 
 /**
  * The sound dcdata publishes beside the disc's packs (docs/AUDIO_FRAMEWORK.md), which the game plays in
@@ -48,6 +51,19 @@ std::optional<PublishedList> FindList(const void *member, std::size_t size, std:
  * The bank a bank document describes, its samples read as WAV; null when it cannot be read.
  */
 std::shared_ptr<audio::Bank> LoadBank(const std::string &document);
+
+/**
+ * The bank a bank document describes, for Noktus's audio (noktus::audio::Bank), its samples read as WAV from the datapacks and the data as LoadBank
+ * reads them; null when it cannot be read.
+ */
+std::shared_ptr<const noktus::audio::Bank> LoadNoktusBank(const std::string &document);
+
+/**
+ * A bank document's text as Noktus's bank, each sample's WAV (a path relative to the data, as the document names it) read by read: nothing when it
+ * isn't there.
+ */
+std::shared_ptr<const noktus::audio::Bank> NoktusBankFromJson(std::string_view                                                                    text,
+                                                              const std::function<std::optional<std::vector<std::uint8_t>>(const std::string &)> &read);
 
 /**
  * The sequence a sequence document describes; null when it cannot be read.
