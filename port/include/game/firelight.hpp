@@ -91,6 +91,37 @@ bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_th
  */
 bool GiveFlame(const float *middle, float scale, float fog, bool glows = false);
 
+/**
+ * Gives the flame of a lamp the game shows by its halo alone (a two-layer fire drawing only its halo), where the renderer draws flames and a halo would
+ * be a glow (HaloGlowWanted): the renderer's flame inside it, glowing from itself, seen through its glass as the halo was. False for the caller to
+ * give the halo (GiveHaloGlow) or draw the game's.
+ * @param middle The halo's middle, in the world.
+ * @param scale The halo's scale, as DrawFire was given it.
+ * @param fog How much of it the fog leaves, 0 to 1.
+ * @param seen_through How far towards the eye the game drew its halo in front of the flame.
+ */
+bool GiveLampFlame(const float *middle, float scale, float fog, float seen_through);
+
+/**
+ * Gives a candle's flame to the renderer, where it draws flames (render::ModernFire), in place of CCandleEffect's sprite, glowing from itself where
+ * the renderer draws glows: false for the caller to draw the game's.
+ * @param position The candle's place, as CCandleEffect has it.
+ * @param half_width, half_height The sprite's, as CCandleEffect has them (its width, and twice its height).
+ */
+bool GiveCandleFlame(const float *position, float half_width, float half_height);
+
+/** While one stands, spared (its flame given, glowing from itself), a fire's halo isn't given as a glow (GiveHaloGlow says it was), nor drawn. */
+class HaloSpared {
+public:
+    explicit HaloSpared(bool spared);
+    ~HaloSpared();
+    HaloSpared(const HaloSpared &) = delete;
+    HaloSpared &operator=(const HaloSpared &) = delete;
+
+private:
+    bool spared_;
+};
+
 /** Whether a fire's halo is given as light where it's drawn (a HaloAsGlow stands, with the renderer's glows): a fire whose flame is given
  *  (GiveFlame) then glows from the flame itself, its halo left out. */
 bool HaloGlowWanted();

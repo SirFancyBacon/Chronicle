@@ -17,6 +17,7 @@
 #include "frame.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
+#include "render/renderer_calls.hpp"
 
 namespace dc::game {
 
@@ -462,12 +463,20 @@ void DrawEditEffect(EDIT_EFFECT_INFO *effect, CCamera *camera, CEffectGroup *gro
     effect->frame->GetWorldPosition(position, effect->offset);
     float scale = effect->colour[0];
 
+    // A candle given as the renderer's flame, glowing from itself: its halo is left out (HaloSpared).
+    bool candle_glows = false;
+
     switch (effect->kind) {
         case EDIT_EFFECT_CANDLE:
             setbilinear(1);
             Candle.SetPosition(position);
             Candle.SetScale(effect->colour[0], effect->colour[1]);
-            Candle.Draw();
+            // The renderer's flame in place of the game's sprite (step 11), its flicker its own if its part moves.
+            if (const FlameKey flame(reinterpret_cast<std::uintptr_t>(effect)); GiveCandleFlame(position, effect->colour[0], effect->colour[1])) {
+                candle_glows = render::ModernGlow();
+            } else {
+                Candle.Draw();
+            }
             scale *= 0.1f;
             position[1] -= 4.0f;
 
@@ -500,6 +509,7 @@ void DrawEditEffect(EDIT_EFFECT_INFO *effect, CCamera *camera, CEffectGroup *gro
             setbilinear(1);
             // Its light is given as a point light (GiveEffectLight), so its halo can be a glow.
             const HaloAsGlow glow;
+            const HaloSpared spared(candle_glows);
             const FlameKey   flame(reinterpret_cast<std::uintptr_t>(effect)); // its flame its own, if its part moves
             Fire.DrawFire(1, 1, camera, position, scale, fire_kind, 15.0f);
             break;

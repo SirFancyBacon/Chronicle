@@ -177,6 +177,8 @@ void CFireOmni::DrawFire(int /*unused0*/, int /*unused1*/, CCamera *camera, floa
 
         if (flame_given && flame_glows) {
             // The flame glows from itself (GiveFlame).
+        } else if ((layers & 1) == 0 && GiveLampFlame(world, scale, FogAt(world), camera_offset)) {
+            // A lamp's flame, seen through its glass, glowing from itself in place of its halo.
         } else if (GiveHaloGlow(world, scale, flicker_width, camera_offset, (layers & 1) != 0)) {
             // A glow in place of the halo: the light it threw is the fire's point light.
         } else if (MGRotTransPers3DSprite(top_left.data(), bottom_right.data(), world, 45.0f * flicker_width * scale,
