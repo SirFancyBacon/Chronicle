@@ -43,29 +43,25 @@ namespace {
 // #embed is C23's; clang offers it to C++ as an extension, which __has_embed has already checked for.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc23-extensions"
-#if __has_embed("../../tools/font/SourceSansProSemibold.ttf")
+#if __has_embed("../../../tools/font/SourceSansProSemibold.ttf")
 #define CHRONICLE_HAS_EMBEDDED_STATUS_FONT 1
 alignas(16) constexpr unsigned char kEmbeddedStatusFont[] = {
-#embed "../../tools/font/SourceSansProSemibold.ttf"
+#embed "../../../tools/font/SourceSansProSemibold.ttf"
 };
-#elif __has_embed("../tools/font/SourceSansProSemibold.ttf")
-#define CHRONICLE_HAS_EMBEDDED_STATUS_FONT 1
-alignas(16) constexpr unsigned char kEmbeddedStatusFont[] = {
-#embed "../tools/font/SourceSansProSemibold.ttf"
-};
+#else
+// The font is in the repository: missing, a path is wrong (as after this file's move into text/), and its text would fall back unseen.
+#error "tools/font/SourceSansProSemibold.ttf not found from port/src/text"
 #endif
 // The title menu's font: Chronicle Title Bold, Albert Sans (the free geometric sans closest to the title's painted rows)
 // refitted letter by letter to them, its corners rounded (tools/font/README.md).
-#if __has_embed("../../tools/font/ChronicleTitle-Bold.ttf")
+#if __has_embed("../../../tools/font/ChronicleTitle-Bold.ttf")
 #define CHRONICLE_HAS_EMBEDDED_TITLE_FONT 1
 alignas(16) constexpr unsigned char kEmbeddedTitleFont[] = {
-#embed "../../tools/font/ChronicleTitle-Bold.ttf"
+#embed "../../../tools/font/ChronicleTitle-Bold.ttf"
 };
-#elif __has_embed("../tools/font/ChronicleTitle-Bold.ttf")
-#define CHRONICLE_HAS_EMBEDDED_TITLE_FONT 1
-alignas(16) constexpr unsigned char kEmbeddedTitleFont[] = {
-#embed "../tools/font/ChronicleTitle-Bold.ttf"
-};
+#else
+// The font is in the repository: missing, a path is wrong (as after this file's move into text/), and its text would fall back unseen.
+#error "tools/font/ChronicleTitle-Bold.ttf not found from port/src/text"
 #endif
 #pragma clang diagnostic pop
 #endif
