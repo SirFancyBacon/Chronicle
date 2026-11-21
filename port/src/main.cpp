@@ -71,6 +71,7 @@
 #include "render/screen.hpp"
 #include "save/save_state.hpp"
 #include "snd.hpp"
+#include "sound/backend.hpp"
 #include "text/glyphs.hpp"
 #include "title/opening.hpp"
 #include "title/rushmovi.hpp"
@@ -370,7 +371,7 @@ void BgmTestPump() {
         return;
     }
     for (int port = 0; port < audio::kPorts; ++port) {
-        audio::DefaultMixer().Stop(port);
+        sound::Audio().Stop(port);
     }
     SndBgmInit();
     SndBgmLoad(set);
@@ -426,10 +427,6 @@ void LoadInputScript(const char *path) {
         std::exit(kExitUsage);
     }
     InputScriptInstall(std::move(script));
-}
-
-void RenderAudio(void * /*user*/, float *out, int frames) {
-    audio::DefaultMixer().Render(out, frames);
 }
 
 void ReportShaderProgress(uint32_t done, uint32_t total) {
@@ -514,8 +511,8 @@ void ApplyDiscord(const Config &config) {
 // Called mid-tick, from a settings screen: what cannot change inside a frame (the frame layout)
 // waits for PumpHost.
 void ApplyConfigChange(const Config &before, const Config &after) {
-    audio::DefaultMixer().SetMasterGain(after.master_volume);
-    AudioSetSurround(after.surround);
+    sound::Audio().SetMasterGain(after.master_volume);
+    sound::Audio().SetSurround(after.surround);
     InputApplyConfig(after);
 #ifdef __SWITCH__
     ClockSetTickRate(60.0);
@@ -807,9 +804,9 @@ int Run(int argc, const char **argv) {
     }
 #endif
 
-    audio::DefaultMixer().SetMasterGain(config.master_volume);
-    AudioSetSurround(config.surround);
-    AudioOutputStart(audio::DefaultMixer().Rate(), RenderAudio, nullptr);
+    sound::Audio().SetMasterGain(config.master_volume);
+    sound::Audio().SetSurround(config.surround);
+    sound::Audio().StartOutput();
 
 #ifdef __SWITCH__
     ClockSetTickRate(60.0);
@@ -863,7 +860,7 @@ int Run(int argc, const char **argv) {
     ConfigRemoveChangeHook(ApplyConfigChange);
     ClockRemovePumpHook(PumpHost);
     DiscordStop();
-    AudioOutputStop();
+    sound::Audio().StopOutput();
     InputShutdown();
     gfx::RendererShutdown();
     WindowShutdown();

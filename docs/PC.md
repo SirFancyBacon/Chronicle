@@ -1077,6 +1077,19 @@ around one `render/` header:
 
 ## Audio
 
+### Which audio engine plays
+
+Noktus Nimbus's audio engine plays the game's sound (its `docs/AUDIO_PLAN.md`, slice 7): the SPU2's voices, envelopes and Gaussian
+interpolation, its reverb as the hardware's documentation gives it, a sequencer for the game's songs and effects, positioned sound, and a limiter
+on the output in place of clipping. `port/src/sound/backend.cpp` (`sound::Audio()`) is what `CSound` and the `ezMidi` answers speak to: sixteen
+ports of a bank, a sequence or the custom soundtrack's recording, effects, volumes, reverb. Banks and sequences are read from the published
+documents (`sound::NoktusBankFromJson`, `NoktusSequenceFromJson`), or from the pack's own HD, BD and SQ through Kazarov's readers of them.
+
+`DC_AUDIO_ENGINE=kazarov` plays it through Kazarov's mixer instead, as described below, to compare (the owner, 2026-11-21: until the owner
+says). The settings and the Options screen are the same either way. With Noktus's, `DC_AUDIO_INTERPOLATION=cubic` reads between samples by a
+cubic, crisper at the top than the SPU2's Gaussian; `DC_AUDIO_SPEAKERS=7.1` plays surround as 7.1 rather than 5.1 (the option offers surround
+on or off); `DC_AUDIO_WAV` writes 32-bit float in the speakers' layout.
+
 All music and effects are sequenced. `tools/kazarov/src/cpp/audio` decodes VAG ADPCM,
 parses HD banks and SQ sequences, and runs a sixteen-port MIDI player into a
 48-voice synth with envelopes and an approximated reverb (`audio::Mixer`).

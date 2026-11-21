@@ -15,19 +15,17 @@
 #include <utility>
 #include <vector>
 
-#include "audio/mixer.hpp"
-#include "audio/soundtrack.hpp"
 #include "audio/trace.hpp"
 #include "dataread.hpp"
-#include "platform/audio.hpp"
 #include "platform/config.hpp"
+#include "sound/backend.hpp"
 #include "sound/published.hpp"
 
 namespace dc::game {
 
 using namespace dc::platform;
 
-// Banks and sequences live in audio::Mixer rather than in sound memory; the SPU address bookkeeping
+// Banks and sequences live in the audio engine (sound::Audio(), Noktus's or Kazarov's) rather than in sound memory; the SPU address bookkeeping
 // below only keeps GetMidiState() reporting the addresses the game expects.
 
 namespace {
@@ -43,17 +41,17 @@ SE_INF_TABLE se_inf_tbl;
 
 // The bank TransHdBdData loaded, handed to the slot bind that follows it.
 struct PendingBank {
-    std::shared_ptr<audio::Bank> bank;
-    int                          bd_size = 0;
-    int                          spu_address = 0;
+    sound::SoundBank bank;
+    int              bd_size = 0;
+    int              spu_address = 0;
 } g_bank;
 
-// The published bank LoadSoundFileFromPack found for the member it is loading, which TransHdBdData
-// takes in place of the member's HD and BD (docs/AUDIO_FRAMEWORK.md).
-std::shared_ptr<audio::Bank> g_published_bank;
+// The published bank document LoadSoundFileFromPack found for the member it is loading, which TransHdBdData
+// takes in place of the member's HD and BD (docs/AUDIO_FRAMEWORK.md); empty, none.
+std::string g_published_bank;
 
-std::array<std::shared_ptr<audio::Bank>, kSlots>                                  g_slot_banks;
-std::array<std::array<std::shared_ptr<audio::SqFile>, kSequencesPerSlot>, kSlots> g_slot_sequences;
+std::array<sound::SoundBank, kSlots>                                    g_slot_banks;
+std::array<std::array<sound::SoundSequence, kSequencesPerSlot>, kSlots> g_slot_sequences;
 
 // Effect messages are held until Step() sends them.
 struct EffectMessage {
@@ -83,12 +81,8 @@ constexpr auto kFadeRoutes = std::to_array<FadeRoute>({
     {MIDI_PORT_UNK_B,      7, 1},
 });
 
-audio::Mixer &Player() {
-    return audio::DefaultMixer();
-}
-
-void RenderOutput(void * /*user*/, float *out, int frames) {
-    audio::DefaultMixer().Render(out, frames);
+sound::Backend &Player() {
+    return sound::Audio();
 }
 
 std::string_view SequenceName(const MIDI_SEQUENCE &sequence) {
@@ -143,43 +137,40 @@ int TransHdBdData(const std::uint8_t *hd, int hd_size, const std::uint8_t *bd, i
     if (bd_size == 0 || bd == nullptr) {
         std::printf("BD LOAD Err!!!!!!!!!!!!!!!!!!!!!\n");
         g_bank.bd_size = 0;
-        g_bank.bank.reset();
+        g_bank.bank = {};
         return -1;
     }
     if (hd_size == 0 || hd == nullptr) {
         std::printf("HD LOAD Err!!!!!!!!!!!!!!!!!!!!!\n");
         g_bank.bd_size = 0;
-        g_bank.bank.reset();
+        g_bank.bank = {};
         return -1;
     }
     // The BD's size still keeps the SPU address bookkeeping as retail's, the pack being loaded as it was.
-    g_bank.bank = g_published_bank != nullptr ? std::exchange(g_published_bank, nullptr)
-                                              : audio::Bank::Create({hd, static_cast<std::size_t>(hd_size)}, {bd, static_cast<std::size_t>(bd_size)});
+    g_bank.bank = sound::LoadSoundBank(std::exchange(g_published_bank, std::string()), {hd, static_cast<std::size_t>(hd_size)},
+                                       {bd, static_cast<std::size_t>(bd_size)});
     g_bank.bd_size = bd_size;
-    if (g_bank.bank == nullptr) {
+    if (!g_bank.bank) {
         std::printf("sound: unreadable HD bank (%d bytes)\n", hd_size);
         return -1;
     }
-    const audio::HdBank &header = g_bank.bank->Header();
-    audio::Trace("bank: hd %d bytes, bd %d bytes: %zu programs, %zu sample sets, %zu samples, %zu vags",
-                 hd_size, bd_size, header.programs.size(), header.sample_sets.size(), header.samples.size(),
-                 header.vags.size());
+    audio::Trace("bank: hd %d bytes, bd %d bytes", hd_size, bd_size);
     return 0;
 }
 
 void FreeSlot(int slot) {
     MIDI_PORT &state = midi_state.port[slot];
-    g_slot_banks[slot].reset();
+    g_slot_banks[slot] = {};
     state.bank = nullptr;
     for (auto &sequence : g_slot_sequences[slot]) {
-        sequence.reset();
+        sequence = {};
     }
     state.sequence_count = 0;
 }
 
 void TakeBank(int slot) {
     g_slot_banks[slot] = g_bank.bank;
-    midi_state.port[slot].bank = g_bank.bank.get();
+    midi_state.port[slot].bank = g_bank.bank.Address();
 }
 
 void BindPort(int slot, int port, int attribute) {
@@ -207,7 +198,7 @@ int LoadSlotC(const std::uint8_t *hd, int hd_size, const std::uint8_t *bd, int b
         FreeSlot(1);
         // The ambient bank is freed with this one, so its port is unbound too.
         FreeSlot(2);
-        Player().BindBank(MIDI_PORT_AMBIENT, nullptr);
+        Player().BindBank(MIDI_PORT_AMBIENT, {});
         midi_state.port[2].spu_address = midi_state.port[1].spu_address = 0x7D010;
     }
     g_bank.spu_address = midi_state.port[1].spu_address;
@@ -249,7 +240,7 @@ int LoadSlotI(const std::uint8_t *hd, int hd_size, const std::uint8_t *bd, int b
         Player().Stop(MIDI_PORT_SE_DEFAULT);
         FreeSlot(4);
         FreeSlot(3);
-        Player().BindBank(MIDI_PORT_UNK_A, nullptr);
+        Player().BindBank(MIDI_PORT_UNK_A, {});
         midi_state.port[3].spu_address = midi_state.port[4].spu_address = 0x16E900;
     }
     g_bank.spu_address = midi_state.port[4].spu_address - (bd_size + 0x10);
@@ -274,23 +265,22 @@ int LoadSlotSimple(int slot, int port, int attribute, const std::uint8_t *hd, in
     return 0;
 }
 
-int LoadSequence(int slot, const std::uint8_t *data, int size, std::shared_ptr<audio::SqFile> published = nullptr) {
+int LoadSequence(int slot, const std::uint8_t *data, int size, const std::string &published) {
     MIDI_PORT &state = midi_state.port[slot];
     if (state.sequence_count >= kSequencesPerSlot) {
         std::printf("sound: more than %d sequences on slot %d\n", kSequencesPerSlot, slot);
         return -1;
     }
-    auto sequence = published != nullptr          ? std::move(published)
-                    : data != nullptr && size > 0 ? audio::SqFile::Create({data, static_cast<std::size_t>(size)})
-                                                  : nullptr;
-    if (sequence == nullptr) {
+    sound::SoundSequence sequence =
+        sound::LoadSoundSequence(published, data != nullptr && size > 0 ? std::span<const std::uint8_t>(data, static_cast<std::size_t>(size))
+                                                                        : std::span<const std::uint8_t>());
+    if (!sequence) {
         std::printf("sound: unreadable SQ sequence (%d bytes)\n", size);
     } else {
-        audio::Trace("sequence: slot %d #%d, %d bytes, %zu songs", slot, state.sequence_count, size,
-                     sequence->Songs().size());
+        audio::Trace("sequence: slot %d #%d, %d bytes, %zu songs", slot, state.sequence_count, size, sequence.Songs());
     }
-    g_slot_sequences[slot][state.sequence_count] = sequence;
-    state.sequence_address[state.sequence_count] = sequence.get();
+    state.sequence_address[state.sequence_count] = sequence.Address();
+    g_slot_sequences[slot][state.sequence_count] = std::move(sequence);
     return 0;
 }
 
@@ -329,7 +319,7 @@ void StartSequence(int port, int seq_no, const int *volume) {
     }
     Player().SetSequence(port, g_slot_sequences[slot][seq_no]);
     // The soundtrack option: a recording named for this sequence plays in its place.
-    Player().SetStream(port, audio::SoundtrackFor(SequenceName(*state.sequence[seq_no])));
+    Player().SetStream(port, SequenceName(*state.sequence[seq_no]));
     Player().SetVolume(port, volume != nullptr ? *volume : state.sequence[seq_no]->volume);
     Player().Rewind(port, 0);
     Player().Play(port);
@@ -417,16 +407,7 @@ int CSound::LoadSoundFileFromPack(char *name, unsigned int *pack) {
                     continue;
                 }
                 audio::Trace("load %s (slot letter %c)", name_hd.c_str(), kind);
-                std::shared_ptr<audio::SqFile> sequence;
-                if (published) {
-                    if (const std::string document = published_of(published->sequences, name_hd); !document.empty()) {
-                        sequence = sound::LoadSequence(document);
-                        if (sequence == nullptr) {
-                            std::printf("sound: %s unreadable, playing the pack's %s\n", document.c_str(), name_hd.c_str());
-                        }
-                    }
-                }
-                LoadSequence(slot, sq, sq_size, std::move(sequence));
+                LoadSequence(slot, sq, sq_size, published ? published_of(published->sequences, name_hd) : std::string());
                 RegisterSequence(slot, name_hd.c_str());
             }
             continue;
@@ -443,15 +424,7 @@ int CSound::LoadSoundFileFromPack(char *name, unsigned int *pack) {
         if (hd == nullptr || bd == nullptr || hd_size <= 0 || bd_size <= 0) {
             continue;
         }
-        g_published_bank = nullptr;
-        if (published) {
-            if (const std::string document = published_of(published->banks, name_hd); !document.empty()) {
-                g_published_bank = sound::LoadBank(document);
-                if (g_published_bank == nullptr) {
-                    std::printf("sound: %s unreadable, playing the pack's %s\n", document.c_str(), name_hd.c_str());
-                }
-            }
-        }
+        g_published_bank = published ? published_of(published->banks, name_hd) : std::string();
         switch (kind) {
             case 'a':
                 LoadSlotA(hd, hd_size, bd, bd_size);
@@ -576,7 +549,7 @@ int CSound::Init(int mode0, int mode1, int depth0, int depth1) {
     static bool output_started = false;
     if (!output_started) {
         output_started = true;
-        if (!AudioOutputStart(Player().Rate(), RenderOutput, nullptr)) {
+        if (!Player().StartOutput()) {
             std::printf("sound: no audio output, playing silently\n");
         }
     }

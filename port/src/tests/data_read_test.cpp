@@ -24,12 +24,14 @@
 #include "dataalloc.hpp"
 #include "dataread.hpp"
 #include "dataset.hpp"
+#include "noktus/sequence.hpp"
 #include "platform/audio.hpp"
 #include "platform/data_archive.hpp"
 #include "platform/paths.hpp"
 #include "platform_fixture.hpp"
 #include "render/texture_registry.hpp"
 #include "sound.hpp"
+#include "sound/backend.hpp"
 
 namespace dc::test {
 
@@ -1046,7 +1048,8 @@ void WriteText(const fs::path &path, std::string_view text) {
 }
 
 // Loads sound/test.snd's list sound.txt as the game does, returning the slot's first sequence.
-const audio::SqFile *LoadTestPack(const Bytes &pack, std::vector<u_long128> &buffer) {
+// The first sequence loaded, as the playing engine holds it (sound::ActiveEngine): Kazarov's SqFile, or Noktus's first song.
+const void *LoadTestPack(const Bytes &pack, std::vector<u_long128> &buffer) {
     InitCDFile();
     buffer.assign((dcdata::SectorsFor(pack.size()) * dcdata::kSector) / sizeof(u_long128), {});
     int size = 0;
@@ -1057,7 +1060,16 @@ const audio::SqFile *LoadTestPack(const Bytes &pack, std::vector<u_long128> &buf
     if (CSnd.LoadSoundFileFromPack(Mutable("sound.txt"), reinterpret_cast<u_int *>(buffer.data())) != 0) {
         return nullptr;
     }
-    return static_cast<const audio::SqFile *>(CSnd.GetMidiState()->port[0].sequence_address[0]);
+    return CSnd.GetMidiState()->port[0].sequence_address[0];
+}
+
+// Its first song's events, by the playing engine's count.
+std::size_t FirstSongEvents(const void *sequence) {
+    if (sound::ActiveEngine() == sound::Engine::Kazarov) {
+        const auto *file = static_cast<const audio::SqFile *>(sequence);
+        return file->Songs().empty() ? 0 : file->Events(file->Songs()[0]).size();
+    }
+    return static_cast<const noktus::audio::Sequence *>(sequence)->events.size();
 }
 
 } // namespace
@@ -1102,10 +1114,9 @@ TEST(DataRead, APacksPublishedSoundPlaysInPlaceOfItsOwn) {
     std::vector<u_long128> table(4096);
     CSnd.LoadSqInf(Mutable("sound/tbl/sqtbl.txt"), reinterpret_cast<unsigned int *>(table.data()));
     std::vector<u_long128> buffer;
-    const audio::SqFile   *sequence = LoadTestPack(pack, buffer);
+    const void            *sequence = LoadTestPack(pack, buffer);
     ASSERT_NE(sequence, nullptr);
-    ASSERT_EQ(sequence->Songs().size(), 1U);
-    EXPECT_EQ(sequence->Events(sequence->Songs()[0]).size(), 5U) << "the published song's two notes and end, not the pack's one note";
+    EXPECT_EQ(FirstSongEvents(sequence), 5U) << "the published song's two notes and end, not the pack's one note";
     ASSERT_NE(CSnd.GetMidiState()->port[0].sequence[0], nullptr);
     EXPECT_EQ(CSnd.GetMidiState()->port[0].sequence[0]->volume, 100) << "the published volume table";
     fs::remove_all(dir);
@@ -1124,10 +1135,9 @@ TEST(DataRead, APackWithoutPublishedSoundPlaysItsOwn) {
     } stop_audio;
 
     std::vector<u_long128> buffer;
-    const audio::SqFile   *sequence = LoadTestPack(pack, buffer);
+    const void            *sequence = LoadTestPack(pack, buffer);
     ASSERT_NE(sequence, nullptr);
-    ASSERT_EQ(sequence->Songs().size(), 1U);
-    EXPECT_EQ(sequence->Events(sequence->Songs()[0]).size(), 4U) << "its note on and off, end of track and end";
+    EXPECT_EQ(FirstSongEvents(sequence), 4U) << "its note on and off, end of track and end";
     fs::remove_all(dir);
 }
 

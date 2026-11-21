@@ -16,6 +16,7 @@
 #include "platform/audio.hpp"
 #include "platform/clock.hpp"
 #include "platform/settings.hpp"
+#include "sound/backend.hpp"
 
 namespace {
 
@@ -157,6 +158,11 @@ bool AudioOutputRunning() {
 }
 
 void AudioOutputPause(bool paused) {
+    // Kazarov's window pauses the output when the app goes to the background: Noktus's engine, where it plays.
+    if (dc::sound::ActiveEngine() == dc::sound::Engine::Noktus) {
+        dc::sound::Audio().PauseOutput(paused);
+        return;
+    }
     if (g_stream == nullptr) {
         return;
     }

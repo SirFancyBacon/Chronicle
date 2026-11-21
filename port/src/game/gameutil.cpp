@@ -21,7 +21,6 @@
 #include <tuple>
 #include <vector>
 
-#include "audio/mixer.hpp"
 #include "audio/trace.hpp"
 #include "camera.hpp"
 #include "character.hpp"
@@ -37,6 +36,7 @@
 #include "render/texture_registry.hpp"
 #include "render/types.hpp"
 #include "snd.hpp"
+#include "sound/backend.hpp"
 #include "texture.hpp"
 #include "visualvu1.hpp"
 #include "vu0_ops.hpp"
@@ -48,7 +48,7 @@ using namespace dc::render;
 // Shared helpers: the IOP midi RPC, motion interpolation, collision and ground queries, and 2D
 // sprites.
 
-// The EZMIDI RPC as the port's mixer answers it. CSound talks to the mixer directly and never
+// The EZMIDI RPC as the port's audio engine answers it (sound::Audio()). CSound talks to the mixer directly and never
 // comes here; this keeps the command table answerable for anything else.
 //
 // Command words: the low nibble is the MIDI port.
@@ -63,8 +63,8 @@ int ezMidiInit() {
 }
 
 int ezMidi(int command, int argument) {
-    audio::Mixer &mixer = audio::DefaultMixer();
-    const int     port = command & 0x0F;
+    sound::Backend &mixer = sound::Audio();
+    const int       port = command & 0x0F;
     audio::Trace("ezMidi 0x%X 0x%X", command, argument);
     switch (command & ~0x0F) {
         case 0x00:
