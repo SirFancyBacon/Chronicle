@@ -282,6 +282,71 @@ std::shared_ptr<const noktus::audio::Bank> LoadNoktusBank(const std::string &doc
     });
 }
 
+namespace {
+
+std::shared_ptr<const noktus::audio::Sequence> NoktusSequenceFromJsonOrThrow(std::string_view text, int song) {
+    using Event = noktus::audio::SequenceEvent;
+    const Json root = Json::parse(text, nullptr, false);
+    if (root.is_discarded() || !root.is_object() || root.value("kind", "") != "sequence" || !root.contains("songs") || !root["songs"].is_array() ||
+        song < 0 || song >= static_cast<int>(root["songs"].size()) || !root["songs"][song].is_object()) {
+        return nullptr;
+    }
+    const Json &source = root["songs"][song];
+    auto        sequence = std::make_shared<noktus::audio::Sequence>();
+    sequence->division = source.value("division", 480);
+    if (sequence->division <= 0) {
+        return nullptr;
+    }
+    std::uint32_t carried = 0; // the time of events passed over
+    for (const Json &e : source.value("events", Json::array())) {
+        if (!e.is_object()) {
+            return nullptr;
+        }
+        const auto found = e.find("delta");
+        if (found != e.end() && !found->is_number_unsigned()) {
+            return nullptr; // a delta is a count of ticks
+        }
+        const std::uint32_t delta = carried + (found != e.end() ? found->get<std::uint32_t>() : 0u);
+        const std::string   kind = e.value("kind", "");
+        // A channel message of one data byte (a program, say) or two.
+        if (kind == "channel" && e.contains("data") && e["data"].is_array() && !e["data"].empty()) {
+            sequence->events.push_back({.delta = delta,
+                                        .kind = Event::Kind::Channel,
+                                        .status = static_cast<std::uint8_t>(e.value("status", 0)),
+                                        .data1 = static_cast<std::uint8_t>(e["data"][0].get<int>() & 0x7F),
+                                        .data2 = static_cast<std::uint8_t>(e["data"].size() >= 2 ? e["data"][1].get<int>() & 0x7F : 0)});
+        } else if (kind == "meta" && e.value("meta", 0) == 0x51 && e.contains("payload") && e["payload"].is_array() && e["payload"].size() >= 3) {
+            const Json &p = e["payload"];
+            sequence->events.push_back({.delta = delta,
+                                        .kind = Event::Kind::Tempo,
+                                        .tempo = static_cast<std::uint32_t>(p[0].get<int>() & 0xFF) << 16 | static_cast<std::uint32_t>(p[1].get<int>() & 0xFF) << 8 |
+                                                 static_cast<std::uint32_t>(p[2].get<int>() & 0xFF)});
+        } else if (kind == "end") {
+            sequence->events.push_back({.delta = delta, .kind = Event::Kind::End});
+        } else {
+            carried = delta;
+            continue;
+        }
+        carried = 0;
+    }
+    return sequence;
+}
+
+} // namespace
+
+std::shared_ptr<const noktus::audio::Sequence> NoktusSequenceFromJson(std::string_view text, int song) {
+    try {
+        return NoktusSequenceFromJsonOrThrow(text, song);
+    } catch (const nlohmann::json::exception &) {
+        return nullptr;
+    }
+}
+
+std::shared_ptr<const noktus::audio::Sequence> LoadNoktusSequence(const std::string &document, int song) {
+    const std::optional<std::string> text = Text(document);
+    return text ? NoktusSequenceFromJson(*text, song) : nullptr;
+}
+
 std::shared_ptr<audio::SqFile> LoadSequence(const std::string &document) {
     const std::optional<std::string> text = Text(document);
     return text ? audio::SqFile::CreateFromJson(*text) : nullptr;

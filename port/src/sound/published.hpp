@@ -12,6 +12,7 @@
 
 #include "audio/hdbank.hpp"
 #include "audio/sq.hpp"
+#include "noktus/sequence.hpp"
 #include "noktus/synth.hpp"
 
 /**
@@ -64,6 +65,17 @@ std::shared_ptr<const noktus::audio::Bank> LoadNoktusBank(const std::string &doc
  */
 std::shared_ptr<const noktus::audio::Bank> NoktusBankFromJson(std::string_view                                                                    text,
                                                               const std::function<std::optional<std::vector<std::uint8_t>>(const std::string &)> &read);
+
+/**
+ * A song of a sequence document, for Noktus's audio (noktus::audio::Sequence): its channel messages, tempo changes and end, any other event's time
+ * passed on to the next; null when it cannot be read or has no such song.
+ */
+std::shared_ptr<const noktus::audio::Sequence> NoktusSequenceFromJson(std::string_view text, int song = 0);
+
+/**
+ * The song a sequence document holds, read for Noktus's audio as LoadSequence reads it; null when it cannot be read.
+ */
+std::shared_ptr<const noktus::audio::Sequence> LoadNoktusSequence(const std::string &document, int song = 0);
 
 /**
  * The sequence a sequence document describes; null when it cannot be read.
