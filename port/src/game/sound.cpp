@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include "audio/trace.hpp"
+#include "sound/trace.hpp"
 #include "dataread.hpp"
 #include "platform/config.hpp"
 #include "sound/backend.hpp"
@@ -202,7 +202,7 @@ int TransHdBdData(const std::uint8_t *hd, int hd_size, const std::uint8_t *bd, i
         std::printf("sound: unreadable HD bank (%d bytes)\n", hd_size);
         return -1;
     }
-    audio::Trace("bank: hd %d bytes, bd %d bytes", hd_size, bd_size);
+    sound::Trace("bank: hd %d bytes, bd %d bytes", hd_size, bd_size);
     return 0;
 }
 
@@ -325,7 +325,7 @@ int LoadSequence(int slot, const std::uint8_t *data, int size, const std::string
     if (!sequence) {
         std::printf("sound: unreadable SQ sequence (%d bytes)\n", size);
     } else {
-        audio::Trace("sequence: slot %d #%d, %d bytes, %zu songs", slot, state.sequence_count, size, sequence.Songs());
+        sound::Trace("sequence: slot %d #%d, %d bytes, %zu songs", slot, state.sequence_count, size, sequence.Songs());
     }
     state.sequence_address[state.sequence_count] = sequence.Address();
     g_slot_sequences[slot][state.sequence_count] = std::move(sequence);
@@ -359,7 +359,7 @@ void StartSequence(int port, int seq_no, const int *volume) {
         std::printf("###############NOT FOUND SEQ_NO=%d #####################\n", seq_no);
         return;
     }
-    audio::Trace("SQ_Play port %d seq %d (%.9s) volume %d%s", port, seq_no, state.sequence[seq_no]->name,
+    sound::Trace("SQ_Play port %d seq %d (%.9s) volume %d%s", port, seq_no, state.sequence[seq_no]->name,
                  volume != nullptr ? *volume : state.sequence[seq_no]->volume,
                  volume != nullptr ? "" : " (table)");
     if (volume != nullptr) {
@@ -393,12 +393,12 @@ int CSound::GetSeNo(int bank, int program) {
 }
 
 void CSound::StopVoice(int core) {
-    audio::Trace("StopVoice core %d", core);
+    sound::Trace("StopVoice core %d", core);
     Player().KeyOffCore(core);
 }
 
 void CSound::SetReverb(int core, int mode, int depth) {
-    audio::Trace("SetReverb core %d mode %d depth %d", core, mode, depth);
+    sound::Trace("SetReverb core %d mode %d depth %d", core, mode, depth);
     Player().SetReverb(core, mode, depth);
 }
 
@@ -454,7 +454,7 @@ int CSound::LoadSoundFileFromPack(char *name, unsigned int *pack) {
                 if (sq == nullptr || sq_size <= 0) {
                     continue;
                 }
-                audio::Trace("load %s (slot letter %c)", name_hd.c_str(), kind);
+                sound::Trace("load %s (slot letter %c)", name_hd.c_str(), kind);
                 LoadSequence(slot, sq, sq_size, published ? published_of(published->sequences, name_hd) : std::string());
                 RegisterSequence(slot, name_hd.c_str());
             }
@@ -463,7 +463,7 @@ int CSound::LoadSoundFileFromPack(char *name, unsigned int *pack) {
         if (name_hd.compare(6, 3, ".hd") != 0) {
             continue;
         }
-        audio::Trace("load %s (slot letter %c)", name_hd.c_str(), kind);
+        sound::Trace("load %s (slot letter %c)", name_hd.c_str(), kind);
         std::string name_bd = name_hd.substr(0, 7) + "bd";
         int         hd_size = 0;
         int         bd_size = 0;
@@ -629,12 +629,12 @@ void CSound::SQ_Play(int port, int seq_no, int volume) {
 }
 
 void CSound::SQ_RePlay(int port) {
-    audio::Trace("SQ_RePlay port %d", port);
+    sound::Trace("SQ_RePlay port %d", port);
     Player().Play(port);
 }
 
 void CSound::SE_Play(int port, int bank, int program, int pan, int velocity, int volume, int voice) {
-    audio::Trace("SE_Play port %d bank %d program %d pan %d velocity %d volume %d voice %d", port, bank,
+    sound::Trace("SE_Play port %d bank %d program %d pan %d velocity %d volume %d voice %d", port, bank,
                  program, pan, velocity, volume, voice);
     const std::array<int, 4> key = PlacedKey(port, bank, program, voice);
     if (std::ranges::find(g_placed, key) == g_placed.end()) {
@@ -667,7 +667,7 @@ void CSound::SE_Play(int port, int bank, int program, int voice) {
 }
 
 void CSound::SE_SetVol(int port, int bank, int program, int volume, int voice) {
-    audio::Trace("SE_SetVol port %d bank %d program %d volume %d voice %d", port, bank, program, volume,
+    sound::Trace("SE_SetVol port %d bank %d program %d volume %d voice %d", port, bank, program, volume,
                  voice);
     QueueProgram(port, bank);
     QueueExtended(port, {0xFD, 0, 0, static_cast<std::uint8_t>(program), static_cast<std::uint8_t>(voice),
@@ -675,7 +675,7 @@ void CSound::SE_SetVol(int port, int bank, int program, int volume, int voice) {
 }
 
 void CSound::SE_SetPan(int port, int bank, int program, int pan, int voice) {
-    audio::Trace("SE_SetPan port %d bank %d program %d pan %d voice %d", port, bank, program, pan, voice);
+    sound::Trace("SE_SetPan port %d bank %d program %d pan %d voice %d", port, bank, program, pan, voice);
     QueueProgram(port, bank);
     QueueExtended(port, {0xFD, 1, 0, static_cast<std::uint8_t>(program), static_cast<std::uint8_t>(voice),
                          static_cast<std::uint8_t>(pan), 0});
@@ -703,13 +703,13 @@ void CSound::SE_Place(int port, int bank, int program, const float *position, fl
 }
 
 void CSound::SE_Stop(int port, int bank, int program, int voice) {
-    audio::Trace("SE_Stop port %d bank %d program %d voice %d", port, bank, program, voice);
+    sound::Trace("SE_Stop port %d bank %d program %d voice %d", port, bank, program, voice);
     QueueProgram(port, bank);
     QueueExtended(port, {0xFD, 0x10, 0, static_cast<std::uint8_t>(program), static_cast<std::uint8_t>(voice), 0, 0});
 }
 
 void CSound::Fade(int port, float step, int volume) {
-    audio::Trace("Fade port %d step %g to %d", port, step, volume);
+    sound::Trace("Fade port %d step %g to %d", port, step, volume);
     for (const FadeRoute &route : kFadeRoutes) {
         if (route.port == port) {
             MIDI_FADE &fade = midi_state.port[route.slot].fade[route.fade];
@@ -755,13 +755,13 @@ void CSound::Step() {
 }
 
 void CSound::Stop(int port) {
-    audio::Trace("Stop port %d", port);
+    sound::Trace("Stop port %d", port);
     Player().Stop(port);
 }
 
 void CSound::SetVol(int port, int volume) {
     if (Player().Volume(port) != volume) {
-        audio::Trace("SetVol port %d volume %d", port, volume);
+        sound::Trace("SetVol port %d volume %d", port, volume);
     }
     Player().SetVolume(port, volume);
 }
@@ -776,7 +776,7 @@ bool CSound::HearsPlaces() {
 
 // The stereo option is config.json's audio.sound, not the one the load screen reads out of a save.
 void CSound::SetStereoMode(int mode) {
-    audio::Trace("SetStereoMode %d", mode);
+    sound::Trace("SetStereoMode %d", mode);
     Player().SetStereo(ConfigGet().options.stereo);
 }
 

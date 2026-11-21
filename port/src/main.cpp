@@ -32,8 +32,6 @@
 #include "app/gameloop.hpp"
 #include "app/identity.hpp"
 #include "app/kazarov_presentation.hpp"
-#include "audio/mixer.hpp"
-#include "audio/soundtrack.hpp"
 #include "battle_globals.hpp"
 #include "dun/gameloop.hpp"
 #include "dungeon/loot.hpp"
@@ -49,7 +47,6 @@
 #include "nowload.hpp"
 #include "options/menu_option.hpp"
 #include "options/rows.hpp"
-#include "platform/audio.hpp"
 #include "platform/clock.hpp"
 #include "platform/config.hpp"
 #include "platform/crash_report.hpp"
@@ -72,6 +69,7 @@
 #include "save/save_state.hpp"
 #include "snd.hpp"
 #include "sound/backend.hpp"
+#include "sound/soundtrack.hpp"
 #include "text/glyphs.hpp"
 #include "title/opening.hpp"
 #include "title/rushmovi.hpp"
@@ -370,7 +368,7 @@ void BgmTestPump() {
     if (std::sscanf(spec, "%d:%d", &set, &track) < 1) {
         return;
     }
-    for (int port = 0; port < audio::kPorts; ++port) {
+    for (int port = 0; port < sound::kPorts; ++port) {
         sound::Audio().Stop(port);
     }
     SndBgmInit();
@@ -736,7 +734,7 @@ int Run(int argc, const char **argv) {
     LoadInputScript(options.input);
 
     ConfigLoad();
-    audio::SoundtrackEnsure();
+    sound::SoundtrackEnsure();
     const Config &config = ConfigGet();
 
 #ifdef __SWITCH__

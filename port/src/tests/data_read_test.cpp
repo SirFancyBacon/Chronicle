@@ -16,8 +16,6 @@
 #include <vector>
 
 #include "app/exitcodes.hpp"
-#include "audio/hdbank.hpp"
-#include "audio/sq.hpp"
 #include "data/data_mount.hpp"
 #include "data/data_read.hpp"
 #include "data_fixture.hpp"
@@ -25,7 +23,6 @@
 #include "dataread.hpp"
 #include "dataset.hpp"
 #include "noktus/sequence.hpp"
-#include "platform/audio.hpp"
 #include "platform/data_archive.hpp"
 #include "platform/paths.hpp"
 #include "platform_fixture.hpp"
@@ -982,8 +979,8 @@ TEST(DataRead, SoundLoadsPackMembersAboveFourGiBWithoutPointerNarrowing) {
             sequence[at + i] = static_cast<unsigned char>(value >> (8 * i));
         }
     };
-    put(0, audio::kChunkCreator, 4);
-    put(4, audio::kChunkMidi, 4);
+    put(0, 0x53434549, 4); // "SCEI"
+    put(4, 0x4D696469, 4); // "Midi"
     put(8, 0x24, 4);
     put(0x10, 0x14, 4);
     put(0x14, 6, 4);
@@ -1005,7 +1002,7 @@ TEST(DataRead, SoundLoadsPackMembersAboveFourGiBWithoutPointerNarrowing) {
     CSnd.Init(0, 0, 0, 0);
 
     struct StopAudio {
-        ~StopAudio() { AudioOutputStop(); }
+        ~StopAudio() { sound::Audio().StopOutput(); }
     } stop_audio;
 
     ASSERT_EQ(CSnd.LoadSoundFileFromPack(Mutable("sound.txt"), reinterpret_cast<u_int *>(buffer.data())), 0);
@@ -1024,8 +1021,8 @@ Bytes OneNoteSequence() {
             sequence[at + i] = static_cast<unsigned char>(value >> (8 * i));
         }
     };
-    put(0, audio::kChunkCreator, 4);
-    put(4, audio::kChunkMidi, 4);
+    put(0, 0x53434549, 4); // "SCEI"
+    put(4, 0x4D696469, 4); // "Midi"
     put(8, 0x24, 4);
     put(0x10, 0x14, 4);
     put(0x14, 6, 4);
@@ -1048,7 +1045,6 @@ void WriteText(const fs::path &path, std::string_view text) {
 }
 
 // Loads sound/test.snd's list sound.txt as the game does, returning the slot's first sequence.
-// The first sequence loaded, as the playing engine holds it (sound::ActiveEngine): Kazarov's SqFile, or Noktus's first song.
 const void *LoadTestPack(const Bytes &pack, std::vector<u_long128> &buffer) {
     InitCDFile();
     buffer.assign((dcdata::SectorsFor(pack.size()) * dcdata::kSector) / sizeof(u_long128), {});
@@ -1063,12 +1059,8 @@ const void *LoadTestPack(const Bytes &pack, std::vector<u_long128> &buffer) {
     return CSnd.GetMidiState()->port[0].sequence_address[0];
 }
 
-// Its first song's events, by the playing engine's count.
+// Its first song's events.
 std::size_t FirstSongEvents(const void *sequence) {
-    if (sound::ActiveEngine() == sound::Engine::Kazarov) {
-        const auto *file = static_cast<const audio::SqFile *>(sequence);
-        return file->Songs().empty() ? 0 : file->Events(file->Songs()[0]).size();
-    }
     return static_cast<const noktus::audio::Sequence *>(sequence)->events.size();
 }
 
@@ -1107,7 +1099,7 @@ TEST(DataRead, APacksPublishedSoundPlaysInPlaceOfItsOwn) {
     WriteText(dir / "data/sound/tbl/sqtbl.json", R"({"schema_version":1,"kind":"sequence_volumes","rows":[{"name":"seq00a.sq","volume":100}]})");
 
     struct StopAudio {
-        ~StopAudio() { AudioOutputStop(); }
+        ~StopAudio() { sound::Audio().StopOutput(); }
     } stop_audio;
 
     InitCDFile();
@@ -1131,7 +1123,7 @@ TEST(DataRead, APackWithoutPublishedSoundPlaysItsOwn) {
     WriteBytes(dir / "data/sound/test.snd", pack);
 
     struct StopAudio {
-        ~StopAudio() { AudioOutputStop(); }
+        ~StopAudio() { sound::Audio().StopOutput(); }
     } stop_audio;
 
     std::vector<u_long128> buffer;

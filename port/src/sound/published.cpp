@@ -10,10 +10,10 @@
 #include <string>
 #include <vector>
 
-#include "audio/trace.hpp"
 #include "data/data_mount.hpp"
 #include "data/data_read.hpp"
 #include "platform/datapacks.hpp"
+#include "sound/trace.hpp"
 
 namespace dc::sound {
 
@@ -114,19 +114,11 @@ std::optional<PublishedList> FindList(const void *member, std::size_t size, std:
                 published.sequences[name] = load["sequence"];
             }
         }
-        audio::Trace("published: %s list %.*s, %zu banks, %zu sequences", document_path.c_str(), static_cast<int>(list.size()), list.data(),
+        Trace("published: %s list %.*s, %zu banks, %zu sequences", document_path.c_str(), static_cast<int>(list.size()), list.data(),
                      published.banks.size(), published.sequences.size());
         return published;
     }
     return std::nullopt;
-}
-
-std::shared_ptr<audio::Bank> LoadBank(const std::string &document) {
-    const std::optional<std::string> text = Text(document);
-    if (!text) {
-        return nullptr;
-    }
-    return audio::Bank::CreateFromJsonCandidates(*text, [](const std::filesystem::path &sample) { return Candidates(sample.generic_string()); });
 }
 
 namespace {
@@ -345,11 +337,6 @@ std::shared_ptr<const noktus::audio::Sequence> NoktusSequenceFromJson(std::strin
 std::shared_ptr<const noktus::audio::Sequence> LoadNoktusSequence(const std::string &document, int song) {
     const std::optional<std::string> text = Text(document);
     return text ? NoktusSequenceFromJson(*text, song) : nullptr;
-}
-
-std::shared_ptr<audio::SqFile> LoadSequence(const std::string &document) {
-    const std::optional<std::string> text = Text(document);
-    return text ? audio::SqFile::CreateFromJson(*text) : nullptr;
 }
 
 std::optional<std::vector<SequenceVolume>> SequenceVolumes(std::string_view table) {

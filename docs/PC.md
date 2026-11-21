@@ -749,13 +749,13 @@ takes `--data`/`--save` out of argv; the other options are parsed; optional
 `--seed-save` copies a fixture into the explicit save root; the data
 directory is checked; `ConfigLoad` reads `config.json`; `WindowInit` opens the
 window (size and fullscreen from the config, offscreen when headless);
-`InputInit`; `gfx::RendererInit` with the frame's layout, and Noktus starts on the first tick; `AudioOutputStart` pulls
-`audio::DefaultMixer()` at its rate with the config's master gain; the clock
+`InputInit`; `gfx::RendererInit` with the frame's layout, and Noktus starts on the first tick; `sound::Audio().StartOutput()` opens
+Noktus's audio engine with the config's master gain, speakers and interpolation; the clock
 gets the config's tick rate (unbounded when headless); a pump hook is
 installed that pumps window events (a close request stops the game) and
 samples input and applies a pending frame layout; the config change hook
 is added; then `RunGame`. After it returns: the screenshot, then
-`AudioOutputStop`, `InputShutdown`, `RendererShutdown`, `WindowShutdown`.
+`sound::Audio().StopOutput()`, `InputShutdown`, `RendererShutdown`, `WindowShutdown`.
 `main.cpp` also forwards the names MWCC gives the calls in retail `main`
 (below).
 
@@ -1079,51 +1079,44 @@ around one `render/` header:
 
 ## Audio
 
-### Which audio engine plays
+### The audio engine
 
-Noktus Nimbus's audio engine plays the game's sound (its `docs/AUDIO_PLAN.md`, slice 7): the SPU2's voices, envelopes and Gaussian
-interpolation, its reverb as the hardware's documentation gives it, a sequencer for the game's songs and effects, positioned sound, and a limiter
-on the output in place of clipping. `port/src/sound/backend.cpp` (`sound::Audio()`) is what `CSound` and the `ezMidi` answers speak to: sixteen
-ports of a bank, a sequence or the custom soundtrack's recording, effects, volumes, reverb. Banks and sequences are read from the published
-documents (`sound::NoktusBankFromJson`, `NoktusSequenceFromJson`), or from the pack's own HD, BD and SQ through Kazarov's readers of them.
+Noktus Nimbus's audio engine plays the game's sound (its `docs/AUDIO_PLAN.md`): the SPU2's voices, envelopes and interpolation, its reverb as
+the hardware's documentation gives it, a sequencer for the game's songs and effects, positioned sound, and a limiter on the output in place of
+clipping. Kazarov's audio isn't built (the owner, 2026-11-21). `port/src/sound/backend.cpp` (`sound::Audio()`) is what `CSound` and the `ezMidi`
+answers speak to: sixteen ports of a bank, a sequence or the custom soundtrack's recording, effects, volumes, reverb. Banks and sequences are
+read from the published documents (`sound::NoktusBankFromJson`, `NoktusSequenceFromJson`), or from the pack's own HD, BD and SQ
+(`port/src/sound/retail.cpp`, `RetailBank` and `RetailSequences`); `SoundPublishRealData` checks the two give the same banks, waveforms and
+songs for every published pack. The custom soundtrack's recordings (docs/SOUNDTRACK.md) are read and decoded on a worker of their own
+(`port/src/sound/soundtrack.cpp`).
 
-`DC_AUDIO_ENGINE=kazarov` plays it through Kazarov's mixer instead, as described below, to compare (the owner, 2026-11-21: until the owner
-says). The settings and the Options screen are the same either way, but for Audio > Interpolation (`audio.interpolation`): Noktus's engine
-reads between samples by a cubic (`"cubic"`, the default), crisper at the top, or by the SPU2's Gaussian (`"ps2"`), soft as on the console,
-where Kazarov's mixer keeps its own.
-Audio > Sound offers surround for 5.1 or 7.1 speakers; Kazarov's mixer plays either as 5.1. `DC_AUDIO_WAV` writes 32-bit float in the
-speakers' layout.
+Audio > Interpolation (`audio.interpolation`) reads between samples by a cubic (`"cubic"`, the default), crisper at the top, or by the SPU2's
+Gaussian (`"ps2"`), soft as on the console. Audio > Sound offers mono, stereo, and surround for 5.1 or 7.1 speakers.
 
-In surround, Noktus's engine hears sounds from their places: the listener is the camera `SndSetCamera` gives, and the game's positional calls
+In surround, sounds are heard from their places: the listener is the camera `SndSetCamera` gives, and the game's positional calls
 (`SndSePlay` with a position, footsteps, monsters, the dungeons' and the opening's sources, the event scripts' special sound, doors) place
 their effects through `CSound::SE_Place` (`SndSePlace`, `SndSPSePlace`) before keying them on. A town's sound entered from several places is
-split among its loudest three, each a voice of its own (`sound::SplitAmong`), together as loud as retail's one. Stereo and mono, and Kazarov's
-mixer, hear the game's own pan as retail does.
+split among its loudest three, each a voice of its own (`sound::SplitAmong`), together as loud as retail's one. Stereo and mono hear the game's
+own pan as retail does.
 
-All music and effects are sequenced. `tools/kazarov/src/cpp/audio` decodes VAG ADPCM,
-parses HD banks and SQ sequences, and runs a sixteen-port MIDI player into a
-48-voice synth with envelopes and an approximated reverb (`audio::Mixer`).
-`port/src/game/sound.cpp` replaces `CSound` (bank and sequence transfers, play,
-stop, fades, volumes, effect messages) on that mixer, and
-`gameutil.cpp` answers the EZMIDI RPC commands for anything that still
-sends them. `main` starts the output; `CSound::Init` starts it too if it is
-not running.
+All music and effects are sequenced. `port/src/game/sound.cpp` replaces `CSound` (bank and sequence transfers, play, stop, fades, volumes,
+effect messages) on the engine, and `gameutil.cpp` answers the EZMIDI RPC commands for anything that still sends them. `main` starts the
+output.
 
-The formats and the synth's arithmetic were checked against every bank and
-sequence on the PAL disc and against the IOP modules the game loads
-(`EZMIDI.IRX`, `MODMIDI.IRX`, `MODHSYN.IRX`):
+The formats, as checked against every bank and sequence on the PAL disc and against the IOP modules the game loads (`EZMIDI.IRX`,
+`MODMIDI.IRX`, `MODHSYN.IRX`):
 
-- **SQ** (`sq.cpp`): `SCEIVers`, `SCEISequ`, then `SCEIMidi` with a song table
+- **SQ**: `SCEIVers`, `SCEISequ`, then `SCEIMidi` with a song table
   (offsets from the chunk) whose blocks start with a 32-bit data offset (always
   6) and a 16-bit division (always 480). The events are SMF-like with running
   status, but a note-off carries only its note number, and bit 7 on a channel
   message's last data byte means the next event has no delta. All 93
   sequences parse to their end-of-track meta exactly at the chunk's end.
-- **Loops** (`sequencer.cpp`): NRPN 0 (`B0 63 00`) with data entry `n` opens loop
+- **Loops**: NRPN 0 (`B0 63 00`) with data entry `n` opens loop
   `n` just after that data entry; NRPN 1 with data entry `n` and data entry LSB
   (controller 38) `c` jumps back `c` more times, forever for 0. Every sequence
   on the disc has one endless loop.
-- **HD** (`hdbank.cpp`): the `SCEIHead` addresses, 36-byte programs, 20-byte
+- **HD**: the `SCEIHead` addresses, 36-byte programs, 20-byte
   splits, 4+2n-byte sample sets, 42-byte samples and 8-byte VAG entries as
   laid out there. Split bend ranges and every detune are in 128ths of a
   semitone (most splits say 0x600, an octave). A sample set's first byte picks
@@ -1131,32 +1124,20 @@ sequence on the PAL disc and against the IOP modules the game loads
   last byte is its SPU attribute: bits 4-5 pin its voices to core 0 or 1 (or
   either, whichever has more free voices), bits 0-3 are its dry left/right and
   effect-send left/right switches, so only those samples feed the core's reverb.
+- **BD**: the SPU2's ADPCM, 16-byte blocks of 28 samples, each block's first byte a shift and one of five predicting filters, its second the
+  flags marking the loop's start, the wave's end and whether it repeats.
 - **Volume**: a voice sounds at velocity (through the curve) x program x split
   x sample volume, each a fraction of 128, x channel volume x expression, each
   a fraction of 128, x port volume / 256 (`ezMidi(0xB0 + port)`, so the SE
   ports' 256 is unity and a sequence plays at its `sqtbl.txt` volume over 256).
-  The pan law keeps the near side at full scale and fades the far side to
-  silence 63 steps from the centre.
 - **Pitch**: 4096 x rate / 48000 x 2^((note + transposes - base note + fine / 128
   + bend x range / 8192 / 128) / 12), at most 0x3FFF, as the SPU2 pitch register.
 
-`DC_AUDIO_TRACE=1` prints every `CSound` call (bank and sequence loads with
-their names, `SQ_Play` with its table volume, `SetVol`, `SE_Play`, fades,
-reverb), every `ezMidi` command, every channel message a sequence sends with
-its output time, every key-on's resolved sample, pitch, gain and core, and the
-sequencer's tempo and loop events. `DC_AUDIO_WAV=<path>` opens no device and
-instead pulls the mixer on the game thread as the clock ticks, writing 16-bit
-stereo at 48 kHz: N ticks write N/50 s whatever the run's real speed, so
-`DC_AUDIO_WAV=title.wav darkcloud --headless --jump title --fast-load --frames
-600` records what the title would have played. `audio_real_title_*` render the
-title pack's music on the real data (`DC_DATA`); with `DC_AUDIO_TEST_WAV=<dir>`
-they also write what they rendered there.
-
-What still differs from the PS2: the reverb is a generic room, not the SPU2's
-effect programs and work area; core 0's output does not pass through core 1;
-the ADSR runs at the SPU's rate but key follow of the envelope, LFOs, velocity
-crossfades and per-key pan follow are not applied; effect messages resolve
-their tone by key range, then split index.
+`DC_AUDIO_TRACE=1` prints every `CSound` call (bank and sequence loads with their names, `SQ_Play` with its table volume, `SetVol`,
+`SE_Play`, fades, reverb), every `ezMidi` command and the soundtrack's mapping as it's read. `DC_AUDIO_WAV=<path>` opens no device and instead
+renders on the game thread as the clock ticks, writing 32-bit float at 48 kHz in the speakers' layout: N ticks write N / tick rate seconds
+whatever the run's real speed, so `DC_AUDIO_WAV=title.wav darkcloud --headless --jump title --fast-load --frames 600` records what the title
+would have played. `DC_AUDIO=off` plays nothing. What still differs from the PS2 is in Noktus's `docs/AUDIO_PLAN.md`.
 
 ## Saves and host files
 
@@ -2125,10 +2106,8 @@ largest remaining measured software stage is image decoding; a repeated-image
 cache has no demonstrated opportunity in this fixture. Model conversion and upload
 costs still need separate measurement.
 
-Chronicle reads the retail HD/BD/SQ audio formats through Kazarov's raw audio parser
-(`tools/kazarov/src/cpp/audio/raw_audio.cpp`), which normalizes retail events once when a
-sequence loads; playback uses Kazarov's event player. Dark Cloud's SQ note-offs carry only a
-note number, so `LoadSequence` passes `SqRawOptions::short_note_off`. This does not require
+Chronicle reads the retail HD/BD/SQ audio formats itself (`port/src/sound/retail.cpp`) where a pack
+has no published documents, straight into Noktus's banks and songs. This does not require
 re-extracting disc data.
 
 

@@ -21,7 +21,7 @@
 #include <tuple>
 #include <vector>
 
-#include "audio/trace.hpp"
+#include "sound/trace.hpp"
 #include "camera.hpp"
 #include "character.hpp"
 #include "collisionmdt.hpp"
@@ -65,7 +65,7 @@ int ezMidiInit() {
 int ezMidi(int command, int argument) {
     sound::Backend &mixer = sound::Audio();
     const int       port = command & 0x0F;
-    audio::Trace("ezMidi 0x%X 0x%X", command, argument);
+    sound::Trace("ezMidi 0x%X 0x%X", command, argument);
     switch (command & ~0x0F) {
         case 0x00:
             mixer.Play(port);

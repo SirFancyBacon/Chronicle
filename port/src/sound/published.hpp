@@ -10,8 +10,6 @@
 #include <string_view>
 #include <vector>
 
-#include "audio/hdbank.hpp"
-#include "audio/sq.hpp"
 #include "noktus/sequence.hpp"
 #include "noktus/synth.hpp"
 
@@ -49,13 +47,8 @@ struct PublishedList {
 std::optional<PublishedList> FindList(const void *member, std::size_t size, std::string_view list);
 
 /**
- * The bank a bank document describes, its samples read as WAV; null when it cannot be read.
- */
-std::shared_ptr<audio::Bank> LoadBank(const std::string &document);
-
-/**
- * The bank a bank document describes, for Noktus's audio (noktus::audio::Bank), its samples read as WAV from the datapacks and the data as LoadBank
- * reads them; null when it cannot be read.
+ * The bank a bank document describes, for Noktus's audio (noktus::audio::Bank), its samples read as WAV from the datapacks first, then the data;
+ * null when it cannot be read.
  */
 std::shared_ptr<const noktus::audio::Bank> LoadNoktusBank(const std::string &document);
 
@@ -73,14 +66,9 @@ std::shared_ptr<const noktus::audio::Bank> NoktusBankFromJson(std::string_view  
 std::shared_ptr<const noktus::audio::Sequence> NoktusSequenceFromJson(std::string_view text, int song = 0);
 
 /**
- * The song a sequence document holds, read for Noktus's audio as LoadSequence reads it; null when it cannot be read.
+ * A song of a sequence document, for Noktus's audio; null when it cannot be read or has no such song.
  */
 std::shared_ptr<const noktus::audio::Sequence> LoadNoktusSequence(const std::string &document, int song = 0);
-
-/**
- * The sequence a sequence document describes; null when it cannot be read.
- */
-std::shared_ptr<audio::SqFile> LoadSequence(const std::string &document);
 
 /**
  * A row of the published sequence volume table (sound/tbl/sqtbl.json).

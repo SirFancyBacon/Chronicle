@@ -19,9 +19,10 @@ set_target_properties(darkcloud_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAK
 target_include_directories(darkcloud_tests PRIVATE ${NOKTUS_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/tools/dcdata)
 dc_link_game(darkcloud_tests)
 kz_port_tests(darkcloud_tests)
-# Kazarov's own renderer tests expect its renderer behind the gfx calls, and here Noktus is unless DC_RENDERER says otherwise.
+# Kazarov's own renderer tests expect its renderer behind the gfx calls, and here Noktus is unless DC_RENDERER says otherwise; its audio
+# tests, its audio, which isn't built.
 get_target_property(darkcloud_test_sources darkcloud_tests SOURCES)
-list(FILTER darkcloud_test_sources EXCLUDE REGEX "/kazarov/src/cpp/tests/gfx_[a-z0-9_]+_test\\.cpp$")
+list(FILTER darkcloud_test_sources EXCLUDE REGEX "/kazarov/src/cpp/tests/(gfx|audio)_[a-z0-9_]+_test\\.cpp$")
 set_target_properties(darkcloud_tests PROPERTIES SOURCES "${darkcloud_test_sources}")
 target_link_libraries(darkcloud_tests PRIVATE GTest::gtest nlohmann_json::nlohmann_json)
 

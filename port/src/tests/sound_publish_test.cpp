@@ -9,17 +9,18 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <span>
 #include <string>
 #include <tuple>
 #include <vector>
 
-#include "audio/hdbank.hpp"
-#include "audio/sq.hpp"
 #include "dataread.hpp"
 #include "platform/paths.hpp"
 #include "snd.hpp"
 #include "sound.hpp"
+#include "sound/published.hpp"
+#include "sound/retail.hpp"
 #include "sound_data.hpp"
 
 namespace dc::test {
@@ -40,73 +41,65 @@ std::span<const std::uint8_t> Bytes(const dcdata::PackMember &member) {
     return member.data;
 }
 
-void ExpectSameBank(const audio::Bank &raw, const audio::Bank &published, const std::string &where) {
-    const audio::HdBank &a = raw.Header();
-    const audio::HdBank &b = published.Header();
-    ASSERT_EQ(a.programs.size(), b.programs.size()) << where;
-    for (std::size_t p = 0; p < a.programs.size(); p++) {
-        const audio::HdProgram &x = a.programs[p];
-        const audio::HdProgram &y = b.programs[p];
+namespace na = noktus::audio;
+
+// What the synth plays from either: every program, split, sample set and sample, and every waveform's samples and loop.
+void ExpectSameBank(const na::Bank &raw, const na::Bank &published, const std::string &where) {
+    ASSERT_EQ(raw.programs.size(), published.programs.size()) << where;
+    for (std::size_t p = 0; p < raw.programs.size(); p++) {
+        const na::BankProgram &x = raw.programs[p];
+        const na::BankProgram &y = published.programs[p];
         ASSERT_EQ(x.present, y.present) << where << " program " << p;
         EXPECT_EQ(std::tie(x.volume, x.pan, x.transpose, x.detune), std::tie(y.volume, y.pan, y.transpose, y.detune)) << where << " program " << p;
         ASSERT_EQ(x.splits.size(), y.splits.size()) << where << " program " << p;
         for (std::size_t s = 0; s < x.splits.size(); s++) {
-            const audio::HdSplit &i = x.splits[s];
-            const audio::HdSplit &j = y.splits[s];
+            const na::BankSplit &i = x.splits[s];
+            const na::BankSplit &j = y.splits[s];
             EXPECT_EQ(std::tie(i.sample_set, i.key_low, i.key_high, i.bend_low, i.bend_high, i.volume, i.pan, i.transpose, i.detune),
                       std::tie(j.sample_set, j.key_low, j.key_high, j.bend_low, j.bend_high, j.volume, j.pan, j.transpose, j.detune))
                 << where << " program " << p << " split " << s;
         }
     }
-    ASSERT_EQ(a.samples.size(), b.samples.size()) << where;
-    for (std::size_t s = 0; s < a.samples.size(); s++) {
-        const audio::HdSample &i = a.samples[s];
-        const audio::HdSample &j = b.samples[s];
-        EXPECT_EQ(std::tie(i.vag, i.vel_low, i.vel_high, i.base_note, i.detune, i.pan, i.volume, i.adsr1, i.adsr2, i.spu_attr),
-                  std::tie(j.vag, j.vel_low, j.vel_high, j.base_note, j.detune, j.pan, j.volume, j.adsr1, j.adsr2, j.spu_attr))
+    ASSERT_EQ(raw.sample_sets.size(), published.sample_sets.size()) << where;
+    for (std::size_t s = 0; s < raw.sample_sets.size(); s++) {
+        const na::BankSampleSet &i = raw.sample_sets[s];
+        const na::BankSampleSet &j = published.sample_sets[s];
+        EXPECT_EQ(i.samples, j.samples) << where << " sample set " << s;
+        // An empty set plays nothing, whatever velocities it's given (the documents give an empty place's 0 to 0).
+        if (!i.samples.empty()) {
+            EXPECT_EQ(std::tie(i.velocity_low, i.velocity_high, i.velocity_curve), std::tie(j.velocity_low, j.velocity_high, j.velocity_curve))
+                << where << " sample set " << s;
+        }
+    }
+    ASSERT_EQ(raw.samples.size(), published.samples.size()) << where;
+    for (std::size_t s = 0; s < raw.samples.size(); s++) {
+        const na::BankSample &i = raw.samples[s];
+        const na::BankSample &j = published.samples[s];
+        EXPECT_EQ(std::tie(i.wave, i.velocity_low, i.velocity_high, i.base_note, i.detune, i.pan, i.volume, i.adsr1, i.adsr2, i.spu_attribute),
+                  std::tie(j.wave, j.velocity_low, j.velocity_high, j.base_note, j.detune, j.pan, j.volume, j.adsr1, j.adsr2, j.spu_attribute))
             << where << " sample " << s;
     }
-    // What the synth plays: every layer of every key-on, its sample's PCM and loop included.
-    std::array<audio::Layer, 16> x{};
-    std::array<audio::Layer, 16> y{};
-    for (int program = 0; program < static_cast<int>(a.programs.size()); program++) {
-        for (int note = 0; note < 128; note++) {
-            for (const int velocity : {1, 64, 127}) {
-                const int count = raw.Resolve(program, note, velocity, x);
-                ASSERT_EQ(count, published.Resolve(program, note, velocity, y)) << where << " program " << program << " note " << note;
-                for (int l = 0; l < count; l++) {
-                    EXPECT_EQ(x[l].rate, y[l].rate) << where;
-                    EXPECT_EQ(x[l].vel_curve, y[l].vel_curve) << where;
-                    ASSERT_EQ(x[l].vag == nullptr, y[l].vag == nullptr) << where;
-                    if (x[l].vag != nullptr) {
-                        EXPECT_EQ(x[l].vag->pcm, y[l].vag->pcm) << where << " program " << program << " note " << note;
-                        EXPECT_EQ(x[l].vag->loop_start, y[l].vag->loop_start) << where;
-                        EXPECT_EQ(x[l].vag->loops, y[l].vag->loops) << where;
-                    }
-                }
-            }
+    ASSERT_EQ(raw.waves.size(), published.waves.size()) << where;
+    for (std::size_t w = 0; w < raw.waves.size(); w++) {
+        const na::BankWave &i = raw.waves[w];
+        const na::BankWave &j = published.waves[w];
+        ASSERT_EQ(i.samples == nullptr, j.samples == nullptr) << where << " wave " << w;
+        if (i.samples != nullptr) {
+            EXPECT_EQ(i.samples->rate, j.samples->rate) << where << " wave " << w;
+            EXPECT_EQ(i.samples->data, j.samples->data) << where << " wave " << w;
+            EXPECT_EQ(std::tie(i.loop_start, i.loops), std::tie(j.loop_start, j.loops)) << where << " wave " << w;
         }
     }
 }
 
-void ExpectSameSequence(const audio::SqFile &raw, const audio::SqFile &published, const std::string &where) {
-    ASSERT_EQ(raw.Songs().size(), published.Songs().size()) << where;
-    for (std::size_t s = 0; s < raw.Songs().size(); s++) {
-        EXPECT_EQ(raw.Songs()[s].division, published.Songs()[s].division) << where;
-        const auto x = raw.Events(raw.Songs()[s]);
-        const auto y = published.Events(published.Songs()[s]);
-        ASSERT_EQ(x.size(), y.size()) << where << " song " << s;
-        for (std::size_t e = 0; e < x.size(); e++) {
-            EXPECT_EQ(std::tie(x[e].delta, x[e].kind, x[e].status, x[e].data[0], x[e].data[1]),
-                      std::tie(y[e].delta, y[e].kind, y[e].status, y[e].data[0], y[e].data[1]))
-                << where << " song " << s << " event " << e;
-            // A track's end stops playback whatever meta number it carries; the published document
-            // keeps none, the raw reader its 0x2F.
-            if (x[e].kind == audio::SqEventKind::Meta) {
-                EXPECT_EQ(x[e].meta, y[e].meta) << where << " song " << s << " event " << e;
-            }
-            EXPECT_TRUE(std::ranges::equal(x[e].payload, y[e].payload)) << where << " song " << s << " event " << e;
-        }
+void ExpectSameSong(const na::Sequence &raw, const na::Sequence &published, const std::string &where) {
+    EXPECT_EQ(raw.division, published.division) << where;
+    ASSERT_EQ(raw.events.size(), published.events.size()) << where;
+    for (std::size_t e = 0; e < raw.events.size(); e++) {
+        const na::SequenceEvent &x = raw.events[e];
+        const na::SequenceEvent &y = published.events[e];
+        EXPECT_EQ(std::tie(x.delta, x.kind, x.status, x.data1, x.data2, x.tempo), std::tie(y.delta, y.kind, y.status, y.data1, y.data2, y.tempo))
+            << where << " event " << e;
     }
 }
 
@@ -191,7 +184,13 @@ TEST(SoundPublishRealData, EveryPublishedPackPlaysWhatTheOriginalsDo) {
     if (documents.empty()) {
         GTEST_SKIP() << "no published sound in DC_DATA; run dcdata publish-sound";
     }
-    const auto resolve = [&](const fs::path &path) { return data / path; };
+    const auto read = [&](const std::string &path) -> std::optional<std::vector<std::uint8_t>> {
+        std::ifstream stream(data / path, std::ios::binary);
+        if (!stream) {
+            return std::nullopt;
+        }
+        return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+    };
     int        banks = 0;
     int        sequences = 0;
     int        configs = 0;
@@ -220,18 +219,22 @@ TEST(SoundPublishRealData, EveryPublishedPackPlaysWhatTheOriginalsDo) {
                 if (load.contains("bank")) {
                     const dcdata::PackMember *bd = sound::FindMember(members, member.substr(0, 7) + "bd");
                     ASSERT_NE(bd, nullptr) << where;
-                    const auto raw = audio::Bank::Create(Bytes(*source), Bytes(*bd));
-                    const auto published = audio::Bank::CreateFromJson(ReadText(data / load["bank"].get<std::string>()), resolve);
+                    const auto raw = dc::sound::RetailBank(Bytes(*source), Bytes(*bd));
+                    const auto published = dc::sound::NoktusBankFromJson(ReadText(data / load["bank"].get<std::string>()), read);
                     ASSERT_NE(raw, nullptr) << where;
                     ASSERT_NE(published, nullptr) << where;
                     ExpectSameBank(*raw, *published, where);
                     banks++;
                 } else {
-                    const auto raw = audio::SqFile::Create(Bytes(*source));
-                    const auto published = audio::SqFile::CreateFromJson(ReadText(data / load["sequence"].get<std::string>()));
-                    ASSERT_NE(raw, nullptr) << where;
-                    ASSERT_NE(published, nullptr) << where;
-                    ExpectSameSequence(*raw, *published, where);
+                    const auto        raw = dc::sound::RetailSequences(Bytes(*source));
+                    const std::string text = ReadText(data / load["sequence"].get<std::string>());
+                    ASSERT_FALSE(raw.empty()) << where;
+                    for (std::size_t song = 0; song < raw.size(); song++) {
+                        const auto published = dc::sound::NoktusSequenceFromJson(text, static_cast<int>(song));
+                        ASSERT_NE(published, nullptr) << where << " song " << song;
+                        ExpectSameSong(*raw[song], *published, where + " song " + std::to_string(song));
+                    }
+                    EXPECT_EQ(dc::sound::NoktusSequenceFromJson(text, static_cast<int>(raw.size())), nullptr) << where;
                     sequences++;
                 }
             }

@@ -1,8 +1,7 @@
 #pragma once
 
-// The game's sound, played by one audio engine or the other (Noktus's AUDIO_PLAN.md, slice 7): Noktus's by default, Kazarov's where
-// DC_AUDIO_ENGINE=kazarov asks for it, to compare (the owner, 2026-11-21). CSound and the EZMIDI answers speak to the engine through this, in the
-// sound library's terms: sixteen ports, each a bank, a sequence or a recording in its place, effects, a volume.
+// The game's sound, played by Noktus's audio engine (Noktus's AUDIO_PLAN.md, slice 7). CSound and the EZMIDI answers speak to the engine through
+// this, in the sound library's terms: sixteen ports, each a bank, a sequence or a recording in its place, effects, a volume.
 
 #include <cstdint>
 #include <memory>
@@ -12,55 +11,40 @@
 #include <string_view>
 #include <vector>
 
-#include "audio/hdbank.hpp"
-#include "audio/sq.hpp"
 #include "noktus/audio.hpp"
 #include "noktus/sequence.hpp"
 #include "noktus/synth.hpp"
 
 namespace dc::sound {
 
-enum class Engine : std::uint8_t {
-    Noktus,
-    Kazarov,
-};
+/** The sound library's ports, as the game numbers them (game/sound.hpp, MIDI_PORT_*). */
+inline constexpr int kPorts = 16;
 
-/** The engine playing the game's sound, chosen once from DC_AUDIO_ENGINE ("kazarov", or Noktus's by default). */
-Engine ActiveEngine();
-
-/** A bank as the playing engine takes it. */
+/** A bank for the engine. */
 struct SoundBank {
-    std::shared_ptr<audio::Bank>               kazarov;
-    std::shared_ptr<const noktus::audio::Bank> noktus;
+    std::shared_ptr<const noktus::audio::Bank> bank;
 
-    explicit operator bool() const { return kazarov != nullptr || noktus != nullptr; }
+    explicit operator bool() const { return bank != nullptr; }
 
     /** Where it is, for the game's state to hold: only ever compared with null. */
     void *Address() const;
 };
 
-/** A sequence, each of its songs, as the playing engine takes it. */
+/** A sequence, each of its songs, for the engine. */
 struct SoundSequence {
-    std::shared_ptr<audio::SqFile>                              kazarov;
-    std::vector<std::shared_ptr<const noktus::audio::Sequence>> noktus;
+    std::vector<std::shared_ptr<const noktus::audio::Sequence>> songs;
 
-    explicit operator bool() const { return kazarov != nullptr || !noktus.empty(); }
+    explicit operator bool() const { return !songs.empty(); }
 
-    std::size_t Songs() const;
+    std::size_t Songs() const { return songs.size(); }
     void       *Address() const;
 };
 
-/** A bank for the playing engine: its published document where there is one (empty, none), else the pack's own HD and BD. */
+/** A bank: its published document where there is one (empty, none), else the pack's own HD and BD. */
 SoundBank LoadSoundBank(const std::string &document, std::span<const std::uint8_t> hd, std::span<const std::uint8_t> bd);
 
-/** A sequence for the playing engine: its published document where there is one (empty, none), else the pack's own SQ. */
+/** A sequence: its published document where there is one (empty, none), else the pack's own SQ. */
 SoundSequence LoadSoundSequence(const std::string &document, std::span<const std::uint8_t> sq);
-
-/** The pack's own HD and BD as Noktus's bank, through Kazarov's readers of them; null if they can't be read. */
-std::shared_ptr<const noktus::audio::Bank> NoktusBankFromRaw(std::span<const std::uint8_t> hd, std::span<const std::uint8_t> bd);
-
-/** A song of a sequence Kazarov read, as Noktus's; null if there's no such song. */
-std::shared_ptr<const noktus::audio::Sequence> NoktusSequenceFromSq(const audio::SqFile &file, std::size_t song);
 
 /** Who hears the world from a camera's place and the way it looks (SndSetCamera's): forward its look on the level, right the side SndGetVolPan
  *  pans a sound to the right of. None where it looks straight up or down. */
@@ -71,12 +55,12 @@ class Backend {
 public:
     virtual ~Backend() = default;
 
-    /** Opens the output (the device, or the WAV capture that <prefix>_AUDIO_WAV asks for); false if there's none, the game playing silently. */
+    /** Opens the output (the device, or the WAV capture that DC_AUDIO_WAV asks for); false if there's none, the game playing silently. */
     virtual bool StartOutput() = 0;
     virtual void StopOutput() = 0;
     virtual void PauseOutput(bool paused) = 0;
     virtual void SetMasterGain(float gain) = 0;
-    /** Surround on or off; seven_one, for 7.1 speakers rather than 5.1 (Noktus's engine: Kazarov's output is 5.1 alone). */
+    /** Surround on or off; seven_one, for 7.1 speakers rather than 5.1. */
     virtual void SetSurround(bool on, bool seven_one) = 0;
     /** Stereo, or mono (the game's sound option). */
     virtual void SetStereo(bool stereo) = 0;
@@ -108,11 +92,11 @@ public:
     /** Where an effect instance (its id and number, under the port's program) sounds in the world: three numbers, or null for in front by its
      *  pan. Kept for the instance's next key on; within size of the listener it's heard in front by its pan. */
     virtual void EffectPlace(int port, int id, int number, const float *position, float size) = 0;
-    /** Whether a sound's place is heard (surround through Noktus's engine); where it isn't, the game's own pan is all there is. */
+    /** Whether a sound's place is heard (surround); where it isn't, the game's own pan is all there is. */
     virtual bool HearsPlaces() const = 0;
 };
 
-/** The playing engine's. */
+/** The engine's. */
 Backend &Audio();
 
 } // namespace dc::sound

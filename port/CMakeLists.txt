@@ -59,8 +59,8 @@ kz_port_host_library(dc_host)
 # Noktus draws the game, and Kazarov's renderer is only there for DC_RENDERER=kazarov. Both define the gfx calls, so its sources are built with
 # other names for them: port/src/render/gfx_host.cpp answers to the real names, and passes a call on when Kazarov's renderer is drawing.
 get_target_property(dc_host_sources dc_host SOURCES)
-# Chronicle's port/src/platform/audio_output.cpp stands in for Kazarov's audio output, for surround's silent bass channel.
-list(FILTER dc_host_sources EXCLUDE REGEX "/platform/audio\\.cpp$")
+# Noktus plays the game's sound (port/src/sound): Kazarov's audio, its mixer and output, isn't built (the owner, 2026-11-21).
+list(FILTER dc_host_sources EXCLUDE REGEX "/audio/[a-z_]+\\.cpp$|/platform/audio\\.cpp$")
 set_property(TARGET dc_host PROPERTY SOURCES ${dc_host_sources})
 set(kazarov_renderer_sources "${dc_host_sources}")
 list(FILTER kazarov_renderer_sources INCLUDE REGEX "/gfx/(displaylist|draw|memory|pipelines|readback|renderer|requirements|resources|thread|vulkan_android)\\.cpp$")
@@ -72,9 +72,6 @@ endif()
 if(NINTENDO_SWITCH)
     dc_switch_host(dc_host)
 endif()
-# Chronicle still loads retail HD/BD/SQ audio. These compatibility declarations extend the shared
-# semantic audio API; every host and game unit must see the same class definitions.
-target_include_directories(dc_host BEFORE PRIVATE ${CMAKE_SOURCE_DIR}/port/include)
 
 set(GAME_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/game)
 set(PORT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
