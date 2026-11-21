@@ -263,8 +263,11 @@ void ReportGpu(const noktus::PaceReport &pace) {
             passes += std::format(", {} {:.3f}", PassName(FromNoktusPass(static_cast<noktus::Pass>(i))), gpu.mean_pass[i]);
         }
     }
-    std::fprintf(stderr, "noktus gpu: %llu frames, mean %.3f ms, worst %.3f ms; by pass%s, finishing %.3f\n", static_cast<unsigned long long>(gpu.frames), gpu.mean_frame,
-                 gpu.worst_frame, passes.c_str(), gpu.mean_finish);
+    std::fprintf(stderr,
+                 "noktus gpu: %llu frames, mean %.3f ms, worst %.3f ms; before the scene: shadows %.3f, occlusion %.3f, reflection %.3f, probe %.3f; by pass%s, "
+                 "finishing %.3f\n",
+                 static_cast<unsigned long long>(gpu.frames), gpu.mean_frame, gpu.worst_frame, gpu.mean_shadows, gpu.mean_occlusion, gpu.mean_reflection,
+                 gpu.mean_probe, passes.c_str(), gpu.mean_finish);
 }
 
 // With DC_NOKTUS_MOTION_OUT=<prefix>, the last tick drawn halfway, then at its end, and the second frame's motion: what the harness's motion check moves
