@@ -225,7 +225,7 @@ std::shared_ptr<const noktus::audio::Bank> NoktusBankFromJsonOrThrow(std::string
         sample.pan = number(s, "pan", 64);
         sample.adsr1 = static_cast<std::uint16_t>(number(s, "adsr1", 0x00FF));
         sample.adsr2 = static_cast<std::uint16_t>(number(s, "adsr2", 0));
-        sample.spu_attribute = static_cast<std::uint8_t>(number(s, "spu_attr", 0));
+        sample.spu_attribute = static_cast<std::uint8_t>(number(s, "spu_attr", 0x0F)); // without one, heard dry and in the reverb, either core
         sample.velocity_low = number(s, "vel_low", 0);
         sample.velocity_high = number(s, "vel_high", 127);
     }

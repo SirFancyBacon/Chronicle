@@ -214,6 +214,46 @@ TEST(NoktusSequenceRealData, PlayTheMusicAsKazarovDoes) {
                     a.Write(kazarov);
                     b.Write(noktus);
                 }
+                // For listening: the same with the list's own reverb (its .cfg's REVERBE, on core 0, the music's), Kazarov's beside the SPU2's.
+                const auto found = list.find("config");
+                const bool configured = found != list.end() && found->is_object();
+                const auto number = [&](const char *key) {
+                    const auto at = configured ? found->find(key) : list.end();
+                    return configured && at != found->end() && at->is_number_integer() ? at->get<int>() : 0;
+                };
+                const int mode = number("reverb_mode");
+                const int depth = number("reverb_depth");
+                if (mode != 0) {
+                    audio::Mixer wet_mixer(48000);
+                    wet_mixer.SetReverbEnabled(true);
+                    wet_mixer.SetReverb(0, mode, depth);
+                    wet_mixer.BindBank(0, kazarov_bank);
+                    wet_mixer.SetSequence(0, kazarov_song);
+                    wet_mixer.SetVolume(0, audio::kFullPortVolume);
+                    wet_mixer.Play(0);
+                    std::vector<float> kazarov_wet(kFrames * 2);
+                    wet_mixer.Render(kazarov_wet.data(), kFrames);
+                    auto wet_engine = noktus::audio::AudioEngine::Create({.sample_rate = 48000, .speakers = noktus::audio::Speakers::Stereo, .device = false});
+                    // The EVOL the game writes: the depth shifted up eight bits, a signed register (128 and more negative).
+                    wet_engine->SetReverb(0, static_cast<noktus::audio::ReverbMode>(std::clamp(mode, 0, 9)), static_cast<float>(static_cast<std::int16_t>((depth << 8) & 0xFFFF)) / 32768.0f);
+                    auto wet_player = std::make_shared<noktus::audio::SequencePlayer>();
+                    wet_player->SetBank(noktus_bank);
+                    wet_player->SetSequence(noktus_song);
+                    wet_player->Play();
+                    wet_engine->Attach(wet_player);
+                    std::vector<float> noktus_wet(kFrames * 2);
+                    wet_engine->Render(noktus_wet);
+                    for (float &x : noktus_wet) {
+                        x = std::clamp(x, -1.0f, 1.0f);
+                    }
+                    noktus::audio::WavWriter c;
+                    noktus::audio::WavWriter d;
+                    if (c.Open(stem + "_kazarov_reverb.wav", 48000, noktus::audio::Speakers::Stereo) &&
+                        d.Open(stem + "_noktus_reverb.wav", 48000, noktus::audio::Speakers::Stereo)) {
+                        c.Write(kazarov_wet);
+                        d.Write(noktus_wet);
+                    }
+                }
             }
         }
     }
