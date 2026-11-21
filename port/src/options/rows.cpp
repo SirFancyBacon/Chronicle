@@ -753,16 +753,21 @@ int Three(const Config & /*config*/) {
     return 3;
 }
 
+int Four(const Config & /*config*/) {
+    return 4;
+}
+
 int SoundChoice(const Config &config) {
     if (config.surround) {
-        return 2;
+        return config.seven_one ? 3 : 2;
     }
     return config.options.stereo ? 1 : 0;
 }
 
 void SetSound(Config &config, int choice) {
     config.options.stereo = choice != 0;
-    config.surround = choice == 2;
+    config.surround = choice >= 2;
+    config.seven_one = choice == 3;
 }
 
 template <int Config::*Member>
@@ -913,8 +918,8 @@ std::span<const Row> DisplayRows() {
 constexpr Row kAudioRows[] = {
     SettingRow("audio.master_volume", "Volume", "\"Volume\"\nHow loud the game is.", VolumeCount, VolumeChoice,
                SetVolume, VolumeText),
-    SettingRow("audio.sound", "Sound", "\"Sound\"\nMono, stereo, or\nsurround for 5.1\nspeakers.", Three, SoundChoice,
-               SetSound, nullptr, "Mono|Stereo|Surround"),
+    SettingRow("audio.sound", "Sound", "\"Sound\"\nMono, stereo, or\nsurround for 5.1 or\n7.1 speakers.", Four, SoundChoice,
+               SetSound, nullptr, "Mono|Stereo|5.1|7.1"),
     NamedRow<&Config::soundtrack>("audio.soundtrack", "Soundtrack",
                                   "\"Soundtrack\"\nPS2: the game's music.\nCustom: your own\nrecordings, from the\nnext song.",
                                   "PS2|Custom"),

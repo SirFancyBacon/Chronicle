@@ -76,7 +76,8 @@ public:
     virtual void StopOutput() = 0;
     virtual void PauseOutput(bool paused) = 0;
     virtual void SetMasterGain(float gain) = 0;
-    virtual void SetSurround(bool on) = 0;
+    /** Surround on or off; seven_one, for 7.1 speakers rather than 5.1 (Noktus's engine: Kazarov's output is 5.1 alone). */
+    virtual void SetSurround(bool on, bool seven_one) = 0;
     /** Stereo, or mono (the game's sound option). */
     virtual void SetStereo(bool stereo) = 0;
     /** How samples are read between: the SPU2's Gaussian, or a cubic (the interpolation option). */

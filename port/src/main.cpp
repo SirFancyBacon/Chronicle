@@ -512,7 +512,7 @@ void ApplyDiscord(const Config &config) {
 // waits for PumpHost.
 void ApplyConfigChange(const Config &before, const Config &after) {
     sound::Audio().SetMasterGain(after.master_volume);
-    sound::Audio().SetSurround(after.surround);
+    sound::Audio().SetSurround(after.surround, after.seven_one);
     sound::Audio().SetInterpolation(after.cubic_interpolation);
     InputApplyConfig(after);
 #ifdef __SWITCH__
@@ -806,7 +806,7 @@ int Run(int argc, const char **argv) {
 #endif
 
     sound::Audio().SetMasterGain(config.master_volume);
-    sound::Audio().SetSurround(config.surround);
+    sound::Audio().SetSurround(config.surround, config.seven_one);
     sound::Audio().SetInterpolation(config.cubic_interpolation);
     sound::Audio().StartOutput();
 

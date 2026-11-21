@@ -109,10 +109,13 @@ TEST(MenuOption, AudioPageKeepsCustomSoundtrackAndSurround) {
     EXPECT_EQ(options::RowValue(*soundtrack, config), "Custom");
     EXPECT_EQ(options::RowValue(*sound, config), "Stereo");
     EXPECT_TRUE(options::StepRow(*sound, config, 1, false));
-    EXPECT_TRUE(config.surround && config.options.stereo);
-    EXPECT_EQ(options::RowValue(*sound, config), "Surround");
+    EXPECT_TRUE(config.surround && config.options.stereo && !config.seven_one);
+    EXPECT_EQ(options::RowValue(*sound, config), "5.1");
+    EXPECT_TRUE(options::StepRow(*sound, config, 1, false));
+    EXPECT_TRUE(config.surround && config.options.stereo && config.seven_one);
+    EXPECT_EQ(options::RowValue(*sound, config), "7.1");
     EXPECT_TRUE(options::StepRow(*sound, config, 1, true));
-    EXPECT_TRUE(!config.surround && !config.options.stereo);
+    EXPECT_TRUE(!config.surround && !config.options.stereo && !config.seven_one);
     EXPECT_EQ(options::RowValue(*sound, config), "Mono");
 }
 

@@ -216,7 +216,7 @@ public:
 
     void SetMasterGain(float gain) override { Mixer().SetMasterGain(gain); }
 
-    void SetSurround(bool on) override { AudioSetSurround(on); }
+    void SetSurround(bool on, bool /*seven_one*/) override { AudioSetSurround(on); }
 
     void SetStereo(bool stereo) override { Mixer().SetStereo(stereo); }
 
@@ -341,8 +341,9 @@ public:
         }
     }
 
-    void SetSurround(bool on) override {
+    void SetSurround(bool on, bool seven_one) override {
         surround_ = on;
+        seven_one_ = seven_one;
         ApplySpeakers();
     }
 
@@ -620,9 +621,7 @@ private:
         if (!surround_) {
             return na::Speakers::Stereo;
         }
-        // Surround is 5.1 unless DC_AUDIO_SPEAKERS=7.1 asks for 7.1 (to try; the option offers 5.1 alone).
-        const char *speakers = std::getenv("DC_AUDIO_SPEAKERS");
-        return speakers != nullptr && std::string_view(speakers) == "7.1" ? na::Speakers::Surround71 : na::Speakers::Surround51;
+        return seven_one_ ? na::Speakers::Surround71 : na::Speakers::Surround51;
     }
 
     void ApplySpeakers() {
@@ -669,6 +668,7 @@ private:
     float                                                   master_ = 1.0f;
     na::Interpolation                                       interpolation_ = na::Interpolation::Gaussian;
     bool                                                    surround_ = false;
+    bool                                                    seven_one_ = false;
     bool                                                    stereo_ = true;
     bool                                                    capturing_ = false;
     std::int64_t                                            last_tick_ = 0;

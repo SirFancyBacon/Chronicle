@@ -198,7 +198,7 @@ key is optional; these are the defaults:
     },
     "audio": {
         "master_volume": 1.0,       // 0 to 1
-        "sound": "stereo",          // mono, stereo or surround (5.1: the music spread about, sounds from their places)
+        "sound": "stereo",          // mono, stereo, 5.1 or 7.1 (surround: the music spread about, sounds from their places; "surround" reads as 5.1)
         "soundtrack": "ps2",        // ps2: the game's music; custom: recordings from soundtrack/ (docs/SOUNDTRACK.md)
         "interpolation": "ps2"      // ps2: the SPU2's Gaussian between samples; cubic: crisper at the top (Noktus's engine)
     },
@@ -1090,8 +1090,8 @@ documents (`sound::NoktusBankFromJson`, `NoktusSequenceFromJson`), or from the p
 `DC_AUDIO_ENGINE=kazarov` plays it through Kazarov's mixer instead, as described below, to compare (the owner, 2026-11-21: until the owner
 says). The settings and the Options screen are the same either way, but for Audio > Interpolation (`audio.interpolation`): Noktus's engine
 reads between samples by the SPU2's Gaussian (`"ps2"`) or by a cubic (`"cubic"`), crisper at the top, where Kazarov's mixer keeps its own.
-`DC_AUDIO_SPEAKERS=7.1` plays surround as 7.1 rather than 5.1 (the option offers surround on or off); `DC_AUDIO_WAV` writes 32-bit float in
-the speakers' layout.
+Audio > Sound offers surround for 5.1 or 7.1 speakers; Kazarov's mixer plays either as 5.1. `DC_AUDIO_WAV` writes 32-bit float in the
+speakers' layout.
 
 In surround, Noktus's engine hears sounds from their places: the listener is the camera `SndSetCamera` gives, and the game's positional calls
 (`SndSePlay` with a position, footsteps, monsters, the dungeons' and the opening's sources, the event scripts' special sound, doors) place
@@ -1418,7 +1418,7 @@ help. Retail's screen-position row is gone: `MGAdjustScreen` moves nothing on PC
 |---|---|
 | Game | save cursor position, clock, time speed, dungeon map, enemy damage, party damage, enemy HP, names, Discord Rich Presence, element quick select, swap keeps lock-on, autosave |
 | Display | window mode, resolution (the monitor's own and the sizes that fit it), V-Sync (`fifo`, `mailbox`, `immediate`), frame limit, aspect ratio, interface size (`ui_scale`), smooth motion (`interpolation`), FPS counter, FPS info (`fps_detail`), anisotropic filter (`anisotropy`), soft focus, cloth (`cloth`), and on Windows HDR, Calibrate HDR, Paper White and Peak Brightness (`hdr`, `hdr_paper_white`, `hdr_peak`) |
-| Audio | volume, sound (mono, stereo or surround), soundtrack (PS2 or custom) |
+| Audio | volume, sound (mono, stereo, 5.1 or 7.1), soundtrack (PS2 or custom), interpolation (PS2 or cubic) |
 | Controls | vibration, mouse sensitivity (in hundredths below 1 and tenths above, whatever its unit), invert mouse Y, vertical return, mouse wheel zoom, reset zoom (its binding), stick sensitivity, invert stick X and Y, gyro, gyro sensitivity, invert gyro X and Y |
 | Text | language, message speed, button symbols (original or new), symbols shown (glyph device), text font (sharp or original), text shadow, symbol shadow, area name shadow, floor label shadow, boss name shadow |
 | Accessibility | always win QTEs |

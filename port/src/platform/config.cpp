@@ -377,9 +377,11 @@ int &ShadowSetting(Config &config, std::string_view name) {
 }
 
 bool Apply(Config &config, std::string_view name, const Json &value) {
-    if (name == "audio.sound" && value == "surround") {
+    // "surround" from older files is 5.1.
+    if (name == "audio.sound" && (value == "5.1" || value == "7.1" || value == "surround")) {
         config.options.stereo = true;
         config.surround = true;
+        config.seven_one = value == "7.1";
         return true;
     }
     if (ApplyGameOption(config.options, name, value)) {
@@ -746,7 +748,7 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
 
 const char *SoundName(const Config &config) {
     if (config.surround) {
-        return "surround";
+        return config.seven_one ? "7.1" : "5.1";
     }
     return config.options.stereo ? "stereo" : "mono";
 }

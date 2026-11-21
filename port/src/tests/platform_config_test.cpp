@@ -230,8 +230,13 @@ TEST(PlatformConfig, ShowFpsAndTheHostKeys) {
 TEST(PlatformConfig, SurroundIsOffUntilAsked) {
     ASSERT_TRUE(!ConfigParse("").surround);
     Config surround = ConfigParse(R"({"audio": {"sound": "surround"}})");
-    ASSERT_TRUE(surround.surround && surround.options.stereo);
-    ASSERT_NE(ConfigSerialize(surround).find("\"sound\": \"surround\""), std::string::npos);
+    ASSERT_TRUE(surround.surround && surround.options.stereo && !surround.seven_one);
+    ASSERT_NE(ConfigSerialize(surround).find("\"sound\": \"5.1\""), std::string::npos);
+    Config seven_one = ConfigParse(R"({"audio": {"sound": "7.1"}})");
+    ASSERT_TRUE(seven_one.surround && seven_one.options.stereo && seven_one.seven_one);
+    ASSERT_NE(ConfigSerialize(seven_one).find("\"sound\": \"7.1\""), std::string::npos);
+    Config five_one = ConfigParse(R"({"audio": {"sound": "5.1"}})");
+    ASSERT_TRUE(five_one.surround && !five_one.seven_one);
     ASSERT_EQ(ConfigSerialize(surround).find("\"surround\": "), std::string::npos);
     ASSERT_TRUE(ConfigParse(R"({"audio": {"sound": "stereo", "surround": true}})").surround);
     ASSERT_TRUE(!ConfigParse(R"({"audio": {"surround": "yes"}})").surround);
