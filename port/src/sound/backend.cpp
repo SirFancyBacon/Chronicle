@@ -666,7 +666,7 @@ private:
     std::array<Reverb, 2>                                   reverbs_{};
     na::Listener                                            listener_;
     float                                                   master_ = 1.0f;
-    na::Interpolation                                       interpolation_ = na::Interpolation::Gaussian;
+    na::Interpolation                                       interpolation_ = na::Interpolation::Cubic;
     bool                                                    surround_ = false;
     bool                                                    seven_one_ = false;
     bool                                                    stereo_ = true;

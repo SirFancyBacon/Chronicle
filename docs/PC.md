@@ -200,7 +200,7 @@ key is optional; these are the defaults:
         "master_volume": 1.0,       // 0 to 1
         "sound": "stereo",          // mono, stereo, 5.1 or 7.1 (surround: the music spread about, sounds from their places; "surround" reads as 5.1)
         "soundtrack": "ps2",        // ps2: the game's music; custom: recordings from soundtrack/ (docs/SOUNDTRACK.md)
-        "interpolation": "ps2"      // ps2: the SPU2's Gaussian between samples; cubic: crisper at the top (Noktus's engine)
+        "interpolation": "cubic"    // cubic (the default): crisper at the top; ps2: the SPU2's Gaussian between samples (Noktus's engine)
     },
     "input": {
         "mouse_sensitivity": 0.1,   // degrees the camera turns per count of mouse motion
@@ -1089,7 +1089,8 @@ documents (`sound::NoktusBankFromJson`, `NoktusSequenceFromJson`), or from the p
 
 `DC_AUDIO_ENGINE=kazarov` plays it through Kazarov's mixer instead, as described below, to compare (the owner, 2026-11-21: until the owner
 says). The settings and the Options screen are the same either way, but for Audio > Interpolation (`audio.interpolation`): Noktus's engine
-reads between samples by the SPU2's Gaussian (`"ps2"`) or by a cubic (`"cubic"`), crisper at the top, where Kazarov's mixer keeps its own.
+reads between samples by a cubic (`"cubic"`, the default), crisper at the top, or by the SPU2's Gaussian (`"ps2"`), soft as on the console,
+where Kazarov's mixer keeps its own.
 Audio > Sound offers surround for 5.1 or 7.1 speakers; Kazarov's mixer plays either as 5.1. `DC_AUDIO_WAV` writes 32-bit float in the
 speakers' layout.
 

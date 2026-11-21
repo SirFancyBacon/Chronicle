@@ -253,15 +253,15 @@ TEST(PlatformConfig, SoundtrackIsPs2UntilAsked) {
     ASSERT_NE(ConfigSerialize(custom).find("\"soundtrack\": \"custom\""), std::string::npos);
 }
 
-TEST(PlatformConfig, InterpolationIsThePs2sUntilAsked) {
-    ASSERT_TRUE(!ConfigParse("").cubic_interpolation);
+TEST(PlatformConfig, InterpolationIsCubicUnlessThePs2sIsAsked) {
+    ASSERT_TRUE(ConfigParse("").cubic_interpolation);
     ASSERT_TRUE(ConfigParse(R"({"audio": {"interpolation": "cubic"}})").cubic_interpolation);
     ASSERT_TRUE(!ConfigParse(R"({"audio": {"interpolation": "ps2"}})").cubic_interpolation);
-    ASSERT_TRUE(!ConfigParse(R"({"audio": {"interpolation": "sinc"}})").cubic_interpolation);
-    Config cubic;
-    cubic.cubic_interpolation = true;
-    ASSERT_NE(ConfigSerialize(cubic).find("\"interpolation\": \"cubic\""), std::string::npos);
-    ASSERT_TRUE(ConfigParse(ConfigSerialize(cubic)).cubic_interpolation);
+    ASSERT_TRUE(ConfigParse(R"({"audio": {"interpolation": "sinc"}})").cubic_interpolation);
+    Config ps2;
+    ps2.cubic_interpolation = false;
+    ASSERT_NE(ConfigSerialize(ps2).find("\"interpolation\": \"ps2\""), std::string::npos);
+    ASSERT_TRUE(!ConfigParse(ConfigSerialize(ps2)).cubic_interpolation);
 }
 
 TEST(PlatformConfig, GameOptionsLiveInTheirPagesSections) {

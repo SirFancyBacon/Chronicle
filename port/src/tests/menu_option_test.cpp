@@ -126,10 +126,10 @@ TEST(MenuOption, AudioPageOffersTheInterpolation) {
     const auto row = std::ranges::find_if(page->rows, [](const options::Row &row) { return std::string_view(row.key) == "audio.interpolation"; });
     ASSERT_NE(row, page->rows.end());
     Config config;
-    EXPECT_EQ(options::RowValue(*row, config), "PS2");
-    EXPECT_TRUE(options::StepRow(*row, config, 1, false));
-    EXPECT_TRUE(config.cubic_interpolation);
     EXPECT_EQ(options::RowValue(*row, config), "Cubic");
+    EXPECT_TRUE(options::StepRow(*row, config, 1, true));
+    EXPECT_TRUE(!config.cubic_interpolation);
+    EXPECT_EQ(options::RowValue(*row, config), "PS2");
 }
 
 namespace {

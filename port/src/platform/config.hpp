@@ -94,7 +94,7 @@ struct Config : HostSettings {
     bool              enhanced_cloth = false;     /**< video.cloth: false runs the PS2's cloth, true also keeps it out of the body. */
     bool               planar_reflections = true;  /**< video.reflections: water reflects the scene mirrored in it (planar), or what's on the screen (screen). */
     bool               seven_one = false; /**< audio.sound "7.1": surround (HostSettings::surround) for 7.1 speakers rather than 5.1. */
-    bool               cubic_interpolation = false; /**< audio.interpolation: the PS2's Gaussian between samples ("ps2", its soft top), or a cubic ("cubic", crisper). */
+    bool               cubic_interpolation = true; /**< audio.interpolation: a cubic between samples ("cubic", crisper; the owner's default of 2026-11-21), or the PS2's Gaussian ("ps2", its soft top). */
     float             mouse_camera_return = 0.2f; /**< Third-person vertical return after mouse input: 0 holds height, 1 is retail's rate. */
     bool              radial_dead_zone = true;    /**< input.dead_zone: true (radial) measures from the centre, false (axial) zeroes each stick axis on its own. */
     ConfigGameOptions options;
