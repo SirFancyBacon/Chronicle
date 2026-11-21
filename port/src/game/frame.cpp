@@ -1061,7 +1061,8 @@ int CFrameVu1::DrawVu1(unsigned int *packet, RenderInfo *info) {
             const render::RiverWaterScope river_water(render::RiverWater() && !Upright(*this));
             // Self-lit (the 'C' code): its own colour, the scene's light falling on it no more than the game's lights did.
             Draw3DSelfLitScope self_lit(!info->shadow_pass && attr.use_color && !attr.ambient_boost && !lit_face && !painted);
-            const render::ShadowOnlyScope only_casting(shadow_only);
+            // Inside a caster-only draw (a dungeon cell the view leaves out), what's on the screen stays a caster too.
+            const render::ShadowOnlyScope only_casting(shadow_only || render::ShadowOnly());
             visual->DrawVu1(packet, matrix, info, VU1_PROGRAM_UNKNOWN6, nullptr, 0, 0);
         }
 

@@ -25,6 +25,7 @@
 #include "mathutil.hpp"
 #include "mglib.hpp"
 #include "rect.hpp"
+#include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
 #include "render/screen.hpp"
 #include "render/types.hpp"
@@ -442,7 +443,12 @@ void CDungeonMap::DrawMap(CCameraFollow *camera, CFrameVu1 * /*player*/) {
                 }
             }
             cell.visible = draw;
-            if (!draw) {
+            // With real shadows, a cell the view leaves out (behind the eye, or a cell past the draw distance) still casts into it, as the
+            // towns' frames do (frame.cpp's CastsIntoView): drawn as the sun's casters alone, each frame given only where its shadow falls into
+            // view. Without it, a pillar just off the screen took its shadow with it as the camera turned.
+            const bool casts_only = !draw && selectMapNo != DUNGEON_MOON_SEA && render::SunShadows() &&
+                                    dist < kCellSize * (this->draw_dist_scale + 1.0f);
+            if (!draw && !casts_only) {
                 continue;
             }
 
@@ -452,6 +458,11 @@ void CDungeonMap::DrawMap(CCameraFollow *camera, CFrameVu1 * /*player*/) {
             part.pos[1] = 0.0f;
             part.pos[2] = world_z;
             part.pos[3] = 1.0f;
+            if (casts_only) {
+                const render::ShadowOnlyScope only_casting;
+                part.Draw();
+                continue;
+            }
 
             for (int npc_no = 0; npc_no < 4; npc_no++) {
                 if (this->npc[npc_no].parts_no == cell.parts_no && this->npc[npc_no].draw_num < 16 &&
