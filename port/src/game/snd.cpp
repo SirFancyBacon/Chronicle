@@ -2020,11 +2020,13 @@ int SndSyncBG() {
 void SndSetCamera(CCamera *camera) {
     camera->GetPos(camera_pos);
     camera->GetDir(camera_dir);
+    CSnd.SetListener(camera_pos, camera_dir);
 }
 
 void SndSetCamera(float *position, float *rotation) {
     sceVu0CopyVector(camera_pos, position);
     sceVu0CopyVector(camera_dir, rotation);
+    CSnd.SetListener(camera_pos, camera_dir);
 }
 
 namespace {
@@ -2462,7 +2464,20 @@ void SndSePlay(int se_no, float *position, float near, float far) {
     }
 
     SndGetVolPan(&volume, &pan, position, near, far);
+    SndSePlace(se_no, 0, position, near);
     SndSePlay(se_no, volume, pan, 0);
+}
+
+void SndSePlace(int se_no, int voice, float *position, float near) {
+    const SND_SE_INFO *info = GetSeInfo(se_no);
+
+    if (info != nullptr) {
+        CSnd.SE_Place(GetPortNo(se_no), info->bank, info->prog, position, near, voice);
+    }
+}
+
+bool SndHearsPlaces() {
+    return CSnd.HearsPlaces();
 }
 
 void SndSeStop(int se_no, int voice) {
@@ -2532,6 +2547,7 @@ void SndPlayFootSound(int kind, int foot, float *position) {
     const int       se_no = (kind * 4) + 500 + (foot > 0 ? 1 : 0);
 
     SndGetVolPan(&volume, &pan, position, near, far);
+    SndSePlace(se_no, 0, position, near);
     SndSePlay(se_no, volume, pan, 0);
 }
 
@@ -2886,6 +2902,14 @@ void SndSetSPSeVolf(int se_no, float volume) {
 
         level = static_cast<int>(static_cast<float>(level) * volume);
         CSnd.SE_SetVol(MIDI_PORT_SE_SPECIAL, info->bank, info->prog, std::clamp(level, 0, 127), 0);
+    }
+}
+
+void SndSPSePlace(int se_no, float *position, float near) {
+    const SND_SE_INFO *info = GetSPInfo(se_no);
+
+    if (info != nullptr) {
+        CSnd.SE_Place(MIDI_PORT_SE_SPECIAL, info->bank, info->prog, position, near, 0);
     }
 }
 

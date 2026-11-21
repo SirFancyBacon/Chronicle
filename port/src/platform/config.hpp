@@ -93,6 +93,7 @@ struct Config : HostSettings {
     int               hdr_peak = 0;        // nits; 0 takes what the system says
     bool              enhanced_cloth = false;     /**< video.cloth: false runs the PS2's cloth, true also keeps it out of the body. */
     bool               planar_reflections = true;  /**< video.reflections: water reflects the scene mirrored in it (planar), or what's on the screen (screen). */
+    bool               cubic_interpolation = false; /**< audio.interpolation: the PS2's Gaussian between samples ("ps2", its soft top), or a cubic ("cubic", crisper). */
     float             mouse_camera_return = 0.2f; /**< Third-person vertical return after mouse input: 0 holds height, 1 is retail's rate. */
     bool              radial_dead_zone = true;    /**< input.dead_zone: true (radial) measures from the centre, false (axial) zeroes each stick axis on its own. */
     ConfigGameOptions options;

@@ -726,6 +726,9 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "audio.soundtrack") {
         return ReadChoice(value, "ps2", "custom", config.soundtrack);
     }
+    if (name == "audio.interpolation") {
+        return ReadChoice(value, "ps2", "cubic", config.cubic_interpolation);
+    }
     // Older files: audio.sound now takes "surround".
     if (name == "audio.surround") {
         return ReadBool(value, config.surround);
@@ -885,6 +888,7 @@ std::string ConfigSerialize(const Config &config) {
     root["audio"]["master_volume"] = Shortest(config.master_volume);
     root["audio"]["sound"] = SoundName(config);
     root["audio"]["soundtrack"] = config.soundtrack ? "custom" : "ps2";
+    root["audio"]["interpolation"] = config.cubic_interpolation ? "cubic" : "ps2";
     root["input"]["mouse_sensitivity"] = Shortest(config.mouse_sensitivity);
     root["input"]["stick_sensitivity"] = Shortest(config.stick_sensitivity);
     root["input"]["stick_invert_x"] = config.stick_invert_x;

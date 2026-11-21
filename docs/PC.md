@@ -198,7 +198,9 @@ key is optional; these are the defaults:
     },
     "audio": {
         "master_volume": 1.0,       // 0 to 1
-        "sound": "stereo"           // mono, stereo or surround (the stereo mix spread to 5.1 speakers)
+        "sound": "stereo",          // mono, stereo or surround (5.1: the music spread about, sounds from their places)
+        "soundtrack": "ps2",        // ps2: the game's music; custom: recordings from soundtrack/ (docs/SOUNDTRACK.md)
+        "interpolation": "ps2"      // ps2: the SPU2's Gaussian between samples; cubic: crisper at the top (Noktus's engine)
     },
     "input": {
         "mouse_sensitivity": 0.1,   // degrees the camera turns per count of mouse motion
@@ -1086,9 +1088,16 @@ ports of a bank, a sequence or the custom soundtrack's recording, effects, volum
 documents (`sound::NoktusBankFromJson`, `NoktusSequenceFromJson`), or from the pack's own HD, BD and SQ through Kazarov's readers of them.
 
 `DC_AUDIO_ENGINE=kazarov` plays it through Kazarov's mixer instead, as described below, to compare (the owner, 2026-11-21: until the owner
-says). The settings and the Options screen are the same either way. With Noktus's, `DC_AUDIO_INTERPOLATION=cubic` reads between samples by a
-cubic, crisper at the top than the SPU2's Gaussian; `DC_AUDIO_SPEAKERS=7.1` plays surround as 7.1 rather than 5.1 (the option offers surround
-on or off); `DC_AUDIO_WAV` writes 32-bit float in the speakers' layout.
+says). The settings and the Options screen are the same either way, but for Audio > Interpolation (`audio.interpolation`): Noktus's engine
+reads between samples by the SPU2's Gaussian (`"ps2"`) or by a cubic (`"cubic"`), crisper at the top, where Kazarov's mixer keeps its own.
+`DC_AUDIO_SPEAKERS=7.1` plays surround as 7.1 rather than 5.1 (the option offers surround on or off); `DC_AUDIO_WAV` writes 32-bit float in
+the speakers' layout.
+
+In surround, Noktus's engine hears sounds from their places: the listener is the camera `SndSetCamera` gives, and the game's positional calls
+(`SndSePlay` with a position, footsteps, monsters, the dungeons' and the opening's sources, the event scripts' special sound, doors) place
+their effects through `CSound::SE_Place` (`SndSePlace`, `SndSPSePlace`) before keying them on. A town's sound entered from several places is
+split among its loudest three, each a voice of its own (`sound::SplitAmong`), together as loud as retail's one. Stereo and mono, and Kazarov's
+mixer, hear the game's own pan as retail does.
 
 All music and effects are sequenced. `tools/kazarov/src/cpp/audio` decodes VAG ADPCM,
 parses HD banks and SQ sequences, and runs a sixteen-port MIDI player into a

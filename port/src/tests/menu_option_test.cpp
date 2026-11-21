@@ -116,6 +116,19 @@ TEST(MenuOption, AudioPageKeepsCustomSoundtrackAndSurround) {
     EXPECT_EQ(options::RowValue(*sound, config), "Mono");
 }
 
+TEST(MenuOption, AudioPageOffersTheInterpolation) {
+    const auto pages = options::Pages();
+    const auto page = std::ranges::find_if(pages, [](const options::Page &page) { return std::string_view(page.name) == "Audio"; });
+    ASSERT_NE(page, pages.end());
+    const auto row = std::ranges::find_if(page->rows, [](const options::Row &row) { return std::string_view(row.key) == "audio.interpolation"; });
+    ASSERT_NE(row, page->rows.end());
+    Config config;
+    EXPECT_EQ(options::RowValue(*row, config), "PS2");
+    EXPECT_TRUE(options::StepRow(*row, config, 1, false));
+    EXPECT_TRUE(config.cubic_interpolation);
+    EXPECT_EQ(options::RowValue(*row, config), "Cubic");
+}
+
 namespace {
 
 std::vector<DisplayModeSize> Modes() {

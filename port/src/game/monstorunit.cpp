@@ -744,6 +744,7 @@ void CMonstorUnit::SoundCheck() {
     if (sound[current_monster].sequence_start <= frame && !(sound[current_monster].sequence_end <= frame)) {
         float volume = 0.0f;
         float pan = 0.0f;
+        SndSePlace(sound[current_monster].sequence_id, current_monster * 2, position, near_distance);
         SndSeSeqPlayStop(sound[current_monster].sequence_id, sound[current_monster].sequence_step, current_monster * 2);
         SndGetVolPan(&volume, &pan, position, near_distance, far_distance);
         SndSetSeVolf(sound[current_monster].sequence_id, volume, current_monster * 2);
@@ -756,6 +757,7 @@ void CMonstorUnit::SoundCheck() {
         } else if (sound[current_monster].id[i] != -1 && sound[current_monster].start[i] <= frame && !(sound[current_monster].end[i] <= frame)) {
             float volume = 0.0f;
             float pan = 0.0f;
+            SndSePlace(sound[current_monster].id[i], 0, position, near_distance);
             SndSePlay(sound[current_monster].id[i], -1, 0);
             SndGetVolPan(&volume, &pan, position, near_distance, far_distance);
             SndSetSeVolf(sound[current_monster].id[i], volume, 0);

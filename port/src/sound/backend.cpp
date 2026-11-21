@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -219,6 +220,9 @@ public:
 
     void SetStereo(bool stereo) override { Mixer().SetStereo(stereo); }
 
+    // Kazarov's mixer reads between samples its own way.
+    void SetInterpolation(bool) override {}
+
     void BindBank(int port, const SoundBank &bank) override { Mixer().BindBank(port, bank.kazarov); }
 
     void SetSequence(int port, const SoundSequence &sequence) override { Mixer().SetSequence(port, sequence.kazarov); }
@@ -246,6 +250,13 @@ public:
     void KeyOffCore(int core) override { Mixer().KeyOffCore(core); }
 
     void SetReverb(int core, int mode, int depth) override { Mixer().SetReverb(core, mode, depth); }
+
+    // Kazarov's mixer pans by the game's pan alone.
+    void SetListener(const float *, const float *) override {}
+
+    void EffectPlace(int, int, int, const float *, float) override {}
+
+    bool HearsPlaces() const override { return false; }
 
 private:
     static audio::Mixer &Mixer() { return audio::DefaultMixer(); }
@@ -279,9 +290,8 @@ public:
         }
         engine_ = na::AudioEngine::Create({.sample_rate = kRate, .speakers = Speakers(), .device = device, .limiter = true});
         engine_->SetMasterVolume(master_);
-        if (const char *interpolation = std::getenv("DC_AUDIO_INTERPOLATION"); interpolation != nullptr && std::string_view(interpolation) == "cubic") {
-            engine_->SetInterpolation(na::Interpolation::Cubic);
-        }
+        engine_->SetListener(listener_);
+        engine_->SetInterpolation(interpolation_);
         for (const auto &player : players_) {
             engine_->Attach(player);
         }
@@ -339,6 +349,13 @@ public:
     void SetStereo(bool stereo) override {
         stereo_ = stereo;
         ApplySpeakers();
+    }
+
+    void SetInterpolation(bool cubic) override {
+        interpolation_ = cubic ? na::Interpolation::Cubic : na::Interpolation::Gaussian;
+        if (engine_ != nullptr) {
+            engine_->SetInterpolation(interpolation_);
+        }
     }
 
     void BindBank(int port, const SoundBank &bank) override {
@@ -524,6 +541,33 @@ public:
         }
     }
 
+    void SetListener(const float *position, const float *direction) override {
+        const std::optional<na::Listener> listener = ListenerFor(position, direction);
+        if (!listener) {
+            return; // looking straight up or down: as it was
+        }
+        listener_ = *listener;
+        if (engine_ != nullptr) {
+            engine_->SetListener(listener_);
+        }
+    }
+
+    void EffectPlace(int port, int id, int number, const float *position, float size) override {
+        if (!ValidPort(port)) {
+            return;
+        }
+        std::optional<na::Point> at;
+        if (position != nullptr) {
+            at = na::Point{position[0], position[1], position[2]};
+        }
+        players_[port]->EffectPlace(id & 0x7F, number & 0x7F, at, size);
+    }
+
+    bool HearsPlaces() const override {
+        const na::Speakers speakers = Speakers();
+        return speakers == na::Speakers::Surround51 || speakers == na::Speakers::Surround71;
+    }
+
 private:
     static constexpr int kRate = 48000;
     static constexpr int kWholeVolume = 256;
@@ -621,7 +665,9 @@ private:
     std::array<std::shared_ptr<na::SequencePlayer>, kPorts> players_;
     std::array<Port, kPorts>                                ports_;
     std::array<Reverb, 2>                                   reverbs_{};
+    na::Listener                                            listener_;
     float                                                   master_ = 1.0f;
+    na::Interpolation                                       interpolation_ = na::Interpolation::Gaussian;
     bool                                                    surround_ = false;
     bool                                                    stereo_ = true;
     bool                                                    capturing_ = false;
@@ -631,6 +677,20 @@ private:
 };
 
 } // namespace
+
+std::optional<na::Listener> ListenerFor(const float *position, const float *direction) {
+    const float length = std::hypot(direction[0], direction[2]);
+    if (!(length > 1e-6f) || !std::isfinite(length)) {
+        return std::nullopt;
+    }
+    const na::Point forward = {direction[0] / length, 0.0f, direction[2] / length};
+    // SndGetVolPan's right vector is (z, 0, -x) and it pans to the side its dot product is negative on: the right is that negated.
+    return na::Listener{
+        .position = {position[0], position[1], position[2]},
+        .forward = forward,
+        .right = {-forward[2], 0.0f,        forward[0] }
+    };
+}
 
 Backend &Audio() {
     // Never destroyed: the output's thread may still be pulling from it while static destructors run.

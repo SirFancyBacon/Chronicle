@@ -996,6 +996,7 @@ void OpPlayVolPanSE(float *position, float near_dist, float far_dist, int group,
     const short  base_volume = se_info[(se_index * 2) + 1];
     const int    level = std::clamp(static_cast<int>(static_cast<float>(base_volume) * volume), 0, 127);
 
+    CSnd.SE_Place(group, no, voice, position, near_dist, 0);
     CSnd.SE_Play(group, no, voice, pan_level, 127, level, 0);
 }
 
@@ -1007,6 +1008,7 @@ void OpSetVolPanSE(float *position, float near_dist, float far_dist, int group, 
     pan = std::clamp(pan, -1.0f, 1.0f);
 
     const int pan_level = static_cast<int>(63.0f * pan) + 64;
+    CSnd.SE_Place(group, no, voice, position, near_dist, 0);
     CSnd.SE_SetPan(group, no, voice, pan_level, 0);
 
     const int    se_index = CSnd.GetSeNo(no, voice);

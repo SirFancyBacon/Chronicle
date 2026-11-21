@@ -918,6 +918,8 @@ constexpr Row kAudioRows[] = {
     NamedRow<&Config::soundtrack>("audio.soundtrack", "Soundtrack",
                                   "\"Soundtrack\"\nPS2: the game's music.\nCustom: your own\nrecordings, from the\nnext song.",
                                   "PS2|Custom"),
+    NamedRow<&Config::cubic_interpolation>("audio.interpolation", "Interpolation",
+                                           "\"Interpolation\"\nPS2: soft, as on the\nconsole.\nCubic: crisper highs.", "PS2|Cubic"),
 };
 
 constexpr Row kControlRows[] = {

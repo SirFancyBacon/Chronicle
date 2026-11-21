@@ -551,6 +551,7 @@ void CDungeonMap::DrawMap(CCameraFollow *camera, CFrameVu1 * /*player*/) {
         float volume = 0.0f;
         float pan = 0.0f;
         SndGetVolPan(&volume, &pan, sound_pos, 10.0f, 500.0f);
+        SndSePlace(sound_no, 0, sound_pos, 10.0f);
         SndSetSeVolf(sound_no, volume, 0);
         SndSetSePanf(sound_no, pan, 0);
     }
@@ -981,6 +982,7 @@ void CDungeonMap::DrawFireFreeStyle(CFrameVu1 *frame, CCameraFollow *camera) {
 
     if (near_dist <= 30.0f) {
         SndGetVolPan(&vol, &pan, best_pos, 10.0f, 500.0f);
+        SndSePlace(SE_AMBIENT_CAVE_DRIPS, 0, best_pos, 10.0f);
         SndSetSeVolf(SE_AMBIENT_CAVE_DRIPS, vol, 0);
         SndSetSePanf(53, pan, 0);
     } else {
@@ -1087,6 +1089,7 @@ void CDungeonMap::DrawFire(CFrameVu1 *frame, CCameraFollow *camera) {
 
     if (near_dist <= 30.0f) {
         SndGetVolPan(&vol, &pan, best_pos, 10.0f, 500.0f);
+        SndSePlace(SE_AMBIENT_CAVE_DRIPS, 0, best_pos, 10.0f);
         SndSetSeVolf(SE_AMBIENT_CAVE_DRIPS, vol, 0);
         SndSetSePanf(53, pan, 0);
     } else {
@@ -1292,6 +1295,7 @@ void CDungeonMap::DrawWater(float *pos, int mute) {
 
         if (sound_dist < 300.0f) {
             SndGetVolPan(&vol, &pan, best_pos, 50.0f, 300.0f);
+            SndSePlace(SE_AMBIENT_DUNGEON_HISS, 0, best_pos, 50.0f);
 
             if (mute != 0) {
                 vol = 0.0f;
@@ -1308,6 +1312,7 @@ void CDungeonMap::DrawWater(float *pos, int mute) {
 
         if (sound_dist < 300.0f) {
             SndGetVolPan(&vol, &pan, best_pos, 50.0f, 300.0f);
+            SndSePlace(SE_AMBIENT_TOWN_NOISE, 0, best_pos, 50.0f);
 
             if (mute != 0) {
                 vol = 0.0f;

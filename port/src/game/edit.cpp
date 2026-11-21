@@ -13,6 +13,7 @@
 #include <cstring>
 #include <format>
 #include <memory>
+#include <span>
 #include <string_view>
 
 #include "battle_globals.hpp"
@@ -57,6 +58,7 @@
 #include "shop.hpp"
 #include "snd.hpp"
 #include "sound.hpp"
+#include "sound/places.hpp"
 #include "sysmes.hpp"
 #include "texture.hpp"
 
@@ -1225,13 +1227,23 @@ struct SOUND_SRC {
     int                   num;    /**< Number of places entered this frame. */
     std::array<float, 16> volume; /**< Volume the sound arrives at from each place. */
     std::array<float, 16> pan;    /**< Pan the sound arrives at from each place. */
+    std::array<std::array<float, 3>, 16> position; /**< Each place, where its sound comes from (the port's own, for surround). */
+    std::array<float, 16>                near;     /**< Each place's near distance, within which it's heard in front by its pan. */
 };
+
+// Surround (the port's own): where places are heard, a sound entered from several places sounds from the loudest few, each its own instance on
+// a voice from 0 up, so it's heard from each side it's at rather than from their pans averaged. Three at most: retail's four sounds took four
+// voices, and these share the effects' and the music's.
+constexpr int kSplitPlaces = 3;
 
 // A source is one sound effect and every place it is heard from at once, so a sound heard from
 // two sides occupies one slot and plays at a single volume and pan.
 std::array<SOUND_SRC, 4> sound_src;
 std::array<int, 4>       now_play_se;
 std::array<int, 4>       now_play_se_flag;
+// For each of now_play_se's sounds, the voices sounding it (0 up), and where each was placed last, so each follows its place from frame to frame.
+std::array<int, 4>                                            now_play_voices;
+std::array<std::array<std::array<float, 3>, kSplitPlaces>, 4> now_play_at;
 
 void init_sound_src() {
     for (SOUND_SRC &source : sound_src) {
@@ -1294,14 +1306,68 @@ void EdInitSoundSrc() {
     for (i = 0; i < 4; i++) {
         now_play_se[i] = -1;
         now_play_se_flag[i] = 0;
+        now_play_voices[i] = 0;
     }
 
     init_sound_src();
 }
 
+namespace {
+
+// The playing slot (now_play_se's) a sound holds.
+int playing_slot(int se) {
+    for (int i = 0; i < 4; i++) {
+        if (now_play_se[i] == se) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+// Stops a playing sound's voices from the one given on (all of them from 0; voice 0 at least, as retail's one).
+void stop_voices(int slot, int from) {
+    const int sounding = from == 0 ? std::max(now_play_voices[slot], 1) : now_play_voices[slot];
+
+    for (int voice = from; voice < sounding; voice++) {
+        SndSeStop(now_play_se[slot], voice);
+    }
+
+    now_play_voices[slot] = std::min(now_play_voices[slot], from);
+}
+
+/* Surround: the sound split among its loudest places, each on its own voice and heard from there (sound::SplitAmong). */
+void play_split(const SOUND_SRC &source, int slot) {
+    const int                                   se = source.se;
+    std::array<sound::SplitVoice, kSplitPlaces> voices;
+    const int                                   count = sound::SplitAmong(std::span(source.volume).first(source.num), std::span(source.position).first(source.num),
+                                                                          std::span(now_play_at[slot]).first(now_play_voices[slot]), voices);
+
+    stop_voices(slot, count);
+
+    for (int voice = 0; voice < count; voice++) {
+        const int j = voices[voice].place;
+        float     at[3] = {source.position[j][0], source.position[j][1], source.position[j][2]};
+
+        SndSePlace(se, voice, at, source.near[j]);
+
+        if (voice >= now_play_voices[slot]) {
+            SndSePlay(se, 0, voice);
+        }
+
+        SndSetSeVolf(se, voices[voice].volume, voice);
+        SndSetSePanf(se, std::clamp(source.pan[j], -1.0f, 1.0f), voice);
+        now_play_at[slot][voice] = source.position[j];
+    }
+
+    now_play_voices[slot] = count;
+}
+
+} // namespace
+
 /* A sound entered from several places plays at the sum of their volumes and at their pans averaged
    by volume, so the nearer place decides where it sits. Whatever was playing and was not entered
-   this frame is stopped. */
+   this frame is stopped. Where places are heard (surround), it's split among them instead (play_split). */
 void EdPlaySoundSrc() {
     int   i;
     int   j;
@@ -1327,8 +1393,19 @@ void EdPlaySoundSrc() {
             continue;
         }
 
+        const int slot = playing_slot(se);
+
+        if (SndHearsPlaces()) {
+            play_split(sound_src[i], slot);
+            continue;
+        }
+
+        // Back from surround: its other places' voices.
+        stop_voices(slot, 1);
+
         if (playing == 0) {
             SndSePlay(se, 0, 0);
+            now_play_voices[slot] = 1;
         }
 
         volume = 0.0f;
@@ -1369,7 +1446,7 @@ void EdPlaySoundSrc() {
             continue;
         }
 
-        SndSeStop(now_play_se[i], 0);
+        stop_voices(i, 0);
         now_play_se[i] = -1;
     }
 }
@@ -1382,7 +1459,7 @@ void EdStopSoundSrc() {
             continue;
         }
 
-        SndSeStop(now_play_se[i], 0);
+        stop_voices(i, 0);
         now_play_se[i] = -1;
     }
 
@@ -1535,6 +1612,8 @@ void EdSetSoundSrcVol(float time, CMapParts **parts, int count, float *camera_po
             if (source->num < 16) {
                 source->volume[source->num] = volume;
                 source->pan[source->num] = pan;
+                source->position[source->num] = {from[0], from[1], from[2]};
+                source->near[source->num] = near_dist;
                 source->num++;
             }
         }
@@ -1559,6 +1638,8 @@ void EdSetSoundSrcVol(float time, CMapParts **parts, int count, float *camera_po
         if (river_source->num < 16) {
             river_source->volume[river_source->num] = river_volume;
             river_source->pan[river_source->num] = river_pan;
+            river_source->position[river_source->num] = {position[0], position[1], position[2]};
+            river_source->near[river_source->num] = 100.0f;
             river_source->num++;
         }
     }
@@ -1573,6 +1654,8 @@ void EdDoorOpenSe(int door_no, float *position) {
         return;
     }
 
+    // Played at retail's middle pan; the door's place is heard in surround (as near as SndSePlay's own default).
+    SndSePlace(se_open[door_no], 0, position, 20.0f);
     SndSePlay(se_open[door_no], -1, 0);
 }
 
@@ -1583,6 +1666,8 @@ void EdDoorCloseSe(int door_no, float *position) {
         return;
     }
 
+    // Played at retail's middle pan; the door's place is heard in surround (as near as SndSePlay's own default).
+    SndSePlace(se_close[door_no], 0, position, 20.0f);
     SndSePlay(se_close[door_no], -1, 0);
 }
 

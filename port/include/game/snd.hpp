@@ -277,6 +277,25 @@ void SndPlayFootSound(int kind, int foot, float *position);
 void SndGetVolPan(float *vol, float *pan, float *pos, float near, float far);
 
 /**
+ * Places a sound effect's instance on a voice in the world, the port's own: heard
+ * from there in surround, from its key on given in the same tick or as it moves
+ * while it sounds; by its pan in stereo. Within near of the listener it's heard
+ * in front by its pan. A null position takes its place away.
+ */
+void SndSePlace(int se_no, int voice, float *position, float near);
+
+/**
+ * Places a special sound effect, as SndSePlace does.
+ */
+void SndSPSePlace(int se_no, float *position, float near);
+
+/**
+ * Whether sounds' places are heard (surround through Noktus's engine), the
+ * port's own; where they aren't, the game's pan is all there is.
+ */
+bool SndHearsPlaces();
+
+/**
  * Clears every sound-effect sequence slot.
  */
 void SndSeSeqInit();

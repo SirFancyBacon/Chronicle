@@ -513,6 +513,7 @@ void ApplyDiscord(const Config &config) {
 void ApplyConfigChange(const Config &before, const Config &after) {
     sound::Audio().SetMasterGain(after.master_volume);
     sound::Audio().SetSurround(after.surround);
+    sound::Audio().SetInterpolation(after.cubic_interpolation);
     InputApplyConfig(after);
 #ifdef __SWITCH__
     ClockSetTickRate(60.0);
@@ -806,6 +807,7 @@ int Run(int argc, const char **argv) {
 
     sound::Audio().SetMasterGain(config.master_volume);
     sound::Audio().SetSurround(config.surround);
+    sound::Audio().SetInterpolation(config.cubic_interpolation);
     sound::Audio().StartOutput();
 
 #ifdef __SWITCH__

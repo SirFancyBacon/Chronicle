@@ -59,9 +59,31 @@ struct EffectMessage {
     bool                        extended;
     std::uint32_t               message;
     std::array<std::uint8_t, 8> bytes;
+    // A place (SE_Place), its id and number in bytes 0 and 1; no position, none.
+    bool                                placed = false;
+    std::optional<std::array<float, 3>> position;
+    float                               size = 0.0f;
 };
 
 std::vector<EffectMessage> g_effect_queue;
+
+// Each port's program as the queue last changed it; -1, not changed in it yet.
+std::array<std::int8_t, 16> g_queued_program = [] {
+    std::array<std::int8_t, 16> none{};
+    none.fill(-1);
+    return none;
+}();
+
+void ClearEffectQueue() {
+    g_effect_queue.clear();
+    g_queued_program.fill(-1);
+}
+
+// The instances placed since the last Step (port, bank, program, voice), so the key ons that follow keep their places; and those with a place
+// standing in the player, so one keyed on plainly afterwards has it taken away first and isn't heard where it last was. Plain sounds, never
+// placed, send nothing more.
+std::vector<std::array<int, 4>> g_placed;
+std::vector<std::array<int, 4>> g_standing;
 
 struct FadeRoute {
     int port;
@@ -108,6 +130,14 @@ int EffectPort(int port) {
 }
 
 void QueueProgram(int port, int bank) {
+    // The port's program is still this one since its last change in the queue: the change would say nothing, and every effect message
+    // brings one, so a busy tick (a town's places each given a place, a volume and a pan) would fill the player's queue with them.
+    // A song playing on the port could change it between two messages (the queue isn't taken in one go), so then every message keeps its own.
+    std::int8_t &queued = g_queued_program[static_cast<std::size_t>(EffectPort(port))];
+    if (queued == (bank & 0x7F) && !Player().IsPlaying(EffectPort(port))) {
+        return;
+    }
+    queued = static_cast<std::int8_t>(bank & 0x7F);
     g_effect_queue.push_back({
         .port = EffectPort(port),
         .extended = false,
@@ -118,6 +148,24 @@ void QueueProgram(int port, int bank) {
 
 void QueueExtended(int port, std::array<std::uint8_t, 8> bytes) {
     g_effect_queue.push_back({.port = EffectPort(port), .extended = true, .message = 0, .bytes = bytes});
+}
+
+std::array<int, 4> PlacedKey(int port, int bank, int program, int voice) {
+    return {EffectPort(port), bank & 0x7F, program & 0x7F, voice & 0x7F};
+}
+
+// Under the bank's program, as the instance's key on is.
+void QueuePlace(int port, int bank, int program, int voice, const float *position, float size) {
+    QueueProgram(port, bank);
+    EffectMessage message{.port = EffectPort(port), .extended = false, .message = 0, .bytes = {}};
+    message.placed = true;
+    message.bytes[0] = static_cast<std::uint8_t>(program & 0x7F);
+    message.bytes[1] = static_cast<std::uint8_t>(voice & 0x7F);
+    if (position != nullptr) {
+        message.position = std::array<float, 3>{position[0], position[1], position[2]};
+    }
+    message.size = size;
+    g_effect_queue.push_back(message);
 }
 
 int SlotForSequenceLetter(char kind) {
@@ -554,7 +602,8 @@ int CSound::Init(int mode0, int mode1, int depth0, int depth1) {
         }
     }
     set_spu(mode0, mode1, depth0, depth1);
-    g_effect_queue.clear();
+    ClearEffectQueue();
+    g_placed.clear();
 
     static constexpr std::array<int, kSlots> kSpuAddress = {0x5010, 0x7D010, 0x7D010, 0x16E900, 0x16E900, 0x16E900, 0x18AE20, 0x1B6D40};
     for (int slot = 0; slot < kSlots; slot++) {
@@ -587,6 +636,13 @@ void CSound::SQ_RePlay(int port) {
 void CSound::SE_Play(int port, int bank, int program, int pan, int velocity, int volume, int voice) {
     audio::Trace("SE_Play port %d bank %d program %d pan %d velocity %d volume %d voice %d", port, bank,
                  program, pan, velocity, volume, voice);
+    const std::array<int, 4> key = PlacedKey(port, bank, program, voice);
+    if (std::ranges::find(g_placed, key) == g_placed.end()) {
+        if (const auto standing = std::ranges::find(g_standing, key); standing != g_standing.end()) {
+            g_standing.erase(standing);
+            QueuePlace(port, bank, program, voice, nullptr, 0.0f);
+        }
+    }
     QueueProgram(port, bank);
     QueueExtended(port, {0xF9, 0, 0, static_cast<std::uint8_t>(volume), 0});
     QueueExtended(port, {0xF9, 1, 0, static_cast<std::uint8_t>(pan), 0});
@@ -632,6 +688,20 @@ void CSound::SE_SetPan(int port, int se_no, int pan, int voice) {
     SE_SetPan(port, se_inf_tbl.entry[se_no].bank, se_inf_tbl.entry[se_no].program, pan, voice);
 }
 
+void CSound::SE_Place(int port, int bank, int program, const float *position, float size, int voice) {
+    QueuePlace(port, bank, program, voice, position, size);
+    const std::array<int, 4> key = PlacedKey(port, bank, program, voice);
+    if (std::ranges::find(g_placed, key) == g_placed.end()) {
+        g_placed.push_back(key);
+    }
+    const auto standing = std::ranges::find(g_standing, key);
+    if (position != nullptr && standing == g_standing.end()) {
+        g_standing.push_back(key);
+    } else if (position == nullptr && standing != g_standing.end()) {
+        g_standing.erase(standing);
+    }
+}
+
 void CSound::SE_Stop(int port, int bank, int program, int voice) {
     audio::Trace("SE_Stop port %d bank %d program %d voice %d", port, bank, program, voice);
     QueueProgram(port, bank);
@@ -671,13 +741,17 @@ void CSound::Step() {
     }
 
     for (const EffectMessage &message : g_effect_queue) {
-        if (message.extended) {
+        if (message.placed) {
+            Player().EffectPlace(message.port, message.bytes[0], message.bytes[1], message.position ? message.position->data() : nullptr,
+                                 message.size);
+        } else if (message.extended) {
             Player().HsMessage(message.port, message.bytes);
         } else {
             Player().ShortMessage(message.port, message.message);
         }
     }
-    g_effect_queue.clear();
+    ClearEffectQueue();
+    g_placed.clear();
 }
 
 void CSound::Stop(int port) {
@@ -690,6 +764,14 @@ void CSound::SetVol(int port, int volume) {
         audio::Trace("SetVol port %d volume %d", port, volume);
     }
     Player().SetVolume(port, volume);
+}
+
+void CSound::SetListener(const float *position, const float *direction) {
+    Player().SetListener(position, direction);
+}
+
+bool CSound::HearsPlaces() {
+    return Player().HearsPlaces();
 }
 
 // The stereo option is config.json's audio.sound, not the one the load screen reads out of a save.

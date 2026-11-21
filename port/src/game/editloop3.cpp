@@ -7972,6 +7972,7 @@ int _SET_SPECIAL_SE_VOL(RS_STACKDATA *stack, int argument_count) {
     float volume = 0.0f;
     float pan = 0.0f;
     SndGetVolPan(&volume, &pan, position, near, far);
+    SndSPSePlace(sound, position, near);
     SndSetSPSeVolf(sound, volume);
     SndSetSPSePanf(sound, pan);
     return 1;

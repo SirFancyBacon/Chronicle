@@ -220,6 +220,13 @@ public:
     void SE_Stop(int port, int bank, int program, int voice);
 
     /**
+     * Where a sound effect sounds in the world (three numbers; null, none), the port's own: kept for its next key on and moving it while it
+     * sounds, heard there in surround (size: within it of the listener, in front by its pan), by its pan in stereo. Given before its key on in
+     * the same tick; an effect keyed on without one sounds in front by its pan.
+     */
+    void SE_Place(int port, int bank, int program, const float *position, float size, int voice);
+
+    /**
      * Fades a channel towards a volume over a number of steps.
      */
     void Fade(int port, float step, int volume);
@@ -243,6 +250,16 @@ public:
      * Chooses between stereo and monaural output.
      */
     void SetStereoMode(int mode);
+
+    /**
+     * Who hears the world's sounds, the port's own: the camera's place and the way it looks (SndSetCamera's), for the effects SE_Place places.
+     */
+    void SetListener(const float *position, const float *direction);
+
+    /**
+     * Whether SE_Place's places are heard (surround through Noktus's engine), the port's own; where they aren't, the pan is all there is.
+     */
+    bool HearsPlaces();
 
     /**
      * Loads the ambient bank into the sound processor.

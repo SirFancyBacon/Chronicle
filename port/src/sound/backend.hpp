@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -13,6 +14,7 @@
 
 #include "audio/hdbank.hpp"
 #include "audio/sq.hpp"
+#include "noktus/audio.hpp"
 #include "noktus/sequence.hpp"
 #include "noktus/synth.hpp"
 
@@ -60,6 +62,10 @@ std::shared_ptr<const noktus::audio::Bank> NoktusBankFromRaw(std::span<const std
 /** A song of a sequence Kazarov read, as Noktus's; null if there's no such song. */
 std::shared_ptr<const noktus::audio::Sequence> NoktusSequenceFromSq(const audio::SqFile &file, std::size_t song);
 
+/** Who hears the world from a camera's place and the way it looks (SndSetCamera's): forward its look on the level, right the side SndGetVolPan
+ *  pans a sound to the right of. None where it looks straight up or down. */
+std::optional<noktus::audio::Listener> ListenerFor(const float *position, const float *direction);
+
 /** What the game's sound asks of the engine. Its calls come from the game's thread. */
 class Backend {
 public:
@@ -73,6 +79,8 @@ public:
     virtual void SetSurround(bool on) = 0;
     /** Stereo, or mono (the game's sound option). */
     virtual void SetStereo(bool stereo) = 0;
+    /** How samples are read between: the SPU2's Gaussian, or a cubic (the interpolation option). */
+    virtual void SetInterpolation(bool cubic) = 0;
 
     virtual void BindBank(int port, const SoundBank &bank) = 0;
     /** The port's sequence, stopped and rewound; its song's notes let go of, any recording in its place forgotten. */
@@ -93,6 +101,14 @@ public:
     virtual void HsMessage(int port, std::span<const std::uint8_t> message) = 0;
     virtual void KeyOffCore(int core) = 0;
     virtual void SetReverb(int core, int mode, int depth) = 0;
+
+    /** Who hears the world's sounds: the camera's place and the way it looks (SndSetCamera's), on the level. */
+    virtual void SetListener(const float *position, const float *direction) = 0;
+    /** Where an effect instance (its id and number, under the port's program) sounds in the world: three numbers, or null for in front by its
+     *  pan. Kept for the instance's next key on; within size of the listener it's heard in front by its pan. */
+    virtual void EffectPlace(int port, int id, int number, const float *position, float size) = 0;
+    /** Whether a sound's place is heard (surround through Noktus's engine); where it isn't, the game's own pan is all there is. */
+    virtual bool HearsPlaces() const = 0;
 };
 
 /** The playing engine's. */
