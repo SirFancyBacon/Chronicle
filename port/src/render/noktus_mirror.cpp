@@ -644,6 +644,11 @@ void Start(Mirror &mirror) {
     g_real_water = host.water_clarity > 0.0f && std::isfinite(host.water_clarity);
     // The game's world is about ten units to a metre (Toan stands about 14): water's waves and ambient occlusion's reach are sized by it.
     host.world_units_per_metre = 10.0f;
+    // A tick's first playing, never shown, leaving the screen alone where nothing reads it back (Noktus's step 12), on; DC_NOKTUS_LEAN_TICKS=0 draws
+    // it whole, to compare.
+    if (const char *lean = std::getenv("DC_NOKTUS_LEAN_TICKS")) {
+        host.lean_ticks = std::string_view(lean) != "0";
+    }
     // The sun's far cascades kept between a tick's frames (Noktus's step 12), on; DC_NOKTUS_SHADOW_CACHE=0 draws them every frame, to compare.
     if (const char *cache = std::getenv("DC_NOKTUS_SHADOW_CACHE")) {
         host.keep_far_cascades = std::string_view(cache) != "0";
