@@ -104,6 +104,11 @@ void SetPaintedLit(bool on);
 /** Whether self-lit map frames drawn now are lit (SetPaintedLit), with modern light. */
 bool PaintedLit();
 
+/** Where the map drawn from here on casts the sun's shadows though it's indoors (step 8, the owner's decision of 2026-11-21): a dungeon's pillars,
+ * walls and chests, up to this height in the world and no higher, so its ceilings and overhangs shade nothing. None, the map casts nothing
+ * indoors (what stands and moves still does). None unless given. */
+void SetMapCastsBelow(std::optional<float> height);
+
 /** A soft darkening on the ground under something standing there: see AddContactShadow. */
 struct ContactShadowGiven {
     std::uint64_t key = 0;          // who this is from tick to tick, so it moves between ticks: 0 for none

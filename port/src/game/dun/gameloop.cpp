@@ -1987,6 +1987,9 @@ int GameLoop() {
 
 // How far from the eye the dungeon's real shadows reach: its rooms and corridors are seen no further.
 constexpr float kDungeonShadowDistance = 800.0f;
+// How far above the player's feet the map, its chests and Atla cast real shadows: pillars, walls and chests, not ceilings and overhangs (the
+// owner's decision of 2026-11-21). Just above Toan's head: in Divine Beast Cave the walls lean in from about 30 up and shade the whole floor by 60.
+constexpr float kMapCastsAbovePlayer = 20.0f;
 
 void Draw_MainUnitShadow() {
     float light[4][4];
@@ -2259,6 +2262,7 @@ void DunMainDraw() {
     // The dungeon's main light casts real shadows (step 8), on its map too: lit by it, where the game showed the map's painted colour.
     render::SetSunShadows(kDungeonShadowDistance);
     render::SetPaintedLit(true);
+    render::SetMapCastsBelow(CharaFrame->position[1] + kMapCastsAbovePlayer);
     if (NowDngMap->map_type == 1) {
         NowDngMap->DrawMap(NowCamera__3, CharaFrame);
     } else {
@@ -2297,6 +2301,7 @@ void DunMainDraw() {
         sceVu0CopyVector(atra_pos, CharaFrame->position);
         NowDngMap->DrawAtraBoll(atra_pos);
     }
+    render::SetMapCastsBelow(std::nullopt);
 
     render::SetPass(render::Pass::Shadows);
     Draw_MainUnitShadow();

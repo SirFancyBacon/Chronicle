@@ -75,6 +75,8 @@ std::atomic<bool> g_real_water = false;
 
 // Whether the scene is outdoors (SetOutdoorLight). Game thread.
 bool g_outdoors = false;
+// Where the map casts indoors (SetMapCastsBelow): up to this height. Game thread.
+std::optional<float> g_map_casts_below;
 
 // Whether point lights reach the meshes drawn now (SetPointLit). Game thread.
 bool g_point_lit = true;
@@ -847,8 +849,14 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
             light.shadowed = towards.x * sun.x + towards.y * sun.y + towards.z * sun.z > 0.9995f;
         }
         // Indoors and in the dungeons the main light stands for a room's light, not a sun: their maps' ceilings, decks and canopies would put
-        // every floor in shade, so there only what stands and moves casts (characters, monsters, moving parts), onto the map.
-        draw.casts_shadow = of_the_world && (g_outdoors || mirror.pass != noktus::Pass::Ground);
+        // every floor in shade, so there only what stands and moves casts (characters, monsters, moving parts), onto the map; or the map too, up
+        // to a height below its ceilings (SetMapCastsBelow).
+        const bool map_indoors = !g_outdoors && mirror.pass == noktus::Pass::Ground;
+        draw.casts_shadow = of_the_world && (!map_indoors || g_map_casts_below.has_value());
+        if (draw.casts_shadow && map_indoors) {
+            draw.cast_up = {0.0f, 1.0f, 0.0f};
+            draw.cast_height = *g_map_casts_below;
+        }
     }
     // Out of view, given only for its shadow: nothing at all where it wouldn't cast one.
     if (ShadowOnly()) {
@@ -1106,6 +1114,10 @@ bool SunShadows() {
 
 void SetPointLit(bool on) {
     g_point_lit = on;
+}
+
+void SetMapCastsBelow(std::optional<float> height) {
+    g_map_casts_below = height;
 }
 
 void SetPaintedLit(bool on) {
