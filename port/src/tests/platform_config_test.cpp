@@ -732,6 +732,33 @@ TEST(PlatformConfig, Anisotropy) {
     ASSERT_TRUE(ConfigParse(ConfigSerialize(ConfigParse(R"({"video": {"anti_aliasing": "SMAA_T2x"}})"))).anti_aliasing == ConfigAntiAliasing::Smaa);
 }
 
+// The Quality page's own rows (Noktus's step 12): read, written back as they were read, and what isn't one of their values left at the default.
+TEST(PlatformConfig, QualityRows) {
+    const Config defaults;
+    EXPECT_EQ(defaults.shadow_quality, 2);
+    EXPECT_TRUE(defaults.ambient_occlusion && defaults.real_water && defaults.glow);
+    EXPECT_EQ(defaults.point_lights, 256);
+
+    const Config config = ConfigParse(
+        R"({"video": {"shadow_quality": "Ultra", "ambient_occlusion": false, "lights": 64, "water": "original", "glow": false}})");
+    EXPECT_EQ(config.shadow_quality, 3);
+    EXPECT_FALSE(config.ambient_occlusion);
+    EXPECT_EQ(config.point_lights, 64);
+    EXPECT_FALSE(config.real_water);
+    EXPECT_FALSE(config.glow);
+    const Config again = ConfigParse(ConfigSerialize(config));
+    EXPECT_EQ(again.shadow_quality, 3);
+    EXPECT_FALSE(again.ambient_occlusion);
+    EXPECT_EQ(again.point_lights, 64);
+    EXPECT_FALSE(again.real_water);
+    EXPECT_FALSE(again.glow);
+
+    const Config odd = ConfigParse(R"({"video": {"shadow_quality": "extreme", "lights": 100, "water": "wet"}})");
+    EXPECT_EQ(odd.shadow_quality, 2);
+    EXPECT_EQ(odd.point_lights, 256);
+    EXPECT_TRUE(odd.real_water);
+}
+
 TEST(PlatformConfig, ElementPicker) {
     ASSERT_TRUE(!ConfigParse("").element_quick_select);
     Config config = ConfigParse(R"({"game": {"element_quick_select": true}})");

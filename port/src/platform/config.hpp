@@ -93,6 +93,11 @@ struct Config : HostSettings {
     int               hdr_peak = 0;        // nits; 0 takes what the system says
     bool              enhanced_cloth = false;     /**< video.cloth: false runs the PS2's cloth, true also keeps it out of the body. */
     bool               planar_reflections = true;  /**< video.reflections: water reflects the scene mirrored in it (planar), or what's on the screen (screen). */
+    int                shadow_quality = 2;         /**< video.shadow_quality: the sun's shadows, 0 to 3 ("low" to "ultra"): the map's size and how far they reach. */
+    bool               ambient_occlusion = true;   /**< video.ambient_occlusion: corners and where things meet darkened. */
+    int                point_lights = 256;         /**< video.lights: the most lamps and fires lighting the scene, the nearest: 32, 64, 128 or 256. */
+    bool               real_water = true;          /**< video.water: water as real water ("real"), or as the game drew it ("original"). */
+    bool               glow = true;                /**< video.glow: light past white spreads around what gives it, and flames and lamps glow. */
     bool               seven_one = false; /**< audio.sound "7.1": surround (HostSettings::surround) for 7.1 speakers rather than 5.1. */
     bool               cubic_interpolation = true; /**< audio.interpolation: a cubic between samples ("cubic", crisper; the owner's default of 2026-11-21), or the PS2's Gaussian ("ps2", its soft top). */
     float             mouse_camera_return = 0.2f; /**< Third-person vertical return after mouse input: 0 holds height, 1 is retail's rate. */

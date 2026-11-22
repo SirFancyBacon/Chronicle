@@ -194,7 +194,12 @@ key is optional; these are the defaults:
         "hdr_peak": 0,              // the most nits to send; 0 takes the system's
         "soft_focus": true,         // depth of field; drawn by Noktus, off is none at all (retail's off dropped only the far plane)
         "cloth": "original",        // original: the PS2's cloth; enhanced: also kept out of the body (docs/MODEL_FRAMEWORK.md)
-        "reflections": "planar"     // water's reflections: planar (the scene mirrored in it) or screen (what's on the screen, cheaper); DC_NOKTUS_REFLECTIONS overrides
+        "reflections": "planar",    // water's reflections: planar (the scene mirrored in it) or screen (what's on the screen, cheaper); DC_NOKTUS_REFLECTIONS overrides
+        "shadow_quality": "high",   // the sun's shadows: low, medium, high or ultra, the map's size (1024 to 4096) and how far they reach together
+        "ambient_occlusion": true,  // corners and where things meet darkened; DC_NOKTUS_AO overrides
+        "lights": 256,              // the most lamps and fires lighting a frame, the nearest the camera: 32, 64, 128 or 256
+        "water": "real",            // real: clearer by depth, with small waves; original: as the game drew it. DC_NOKTUS_WATER_CLARITY overrides
+        "glow": true                // light past white spreads around what gives it, and flames and lamps glow; DC_NOKTUS_BLOOM overrides
     },
     "audio": {
         "master_volume": 1.0,       // 0 to 1
@@ -1381,8 +1386,8 @@ is the port's settings screen (`port/src/options/menu_option.cpp` replaces
 `OptionMenuFadeOutStart` and hands them to `port/src/options/`: `rows` defines
 the pages and their rows, `screen` runs input and help, `draw` lays it out). It keeps the game's frame, cursor, sounds, EXIT
 button and help window, and draws its rows in the game's message font ("Game
-text"). Seven pages, Game, Display, Audio, Controls, Text, Accessibility and Bindings,
-are named on a help window's plate with L1 and R1 at its ends; the names
+text"). Eight pages, Game, Display, Quality, Audio, Controls, Text, Accessibility and Bindings (Quality on the desktop only:
+what the picture costs, from render resolution to glow), are named on a help window's plate with L1 and R1 at its ends; the names
 scroll along it, with `<` and `>` where more lie past an end. L1 and L2, R1
 and R2 turn the page, and so do left and right on the page names. Each row is a label and a value:
 left and right change the value at once, cross goes round its choices, and a

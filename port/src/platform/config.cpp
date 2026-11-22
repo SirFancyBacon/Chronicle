@@ -155,6 +155,8 @@ const char *HdrName(ConfigHdr hdr) {
     return "off";
 }
 
+constexpr const char *kShadowQualityNames[] = {"low", "medium", "high", "ultra"};
+
 bool ReadAntiAliasing(const Json &value, ConfigAntiAliasing &out) {
     if (!value.is_string()) {
         return false;
@@ -725,6 +727,39 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "video.reflections") {
         return ReadChoice(value, "screen", "planar", config.planar_reflections);
     }
+    if (name == "video.shadow_quality") {
+        if (!value.is_string()) {
+            return false;
+        }
+        const std::string quality = Lower(value.get<std::string>());
+        for (int level = 0; level < static_cast<int>(std::size(kShadowQualityNames)); level++) {
+            if (quality == kShadowQualityNames[level]) {
+                config.shadow_quality = level;
+                return true;
+            }
+        }
+        return false;
+    }
+    if (name == "video.ambient_occlusion") {
+        return ReadBool(value, config.ambient_occlusion);
+    }
+    if (name == "video.lights") {
+        if (!value.is_number_integer()) {
+            return false;
+        }
+        const int lights = value.get<int>();
+        if (lights != 32 && lights != 64 && lights != 128 && lights != 256) {
+            return false;
+        }
+        config.point_lights = lights;
+        return true;
+    }
+    if (name == "video.water") {
+        return ReadChoice(value, "original", "real", config.real_water);
+    }
+    if (name == "video.glow") {
+        return ReadBool(value, config.glow);
+    }
     if (name == "audio.soundtrack") {
         return ReadChoice(value, "ps2", "custom", config.soundtrack);
     }
@@ -887,6 +922,11 @@ std::string ConfigSerialize(const Config &config) {
     root["video"]["soft_focus"] = options.soft_focus;
     root["video"]["cloth"] = config.enhanced_cloth ? "enhanced" : "original";
     root["video"]["reflections"] = config.planar_reflections ? "planar" : "screen";
+    root["video"]["shadow_quality"] = kShadowQualityNames[std::clamp(config.shadow_quality, 0, 3)];
+    root["video"]["ambient_occlusion"] = config.ambient_occlusion;
+    root["video"]["lights"] = config.point_lights;
+    root["video"]["water"] = config.real_water ? "real" : "original";
+    root["video"]["glow"] = config.glow;
     root["audio"]["master_volume"] = Shortest(config.master_volume);
     root["audio"]["sound"] = SoundName(config);
     root["audio"]["soundtrack"] = config.soundtrack ? "custom" : "ps2";

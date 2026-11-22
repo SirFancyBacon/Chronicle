@@ -496,6 +496,47 @@ bool PlanarReflections(const MirrorSettings &settings) {
     return settings.planar_reflections;
 }
 
+// The Shadows row's steps, Low to Ultra: the sun's map, texels a side, and how far its shadows reach by the area's own distance. Slice 4 of
+// Noktus's step 12 sets the numbers from measurements; High is what was drawn before there was a row.
+constexpr std::uint32_t kShadowMapSizes[] = {1024, 2048, 2048, 4096};
+constexpr float         kShadowReaches[] = {0.5f, 0.75f, 1.0f, 1.5f};
+
+int ShadowQuality(const MirrorSettings &settings) {
+    return std::clamp(settings.shadow_quality, 0, 3);
+}
+
+// Each of the Quality page's own rows as the settings say, unless its DC_NOKTUS_* switch asks otherwise, for comparing: the switch wins.
+bool AmbientOcclusion(const MirrorSettings &settings) {
+    if (const char *occlusion = std::getenv("DC_NOKTUS_AO")) {
+        return std::string_view(occlusion) != "0";
+    }
+    return settings.ambient_occlusion;
+}
+
+float Bloom(const MirrorSettings &settings) {
+    if (const char *bloom = std::getenv("DC_NOKTUS_BLOOM")) {
+        return std::strtof(bloom, nullptr);
+    }
+    return g_linear && settings.glow ? 1.0f : 0.0f;
+}
+
+float WaterClarity(const MirrorSettings &settings) {
+    if (const char *clarity = std::getenv("DC_NOKTUS_WATER_CLARITY")) {
+        return std::strtof(clarity, nullptr);
+    }
+    return settings.real_water ? noktus::VulkanHost{}.water_clarity : 0.0f;
+}
+
+std::uint32_t PointLights(const MirrorSettings &settings) {
+    return static_cast<std::uint32_t>(std::clamp(settings.point_lights, 0, 256));
+}
+
+// The flags Chronicle's own drawing goes by (what it gives as glows, water it hands Noktus to draw as water), kept with what Noktus is told.
+void NoteQuality(float bloom, float clarity) {
+    g_bloom = bloom > 0.0f && std::isfinite(bloom);
+    g_real_water = clarity > 0.0f && std::isfinite(clarity);
+}
+
 bool Temporal(MirrorAntiAliasing mode) {
     return mode == MirrorAntiAliasing::Taa;
 }
@@ -631,17 +672,14 @@ void Start(Mirror &mirror) {
         host.linear = std::string_view(linear) != "0";
     }
     g_linear = host.linear;
-    // Bloom: light past white spreading around what gives it, on with the linear scene; DC_NOKTUS_BLOOM sets its strength, 0 for none.
-    host.bloom = host.linear ? 1.0f : 0.0f;
-    if (const char *bloom = std::getenv("DC_NOKTUS_BLOOM")) {
-        host.bloom = std::strtof(bloom, nullptr);
-    }
-    g_bloom = host.bloom > 0.0f && std::isfinite(host.bloom);
-    // Water's colour by depth (Noktus's VulkanHost::water_clarity); DC_NOKTUS_WATER_CLARITY sets it, in the world's units, 0 for water as the game drew it.
-    if (const char *clarity = std::getenv("DC_NOKTUS_WATER_CLARITY")) {
-        host.water_clarity = std::strtof(clarity, nullptr);
-    }
-    g_real_water = host.water_clarity > 0.0f && std::isfinite(host.water_clarity);
+    // Bloom: light past white spreading around what gives it, with the linear scene, Quality's Glow row; DC_NOKTUS_BLOOM sets its strength, 0 for none.
+    host.bloom = Bloom(g_settings);
+    // Water's colour by depth (Noktus's VulkanHost::water_clarity), Quality's Water row; DC_NOKTUS_WATER_CLARITY sets it, in the world's units, 0 for
+    // water as the game drew it.
+    host.water_clarity = WaterClarity(g_settings);
+    NoteQuality(host.bloom, host.water_clarity);
+    host.shadow_map_size = kShadowMapSizes[ShadowQuality(g_settings)];
+    host.point_lights = PointLights(g_settings);
     // The game's world is about ten units to a metre (Toan stands about 14): water's waves and ambient occlusion's reach are sized by it.
     host.world_units_per_metre = 10.0f;
     // A tick's first playing, never shown, leaving the screen alone where nothing reads it back (Noktus's step 12), on; DC_NOKTUS_LEAN_TICKS=0 draws
@@ -653,10 +691,8 @@ void Start(Mirror &mirror) {
     if (const char *cache = std::getenv("DC_NOKTUS_SHADOW_CACHE")) {
         host.keep_far_cascades = std::string_view(cache) != "0";
     }
-    // Ambient occlusion (Noktus's step 9), on; DC_NOKTUS_AO=0 leaves it out, to compare.
-    if (const char *occlusion = std::getenv("DC_NOKTUS_AO")) {
-        host.ambient_occlusion = std::string_view(occlusion) != "0";
-    }
+    // Ambient occlusion (Noktus's step 9), Quality's row; DC_NOKTUS_AO=0 leaves it out, 1 puts it in, to compare.
+    host.ambient_occlusion = AmbientOcclusion(g_settings);
     // DC_NOKTUS_AO_STRENGTH (0 for none) and DC_NOKTUS_AO_RADIUS (in metres) tune it, by eye; anything but a number leaves Noktus's own.
     const auto number = [](const char *name, float *into) {
         if (const char *asked = std::getenv(name)) {
@@ -1001,6 +1037,14 @@ void MirrorApply(const MirrorSettings &settings) {
         noktus::SetAnisotropy(*mirror.renderer, settings.anisotropy);
         noktus::SetAntiAliasing(*mirror.renderer, ToAntiAliasing(settings.anti_aliasing));
         noktus::SetPlanarReflections(*mirror.renderer, PlanarReflections(settings));
+        noktus::SetShadowMapSize(*mirror.renderer, kShadowMapSizes[ShadowQuality(settings)]);
+        noktus::SetAmbientOcclusion(*mirror.renderer, AmbientOcclusion(settings));
+        noktus::SetPointLights(*mirror.renderer, PointLights(settings));
+        const float bloom = Bloom(settings);
+        const float clarity = WaterClarity(settings);
+        noktus::SetBloom(*mirror.renderer, bloom);
+        noktus::SetWaterClarity(*mirror.renderer, clarity);
+        NoteQuality(bloom, clarity);
         ApplySupersampling(mirror, true);
         if (mirror.window != nullptr) {
             const HdrOutput output = HdrForWindow(mirror);
@@ -1087,7 +1131,7 @@ void SetSunShadows(float distance) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (mirror.open) {
-        mirror.sun_distance = distance;
+        mirror.sun_distance = distance * kShadowReaches[ShadowQuality(g_settings)];
     }
 }
 

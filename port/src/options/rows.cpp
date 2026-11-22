@@ -817,6 +817,27 @@ constexpr Row kRenderScaleRow =
                RenderScaleCount, RenderScaleChoice, SetRenderScale, RenderScaleText);
 #endif
 
+// The Quality page's own rows (Noktus's step 12): what the picture costs, Low to Ultra.
+int ShadowQualityChoice(const Config &config) {
+    return std::clamp(config.shadow_quality, 0, 3);
+}
+
+void SetShadowQuality(Config &config, int choice) {
+    config.shadow_quality = choice;
+}
+
+constexpr int kPointLights[] = {32, 64, 128, 256};
+
+// A number of lights the row doesn't offer is drawn as the most, which is what's lit.
+int PointLightsChoice(const Config &config) {
+    const auto found = std::ranges::find(kPointLights, config.point_lights);
+    return found == std::end(kPointLights) ? static_cast<int>(std::size(kPointLights)) - 1 : static_cast<int>(found - std::begin(kPointLights));
+}
+
+void SetPointLights(Config &config, int choice) {
+    config.point_lights = kPointLights[choice];
+}
+
 constexpr Row kDisplayRows[] = {
     SettingRow("video.fullscreen", "Window Mode", "\"Window Mode\"\nPlay in a window or\non the whole screen.", Two,
                Fullscreen, SetFullscreen, nullptr, "Windowed|Fullscreen", RestoreFullscreen),
@@ -903,15 +924,54 @@ constexpr Row kSwitchDisplayRows[] = {
 };
 #endif
 
+#if !defined(__ANDROID__) && !defined(__SWITCH__)
+// The desktop's Display keeps the window and what it's sent; what the picture costs is on Quality. Both are picked from kDisplayRows, HDR's rows last.
+constexpr Row kDesktopDisplayRows[] = {
+    kDisplayRows[0],  // Window Mode
+    kDisplayRows[1],  // Resolution
+    kDisplayRows[3],  // V-Sync
+    kDisplayRows[4],  // Frame Limit
+    kDisplayRows[5],  // Aspect Ratio
+    kDisplayRows[6],  // Interface Size
+    kDisplayRows[7],  // Smooth Motion
+    kDisplayRows[8],  // FPS Counter
+    kDisplayRows[9],  // FPS Info
+    kDisplayRows[15], // Cloth
+    kDisplayRows[16], // HDR
+    kDisplayRows[17], // Calibrate HDR
+    kDisplayRows[18], // Paper White
+    kDisplayRows[19], // Peak Brightness
+};
+static_assert(std::size(kDisplayRows) == 20, "kDesktopDisplayRows and kQualityRows pick from kDisplayRows by place");
+
+constexpr Row kQualityRows[] = {
+    kDisplayRows[2],  // Render Resolution
+    kDisplayRows[11], // Anti-Aliasing
+    kDisplayRows[12], // Supersampling
+    kDisplayRows[10], // Anisotropic Filter
+    SettingRow("video.shadow_quality", "Shadows", "\"Shadows\"\nThe sun's shadows: how\nsharp, and how far\nthey reach.", Four,
+               ShadowQualityChoice, SetShadowQuality, nullptr, "Low|Medium|High|Ultra"),
+    OnOffRow<&Config::ambient_occlusion>("video.ambient_occlusion", "Ambient Occlusion",
+                                         "\"Ambient Occlusion\"\nDarkens corners and\nwhere things meet."),
+    SettingRow("video.lights", "Lights", "\"Lights\"\nHow many lamps and\nfires light the scene,\nthe nearest first.", Four,
+               PointLightsChoice, SetPointLights, nullptr, "32|64|128|256"),
+    kDisplayRows[14], // Reflections
+    NamedRow<&Config::real_water>("video.water", "Water",
+                                  "\"Water\"\nOriginal: the PS2's.\nReal: clearer by depth,\nwith small waves.", "Original|Real"),
+    OnOffRow<&Config::glow>("video.glow", "Glow", "\"Glow\"\nBright light spreads,\nand flames and lamps\nglow."),
+    kDisplayRows[13], // Soft Focus
+};
+#endif
+
 std::span<const Row> DisplayRows() {
 #ifdef __ANDROID__
     return kAndroidDisplayRows;
 #elifdef __SWITCH__
     return kSwitchDisplayRows;
 #elifdef _WIN32
-    return kDisplayRows;
+    return kDesktopDisplayRows;
 #else
-    return std::span(kDisplayRows).first(std::size(kDisplayRows) - kHdrRows);
+    return std::span(kDesktopDisplayRows).first(std::size(kDesktopDisplayRows) - kHdrRows);
 #endif
 }
 
@@ -1100,7 +1160,10 @@ std::span<const Row> BindingRows() {
 std::span<const Page> Pages() {
     static const std::vector<Page> pages = {
         {"Game",          "\"Game\"\nHow the game plays.",                           kGameRows         },
-        {"Display",       "\"Display\"\nThe window and picture.",                    DisplayRows()     },
+        {"Display",       "\"Display\"\nThe window and screen.",                     DisplayRows()     },
+#if !defined(__ANDROID__) && !defined(__SWITCH__)
+        {"Quality",       "\"Quality\"\nHow the picture is\ndrawn, and its cost.",       kQualityRows      },
+#endif
         {"Audio",         "\"Audio\"\nSound and music.",                             kAudioRows        },
         {"Controls",      "\"Controls\"\nMouse, gamepad and gyro.",                  kControlRows      },
         {"Text",          "\"Text\"\nLanguage, lettering and\nsymbols.",             kTextRows         },

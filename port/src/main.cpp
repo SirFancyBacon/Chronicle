@@ -480,7 +480,12 @@ render::MirrorSettings MirrorSettingsOf(const Config &config) {
             .hdr = hdr,
             .paper_white = static_cast<float>(config.hdr_paper_white),
             .peak = static_cast<float>(config.hdr_peak),
-            .planar_reflections = config.planar_reflections};
+            .planar_reflections = config.planar_reflections,
+            .shadow_quality = config.shadow_quality,
+            .ambient_occlusion = config.ambient_occlusion,
+            .point_lights = config.point_lights,
+            .real_water = config.real_water,
+            .glow = config.glow};
 }
 
 GamePresentSettings PresentSettings(const Config &config) {

@@ -260,19 +260,35 @@ TEST(MenuOption, CustomZoomResetBindingIsShownAndKeptUntilChanged) {
     ASSERT_EQ(config.key_bindings.front(), before.key_bindings[1]);
 }
 
+namespace {
+
+const options::Page &PageNamed(std::string_view name) {
+    const std::span<const options::Page> pages = options::Pages();
+    const auto found = std::ranges::find_if(pages, [&](const options::Page &page) { return std::string_view(page.name) == name; });
+    EXPECT_TRUE(found != pages.end()) << name;
+    return *found;
+}
+
+} // namespace
+
 TEST(MenuOption, PagesInOrder) {
     std::span<const options::Page> pages = options::Pages();
     std::vector<std::string_view>  names;
     for (const options::Page &page : pages) {
         names.emplace_back(page.name);
     }
+#if defined(__ANDROID__) || defined(__SWITCH__)
     ASSERT_TRUE((names == std::vector<std::string_view>{"Game", "Display", "Audio", "Controls", "Text", "Accessibility",
                                                         "Bindings"}));
-    ASSERT_TRUE(std::string_view(pages[5].rows[0].key) == "game.qte_always_win");
+#else
+    ASSERT_TRUE((names == std::vector<std::string_view>{"Game", "Display", "Quality", "Audio", "Controls", "Text",
+                                                        "Accessibility", "Bindings"}));
+#endif
+    ASSERT_TRUE(std::string_view(PageNamed("Accessibility").rows[0].key) == "game.qte_always_win");
 }
 
 TEST(MenuOption, BindingRowsSetAndReset) {
-    std::span<const options::Row> bindings = options::Pages()[6].rows;
+    std::span<const options::Row> bindings = PageNamed("Bindings").rows;
     ASSERT_FALSE(bindings.empty());
     auto found = std::ranges::find_if(bindings, [](const options::Row &row) {
         return row.action != nullptr && std::string_view(row.action) == "triangle";
@@ -283,12 +299,12 @@ TEST(MenuOption, BindingRowsSetAndReset) {
     ASSERT_EQ(config.key_bindings.size(), 1u);
     ASSERT_EQ(config.key_bindings.front().action, "triangle");
     ASSERT_EQ(config.key_bindings.front().keys, (std::vector<std::string>{"P"}));
-    options::ResetPage(options::Pages()[6], config);
+    options::ResetPage(PageNamed("Bindings"), config);
     ASSERT_TRUE(config.key_bindings.empty());
 }
 
 TEST(MenuOption, StepAndResetRows) {
-    std::span<const options::Row> controls = options::Pages()[3].rows;
+    std::span<const options::Row> controls = PageNamed("Controls").rows;
     auto                          found = std::ranges::find_if(controls, [](const options::Row &row) { return std::string_view(row.key) == "input.gyro"; });
     ASSERT_TRUE(found != controls.end());
     const options::Row &gyro = *found;
@@ -300,7 +316,7 @@ TEST(MenuOption, StepAndResetRows) {
     ASSERT_TRUE(options::RowValue(gyro, config) == "Off");
 
     config.master_volume = 0.25f;
-    options::ResetPage(options::Pages()[2], config);
+    options::ResetPage(PageNamed("Audio"), config);
     ASSERT_TRUE(config.master_volume == Config{}.master_volume);
     ASSERT_TRUE(config.gyro == ConfigGyro::Off);
 }

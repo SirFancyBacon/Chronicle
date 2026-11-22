@@ -62,6 +62,11 @@ struct MirrorSettings {
     float            peak = 0.0f;        // nits; 0 takes what the system says
     bool             force_hdr = false;  // DC_NOKTUS_HDR_FORCE: the display is in HDR, whatever the system says
     bool               planar_reflections = true; // water's reflections planar, or screen-space
+    int                shadow_quality = 2;        // the sun's shadows, 0 to 3, Low to Ultra: the map's size and how far they reach
+    bool               ambient_occlusion = true;
+    int                point_lights = 256;        // the most a frame lights, the nearest
+    bool               real_water = true;         // water as real water, or as the game drew it
+    bool               glow = true;               // bloom, and the glows of flames and lamps with it
 };
 
 /** What goes to the window, once the settings have met what the system says. */
