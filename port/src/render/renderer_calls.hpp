@@ -150,6 +150,7 @@ struct FireGiven {
     float seen_through = 0.0f; // how far in front of its foot what stands there still doesn't hide it
     float glow = 0.0f;         // how much of its light it gives off round about, from its own shape, for bloom to spread (noktus::Fire::glow)
     float calm = 0.0f;         // how calmly it burns, 0 a torch's to 1 a candle's (noktus::Fire::calm)
+    float hue[3] = {};         // a fire of another colour than fire's, its colour, brightest channel 1; all 0 for fire's own (noktus::Fire::hue)
 };
 
 /** Whether fires' flames are the renderer's own (AddFire), in place of the game's sprites (step 11, the owner's decision of 2026-11-18): with modern

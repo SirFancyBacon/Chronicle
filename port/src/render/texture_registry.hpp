@@ -45,6 +45,13 @@ PortTextureRef PortTextureFromTex0(const sceGsTex0 &tex0, u_long tex1 = 0);
 PortTextureRef PortTextureFromHandle(int handle);
 PortTextureRef PortTextureFromCTexture(const game::CTexture *texture);
 
+/**
+ * The colour a texture lends what it's drawn on by adding (as the game's fire and candle sprites are): its texels' colour in linear light, each
+ * weighed by its alpha and brightness, with the palette it'd be drawn with now. Taken from its first level as it was loaded; nothing where it has no
+ * texel giving light, or isn't a loaded image.
+ */
+std::optional<std::array<float, 3>> PortTextureGlow(const game::CTexture *texture);
+
 /*
  * The registry behind the resolvers.
  *

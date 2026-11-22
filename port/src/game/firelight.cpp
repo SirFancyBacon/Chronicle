@@ -10,6 +10,7 @@
 #include "frame.hpp"
 #include "objanime.hpp"
 #include "render/renderer_calls.hpp"
+#include "render/texture_registry.hpp"
 
 namespace dc::game {
 
@@ -139,6 +140,8 @@ int             g_halo_as_glow = 0;
 int             g_halo_spared = 0;
 bool            g_halo_dungeon = false;
 std::uint64_t   g_flame_key = 0;
+// The hue of the fire being drawn (FlameArt), all 0 for fire's own colours.
+std::array<float, 3> g_flame_hue = {};
 
 // The renderer's flame (render::AddFire) over the game's sprite of it (18 units across at scale 1, centred on the flame's middle): its foot in its
 // torch's head, below that middle, its tip where the sprite's top was. Its heart's light past white, for
@@ -194,6 +197,12 @@ bool GiveHaloGlow(const float *middle, float scale, float flicker, float seen_th
         const float paled = kWarm[c] + (brightness - kWarm[c]) * GlowPale();
         colour[c] = light * (open_flame ? paled + (brightness * kFlameYellow[c] - paled) * TorchYellow() : paled);
     }
+    // A fire of another colour glows in it (FlameArt), as bright as the warm light.
+    if (const float hue_brightness = 0.2126f * g_flame_hue[0] + 0.7152f * g_flame_hue[1] + 0.0722f * g_flame_hue[2]; hue_brightness > 0.0f) {
+        for (int c = 0; c < 3; c++) {
+            colour[c] = light * brightness * g_flame_hue[c] / hue_brightness;
+        }
+    }
     return render::AddGlow({
         .position = {middle[0], middle[1], middle[2]},
         .color = {colour[0], colour[1], colour[2]},
@@ -206,6 +215,29 @@ FlameKey::FlameKey(std::uint64_t key) : previous_(std::exchange(g_flame_key, key
 
 FlameKey::~FlameKey() {
     g_flame_key = previous_;
+}
+
+std::array<float, 3> FireHue(const std::array<float, 3> &glow) {
+    const float brightest = std::max({glow[0], glow[1], glow[2]});
+    if (!std::ranges::all_of(glow, [](float channel) { return std::isfinite(channel); }) || !(brightest > 0.0f)) {
+        return {};
+    }
+    const std::array<float, 3> hue = {glow[0] / brightest, glow[1] / brightest, glow[2] / brightest};
+    // Fire's colours run from red through orange and yellow to white: red the brightest, then green, blue the least (a tenth's give, for a white
+    // one); and anything near white, whichever channel edges past the others.
+    if ((hue[0] >= 1.0f && hue[1] + 0.1f >= hue[2]) || std::min({hue[0], hue[1], hue[2]}) >= 0.9f) {
+        return {};
+    }
+    return hue;
+}
+
+FlameArt::FlameArt(const CTexture *texture) : previous_(g_flame_hue) {
+    const std::optional<std::array<float, 3>> glow = render::PortTextureGlow(texture);
+    g_flame_hue = glow ? FireHue(*glow) : std::array<float, 3>{};
+}
+
+FlameArt::~FlameArt() {
+    g_flame_hue = previous_;
 }
 
 bool HaloGlowWanted() {
@@ -229,7 +261,8 @@ bool GiveFlameAt(const float *middle, const float *foot, float height, float wid
         .fog = fog,
         .seen_through = seen_through,
         .glow = glow,
-        .calm = calm
+        .calm = calm,
+        .hue = {g_flame_hue[0], g_flame_hue[1], g_flame_hue[2]}
     });
 }
 

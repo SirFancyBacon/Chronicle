@@ -472,10 +472,13 @@ void DrawEditEffect(EDIT_EFFECT_INFO *effect, CCamera *camera, CEffectGroup *gro
             Candle.SetPosition(position);
             Candle.SetScale(effect->colour[0], effect->colour[1]);
             // The renderer's flame in place of the game's sprite (step 11), its flicker its own if its part moves.
-            if (const FlameKey flame(reinterpret_cast<std::uintptr_t>(effect)); GiveCandleFlame(position, effect->colour[0], effect->colour[1])) {
-                candle_glows = render::ModernGlow();
-            } else {
-                Candle.Draw();
+            {
+                const FlameArt art(Candle.texture); // in the colour of the game's sprite of it
+                if (const FlameKey flame(reinterpret_cast<std::uintptr_t>(effect)); GiveCandleFlame(position, effect->colour[0], effect->colour[1])) {
+                    candle_glows = render::ModernGlow();
+                } else {
+                    Candle.Draw();
+                }
             }
             scale *= 0.1f;
             position[1] -= 4.0f;

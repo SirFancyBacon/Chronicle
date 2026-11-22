@@ -134,6 +134,8 @@ void CFireOmni::DrawFire(int /*unused0*/, int /*unused1*/, CCamera *camera, floa
     sceVu0Normalize(camera_direction, camera_direction);
     sceVu0ScaleVector(camera_direction, camera_direction, camera_offset);
     spRGBA white = {.r = 0x80, .g = 0x80, .b = 0x80, .a = 0x80};
+    // The renderer's flame and glow in the colour of the game's art for this fire: its core sprite, which both its layers add.
+    const FlameArt art(core);
     // A flame given with its halo wanted as light glows from itself, its halo left out.
     const bool flame_glows = (layers & 2) != 0 && HaloGlowWanted();
     bool       flame_given = false;

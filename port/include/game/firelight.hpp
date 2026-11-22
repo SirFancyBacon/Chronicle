@@ -1,8 +1,11 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 
 namespace dc::game {
+
+class CTexture;
 
 struct EDIT_EFFECT_INFO;
 
@@ -138,6 +141,24 @@ public:
 private:
     std::uint64_t previous_;
 };
+
+/** While one stands, the flames given (GiveFlame, GiveLampFlame, GiveCandleFlame) and the glows given for halos (GiveHaloGlow) take their colour
+ *  from the game's art for the fire, the texture its sprites add: one of another colour than fire's (the opening's lavender torches) burns in it
+ *  (noktus::Fire::hue), and one of fire's colours keeps the renderer's own. */
+class FlameArt {
+public:
+    explicit FlameArt(const CTexture *texture);
+    ~FlameArt();
+    FlameArt(const FlameArt &) = delete;
+    FlameArt &operator=(const FlameArt &) = delete;
+
+private:
+    std::array<float, 3> previous_;
+};
+
+/** A fire's hue from the texture its sprites add (render::PortTextureGlow), in linear light and its brightest channel 1: nothing (all 0) where it's
+ *  fire's colour (red the brightest, then green, blue the least, give or take, or near white) or gives no light. */
+std::array<float, 3> FireHue(const std::array<float, 3> &glow);
 
 /** How far above where a fire stands its flame burns, as CFireOmni draws it. */
 inline constexpr float kFlameRise = 4.6f;

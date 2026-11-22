@@ -9,6 +9,7 @@
 #include <array>
 #include <bit>
 #include <cctype>
+#include <cmath>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -173,6 +174,10 @@ struct Entry {
     unsigned                                   palette = 0;
     bool                                       four_bit = false;
     std::unique_ptr<std::array<uint32_t, 256>> shadow;
+    // Its glow (PortTextureGlow), from its first level as it was made: an RGBA image's colour, an indexed one's texels counted by index, since the
+    // palette it's drawn with is picked when it's drawn.
+    std::array<float, 3>                       glow = {};
+    std::unique_ptr<std::array<uint32_t, 256>> index_counts;
 };
 
 struct Registry {
@@ -657,6 +662,89 @@ bool PortDecodeTexture(int bpp, int width, int height, const u_char *const *leve
     return true;
 }
 
+namespace {
+
+float LinearFromByte(std::uint8_t value) {
+    static const std::array<float, 256> table = [] {
+        std::array<float, 256> made{};
+        for (int i = 0; i < 256; i++) {
+            const float encoded = static_cast<float>(i) / 255.0f;
+            made[static_cast<std::size_t>(i)] = encoded <= 0.04045f ? encoded / 12.92f : std::pow((encoded + 0.055f) / 1.055f, 2.4f);
+        }
+        return made;
+    }();
+    return table[value];
+}
+
+// What a texel adds to its texture's glow: its colour in linear light, weighed by its alpha and its brightness, as a sprite drawn adding Cs * As
+// gives it.
+void AddGlow(std::uint32_t rgba, float count, std::array<double, 4> &sum) {
+    const float r = LinearFromByte(static_cast<std::uint8_t>(rgba));
+    const float g = LinearFromByte(static_cast<std::uint8_t>(rgba >> 8));
+    const float b = LinearFromByte(static_cast<std::uint8_t>(rgba >> 16));
+    const float weight = count * static_cast<float>(rgba >> 24) / 255.0f * (0.2126f * r + 0.7152f * g + 0.0722f * b);
+    sum[0] += r * weight;
+    sum[1] += g * weight;
+    sum[2] += b * weight;
+    sum[3] += weight;
+}
+
+std::optional<std::array<float, 3>> GlowFrom(const std::array<double, 4> &sum) {
+    if (!(sum[3] > 0.0)) {
+        return std::nullopt;
+    }
+    return std::array{static_cast<float>(sum[0] / sum[3]), static_cast<float>(sum[1] / sum[3]), static_cast<float>(sum[2] / sum[3])};
+}
+
+void NoteGlow(Entry &entry, const PortDecodedTexture &decoded) {
+    const std::vector<uint8_t> &texels = decoded.levels[0];
+    if (decoded.format == gfx::TextureFormat::Index8) {
+        entry.index_counts = std::make_unique<std::array<uint32_t, 256>>();
+        for (const uint8_t index : texels) {
+            (*entry.index_counts)[index]++;
+        }
+        return;
+    }
+    std::array<double, 4> sum = {};
+    for (std::size_t i = 0; i + 3 < texels.size(); i += 4) {
+        AddGlow(static_cast<std::uint32_t>(texels[i]) | static_cast<std::uint32_t>(texels[i + 1]) << 8 | static_cast<std::uint32_t>(texels[i + 2]) << 16 |
+                    static_cast<std::uint32_t>(texels[i + 3]) << 24,
+                1.0f, sum);
+    }
+    entry.glow = GlowFrom(sum).value_or(std::array<float, 3>{});
+}
+
+} // namespace
+
+std::optional<std::array<float, 3>> PortTextureGlow(const CTexture *texture) {
+    if (texture == nullptr) {
+        return std::nullopt;
+    }
+    const auto   tex0 = static_cast<u_long>(texture->tex0);
+    const Entry *entry = Live(static_cast<unsigned>(tex0 & 0x3FFF));
+    if (entry == nullptr || entry->kind != EntryKind::Image) {
+        return std::nullopt;
+    }
+    if (entry->index_counts == nullptr) {
+        return entry->glow[0] + entry->glow[1] + entry->glow[2] > 0.0f ? std::optional(entry->glow) : std::nullopt;
+    }
+    // As PortTextureFromTex0 picks it: CBP's palette, else the image's own.
+    const Entry *palette = Live(static_cast<unsigned>((tex0 >> 37) & 0x3FFF));
+    if (palette == nullptr || palette->kind != EntryKind::Palette) {
+        palette = Live(entry->palette);
+    }
+    if (palette == nullptr || palette->shadow == nullptr) {
+        return std::nullopt;
+    }
+    std::array<double, 4> sum = {};
+    for (std::size_t index = 0; index < 256; index++) {
+        if (const uint32_t count = (*entry->index_counts)[index]; count != 0) {
+            AddGlow((*palette->shadow)[index], static_cast<float>(count), sum);
+        }
+    }
+    return GlowFrom(sum);
+}
+
 unsigned PortCreateTexture(const PortDecodedTexture &decoded, PortTextureOwner owner, unsigned *palette_key) {
     const platform::load_profile::Span profile(platform::load_profile::Kind::Texture);
     if (palette_key != nullptr) {
@@ -671,6 +759,7 @@ unsigned PortCreateTexture(const PortDecodedTexture &decoded, PortTextureOwner o
     entry.height = decoded.height;
     entry.format = decoded.format;
     entry.has_alpha = decoded.has_alpha;
+    NoteGlow(entry, decoded);
     if (RendererUp()) {
         gfx::TextureDesc desc;
         desc.width = decoded.width;

@@ -1295,7 +1295,8 @@ bool AddFire(const FireGiven &given) {
         .fog = given.fog,
         .seen_through = given.seen_through,
         .glow = given.glow,
-        .calm = given.calm
+        .calm = given.calm,
+        .hue = {given.hue[0], given.hue[1], given.hue[2], 1.0f}
     };
     // In the world's camera, then the camera as it was, for what's recorded next.
     Guarded([&] {
