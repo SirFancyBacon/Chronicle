@@ -85,7 +85,7 @@ struct Config : HostSettings {
     int               render_height = 0;
     float             detail_distance = 0.0f;
     float             shadow_distance = 0.0f;
-    int               anisotropy = 0;
+    int               anisotropy = 16;
     ConfigAntiAliasing anti_aliasing = ConfigAntiAliasing::Smaa; /**< The cheaper of the two, the owner's choice of 2026-11-16. */
     int               supersampling = 1; /**< video.supersampling: samples a pixel, 1 (off), 2 or 4: the picture drawn larger and filtered down. */
     ConfigHdr         hdr = ConfigHdr::Off;
@@ -156,6 +156,19 @@ float ConfigDetailDistance();
  * infinity where it is 0. Past it the game's own distances apply.
  */
 float ConfigShadowDistance();
+
+/**
+ * Options' Quality row: four presets, Low to Ultra, each setting the anti-aliasing, anisotropic filter, the sun's shadows, ambient
+ * occlusion, how many lights, reflections, water and glow together. High is the defaults. The picture's size (render resolution,
+ * supersampling) and the game's own Soft Focus are left as they are.
+ */
+constexpr int kQualityPresets = 4;
+
+/** Sets what preset 0 (Low) to kQualityPresets - 1 (Ultra) sets; any other number changes nothing. */
+void ConfigApplyQualityPreset(Config &config, int preset);
+
+/** The preset whose settings config has, or -1 where one of them has been changed by hand (Custom). */
+int ConfigQualityPreset(const Config &config);
 
 /**
  * Parses a JSON text (comments allowed) over the defaults: an object of the sections game, video,

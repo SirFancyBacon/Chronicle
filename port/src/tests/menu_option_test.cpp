@@ -287,6 +287,40 @@ TEST(MenuOption, PagesInOrder) {
     ASSERT_TRUE(std::string_view(PageNamed("Accessibility").rows[0].key) == "game.qte_always_win");
 }
 
+#if !defined(__ANDROID__) && !defined(__SWITCH__)
+TEST(MenuOption, QualityPresetRow) {
+    std::span<const options::Row> rows = PageNamed("Quality").rows;
+    ASSERT_FALSE(rows.empty());
+    const options::Row &quality = rows[0];
+    ASSERT_EQ(std::string_view(quality.key), "video.quality");
+    const auto shadows = std::ranges::find_if(rows, [](const options::Row &row) { return std::string_view(row.key) == "video.shadow_quality"; });
+    ASSERT_TRUE(shadows != rows.end());
+    Config config;
+    EXPECT_EQ(options::RowValue(quality, config), "High");
+    // Picking a preset sets the rows below it.
+    EXPECT_TRUE(options::StepRow(quality, config, 1, true));
+    EXPECT_EQ(options::RowValue(quality, config), "Ultra");
+    EXPECT_EQ(options::RowValue(*shadows, config), "Ultra");
+    // Stepping on wraps past Custom, which is only there while a row's been changed by hand.
+    EXPECT_TRUE(options::StepRow(quality, config, 1, true));
+    EXPECT_EQ(options::RowValue(quality, config), "Low");
+    EXPECT_EQ(options::RowValue(*shadows, config), "Low");
+    EXPECT_TRUE(options::StepRow(*shadows, config, 1, false));
+    EXPECT_EQ(options::RowValue(quality, config), "Custom");
+    // From Custom, on to Low, or back to Ultra.
+    Config back = config;
+    EXPECT_TRUE(options::StepRow(quality, config, 1, true));
+    EXPECT_EQ(options::RowValue(quality, config), "Low");
+    EXPECT_EQ(options::RowValue(*shadows, config), "Low");
+    EXPECT_TRUE(options::StepRow(quality, back, -1, true));
+    EXPECT_EQ(options::RowValue(quality, back), "Ultra");
+    EXPECT_FALSE(options::StepRow(quality, back, 1, false)); // at the last preset, without wrapping
+    // Resetting the page brings back High.
+    options::ResetPage(PageNamed("Quality"), back);
+    EXPECT_EQ(options::RowValue(quality, back), "High");
+}
+#endif
+
 TEST(MenuOption, BindingRowsSetAndReset) {
     std::span<const options::Row> bindings = PageNamed("Bindings").rows;
     ASSERT_FALSE(bindings.empty());

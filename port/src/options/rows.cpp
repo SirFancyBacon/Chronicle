@@ -826,6 +826,20 @@ void SetShadowQuality(Config &config, int choice) {
     config.shadow_quality = choice;
 }
 
+// The preset, or Custom (a fifth choice only while none matches, so stepping through the presets passes it by).
+int QualityCount(const Config &config) {
+    return ConfigQualityPreset(config) >= 0 ? kQualityPresets : kQualityPresets + 1;
+}
+
+int QualityChoice(const Config &config) {
+    const int preset = ConfigQualityPreset(config);
+    return preset >= 0 ? preset : kQualityPresets;
+}
+
+void SetQuality(Config &config, int choice) {
+    ConfigApplyQualityPreset(config, choice);
+}
+
 constexpr int kPointLights[] = {32, 64, 128, 256};
 
 // A number of lights the row doesn't offer is drawn as the most, which is what's lit.
@@ -945,6 +959,8 @@ constexpr Row kDesktopDisplayRows[] = {
 static_assert(std::size(kDisplayRows) == 20, "kDesktopDisplayRows and kQualityRows pick from kDisplayRows by place");
 
 constexpr Row kQualityRows[] = {
+    SettingRow("video.quality", "Quality", "\"Quality\"\nSets the rows below,\nbut not the picture's\nsize or Soft Focus.\nCustom: one changed.",
+               QualityCount, QualityChoice, SetQuality, nullptr, "Low|Medium|High|Ultra|Custom"),
     kDisplayRows[2],  // Render Resolution
     kDisplayRows[11], // Anti-Aliasing
     kDisplayRows[12], // Supersampling
@@ -1217,7 +1233,8 @@ std::vector<std::pair<std::string, std::string>> RowStrings() {
             add(prefix + ".help", row.help);
         }
         if (row.names != nullptr) {
-            const int count = row.count(ConfigGet());
+            // Every name the row has, though some show only at times (Custom, or what the GPU has room for).
+            const int count = static_cast<int>(std::ranges::count(std::string_view(row.names), '|')) + 1;
             for (int choice = 0; choice < count; ++choice) {
                 add(prefix + ".choice." + std::to_string(choice), ChoiceName(row.names, choice));
             }

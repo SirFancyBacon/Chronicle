@@ -839,6 +839,65 @@ float ConfigShadowDistance() {
     return distance > 0.0f ? distance : std::numeric_limits<float>::infinity();
 }
 
+namespace {
+
+// What each preset sets. Placeholders until step 12's slice 4 measures them: High the defaults, the others a step each way.
+struct QualityPreset {
+    ConfigAntiAliasing anti_aliasing;
+    int                anisotropy;
+    int                shadow_quality;
+    bool               ambient_occlusion;
+    int                point_lights;
+    bool               planar_reflections;
+    bool               real_water;
+    bool               glow;
+};
+
+constexpr QualityPreset kPresets[kQualityPresets] = {
+    {ConfigAntiAliasing::Smaa, 4,  0, false, 32,  false, false, false}, // Low
+    {ConfigAntiAliasing::Smaa, 8,  1, true,  64,  false, true,  true }, // Medium
+    {ConfigAntiAliasing::Smaa, 16, 2, true,  256, true,  true,  true }, // High
+    {ConfigAntiAliasing::Smaa, 16, 3, true,  256, true,  true,  true }, // Ultra
+};
+
+QualityPreset PresetOf(const Config &config) {
+    return {config.anti_aliasing,      config.anisotropy,         config.shadow_quality, config.ambient_occlusion,
+            config.point_lights,       config.planar_reflections, config.real_water,     config.glow};
+}
+
+bool operator==(const QualityPreset &a, const QualityPreset &b) {
+    return a.anti_aliasing == b.anti_aliasing && a.anisotropy == b.anisotropy && a.shadow_quality == b.shadow_quality &&
+           a.ambient_occlusion == b.ambient_occlusion && a.point_lights == b.point_lights && a.planar_reflections == b.planar_reflections &&
+           a.real_water == b.real_water && a.glow == b.glow;
+}
+
+} // namespace
+
+void ConfigApplyQualityPreset(Config &config, int preset) {
+    if (preset < 0 || preset >= kQualityPresets) {
+        return;
+    }
+    const QualityPreset &set = kPresets[preset];
+    config.anti_aliasing = set.anti_aliasing;
+    config.anisotropy = set.anisotropy;
+    config.shadow_quality = set.shadow_quality;
+    config.ambient_occlusion = set.ambient_occlusion;
+    config.point_lights = set.point_lights;
+    config.planar_reflections = set.planar_reflections;
+    config.real_water = set.real_water;
+    config.glow = set.glow;
+}
+
+int ConfigQualityPreset(const Config &config) {
+    const QualityPreset now = PresetOf(config);
+    for (int preset = 0; preset < kQualityPresets; preset++) {
+        if (kPresets[preset] == now) {
+            return preset;
+        }
+    }
+    return -1;
+}
+
 Config ConfigParse(std::string_view text) {
     Config config;
     if (Trim(text).empty()) {

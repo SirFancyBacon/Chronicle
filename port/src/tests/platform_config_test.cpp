@@ -717,9 +717,9 @@ TEST(PlatformConfig, Hdr) {
 }
 
 TEST(PlatformConfig, Anisotropy) {
-    ASSERT_TRUE(ConfigParse("").anisotropy == 0);
-    ASSERT_TRUE(ConfigParse(R"({"video": {"anisotropy": 16}})").anisotropy == 16);
-    ASSERT_TRUE(ConfigParse(R"({"video": {"anisotropy": 3}})").anisotropy == 0);
+    ASSERT_TRUE(ConfigParse("").anisotropy == 16);
+    ASSERT_TRUE(ConfigParse(R"({"video": {"anisotropy": 0}})").anisotropy == 0);
+    ASSERT_TRUE(ConfigParse(R"({"video": {"anisotropy": 3}})").anisotropy == 16);
     ASSERT_TRUE(ConfigParse(ConfigSerialize(ConfigParse(R"({"video": {"anisotropy": 8}})"))).anisotropy == 8);
     ASSERT_TRUE(ConfigParse("").anti_aliasing == ConfigAntiAliasing::Smaa);
     ASSERT_TRUE(ConfigParse("").supersampling == 1);
@@ -733,6 +733,38 @@ TEST(PlatformConfig, Anisotropy) {
 }
 
 // The Quality page's own rows (Noktus's step 12): read, written back as they were read, and what isn't one of their values left at the default.
+TEST(PlatformConfig, QualityPresets) {
+    // The defaults are High; each preset reads back as itself, and leaves the picture's size and Soft Focus alone.
+    EXPECT_EQ(ConfigQualityPreset(Config{}), 2);
+    for (int preset = 0; preset < kQualityPresets; preset++) {
+        Config config;
+        config.render_scale = 0.5f;
+        config.supersampling = 2;
+        config.options.soft_focus = false;
+        ConfigApplyQualityPreset(config, preset);
+        EXPECT_EQ(ConfigQualityPreset(config), preset);
+        EXPECT_EQ(config.render_scale, 0.5f);
+        EXPECT_EQ(config.supersampling, 2);
+        EXPECT_FALSE(config.options.soft_focus);
+        EXPECT_EQ(ConfigQualityPreset(ConfigParse(ConfigSerialize(config))), preset);
+    }
+    // Low and Ultra differ from High.
+    Config low;
+    ConfigApplyQualityPreset(low, 0);
+    EXPECT_TRUE(low.shadow_quality < Config{}.shadow_quality && low.point_lights < Config{}.point_lights);
+    Config ultra;
+    ConfigApplyQualityPreset(ultra, 3);
+    EXPECT_GT(ultra.shadow_quality, Config{}.shadow_quality);
+    // A setting changed by hand is Custom; a preset that doesn't exist changes nothing.
+    Config changed;
+    changed.point_lights = 64;
+    EXPECT_EQ(ConfigQualityPreset(changed), -1);
+    ConfigApplyQualityPreset(changed, kQualityPresets);
+    ConfigApplyQualityPreset(changed, -1);
+    EXPECT_EQ(changed.point_lights, 64);
+    EXPECT_EQ(ConfigQualityPreset(changed), -1);
+}
+
 TEST(PlatformConfig, QualityRows) {
     const Config defaults;
     EXPECT_EQ(defaults.shadow_quality, 2);
