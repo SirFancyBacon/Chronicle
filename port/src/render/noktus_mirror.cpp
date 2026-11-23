@@ -692,6 +692,11 @@ void Start(Mirror &mirror) {
     if (const char *lean = std::getenv("DC_NOKTUS_LEAN_TICKS")) {
         host.lean_ticks = std::string_view(lean) != "0";
     }
+    // A frame drawn smaller than the window goes out in one draw where nothing else needs the window's picture (Noktus's step 12, for large windows);
+    // DC_NOKTUS_OUTPUT_IN_ONE=0 draws the window's own target first, to compare.
+    if (const char *one = std::getenv("DC_NOKTUS_OUTPUT_IN_ONE")) {
+        host.output_in_one = std::string_view(one) != "0";
+    }
     // The sun's far cascades kept between a tick's frames (Noktus's step 12), on; DC_NOKTUS_SHADOW_CACHE=0 draws them every frame, to compare.
     if (const char *cache = std::getenv("DC_NOKTUS_SHADOW_CACHE")) {
         host.keep_far_cascades = std::string_view(cache) != "0";
