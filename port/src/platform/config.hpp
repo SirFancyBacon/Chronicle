@@ -85,7 +85,11 @@ struct Config : HostSettings {
     int               render_height = 0;
     float             detail_distance = 0.0f;
     float             shadow_distance = 0.0f;
-    int               anisotropy = 16;
+#if defined(__ANDROID__) || defined(__SWITCH__)
+    int               anisotropy = 0; // off where Noktus doesn't draw, and phone GPUs pay more for it
+#else
+    int               anisotropy = 16; // the Quality row's High
+#endif
     ConfigAntiAliasing anti_aliasing = ConfigAntiAliasing::Smaa; /**< The cheaper of the two, the owner's choice of 2026-11-16. */
     int               supersampling = 1; /**< video.supersampling: samples a pixel, 1 (off), 2 or 4: the picture drawn larger and filtered down. */
     ConfigHdr         hdr = ConfigHdr::Off;
@@ -159,7 +163,7 @@ float ConfigShadowDistance();
 
 /**
  * Options' Quality row: four presets, Low to Ultra, each setting the anti-aliasing, anisotropic filter, the sun's shadows, ambient
- * occlusion, how many lights, reflections, water and glow together. High is the defaults. The picture's size (render resolution,
+ * occlusion, how many lights, reflections, water and glow together. High is the desktop's defaults. The picture's size (render resolution,
  * supersampling) and the game's own Soft Focus are left as they are.
  */
 constexpr int kQualityPresets = 4;

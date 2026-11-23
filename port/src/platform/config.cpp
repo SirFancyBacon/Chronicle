@@ -841,7 +841,10 @@ float ConfigShadowDistance() {
 
 namespace {
 
-// What each preset sets. Placeholders until step 12's slice 4 measures them: High the defaults, the others a step each way.
+// What each preset sets: High the defaults. Measured in Noktus's step 12, slice 4 (the RTX 3070, 1080p): ambient occlusion and anti-aliasing cost
+// about 0.45 ms each, glow 0.1 to 0.3, real water 0.2 where there's water, Low shadows save 0.3 to 0.45 and Ultra's add 0.25 to 0.5, planar
+// reflections about 0.1, and the lights and anisotropic filtering next to nothing. Medium leaves out occlusion and planar reflections; Low all
+// but the cheapest, as the game drew it.
 struct QualityPreset {
     ConfigAntiAliasing anti_aliasing;
     int                anisotropy;
@@ -854,8 +857,8 @@ struct QualityPreset {
 };
 
 constexpr QualityPreset kPresets[kQualityPresets] = {
-    {ConfigAntiAliasing::Smaa, 4,  0, false, 32,  false, false, false}, // Low
-    {ConfigAntiAliasing::Smaa, 8,  1, true,  64,  false, true,  true }, // Medium
+    {ConfigAntiAliasing::Off,  8,  0, false, 64,  false, false, false}, // Low
+    {ConfigAntiAliasing::Smaa, 16, 1, false, 128, false, true,  true }, // Medium
     {ConfigAntiAliasing::Smaa, 16, 2, true,  256, true,  true,  true }, // High
     {ConfigAntiAliasing::Smaa, 16, 3, true,  256, true,  true,  true }, // Ultra
 };

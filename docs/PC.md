@@ -186,7 +186,7 @@ key is optional; these are the defaults:
         "fps_detail": "all",        // what it shows: fps (the frame rate alone), ticks (and the logic ticks) or all (and the draws)
         "detail_distance": 0,       // how far full detail reaches (world units); 0: at any distance
         "shadow_distance": 0,       // how far town parts cast full shadows (world units); 0: at any distance
-        "anisotropy": 16,           // anisotropic filtering of 3D textures: 0 (off), 2, 4, 8 or 16 samples
+        "anisotropy": 16,           // anisotropic filtering of 3D textures: 0 (off), 2, 4, 8 or 16 samples; 0 by default on Android and the Switch
         "anti_aliasing": "smaa",    // off, smaa (each frame alone, the default) or taa (many); before the interface goes on
         "supersampling": 1,         // samples a pixel: 1 (off), 2 or 4, the picture drawn larger and filtered down; with any anti-aliasing
         "hdr": "off",               // off, hdr10 or scrgb; a display not in HDR stays SDR. On the Options screen on Windows only

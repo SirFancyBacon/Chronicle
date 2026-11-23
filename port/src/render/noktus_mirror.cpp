@@ -496,8 +496,9 @@ bool PlanarReflections(const MirrorSettings &settings) {
     return settings.planar_reflections;
 }
 
-// The Shadows row's steps, Low to Ultra: the sun's map, texels a side, and how far its shadows reach by the area's own distance. Slice 4 of
-// Noktus's step 12 sets the numbers from measurements; High is what was drawn before there was a row.
+// The Shadows row's steps, Low to Ultra: the sun's map, texels a side, and how far its shadows reach by the area's own distance. High is what was
+// drawn before there was a row. The map's size is what costs (measured in Noktus's step 12, slice 4: a 1024 map about 0.1 to 0.4 ms less on the
+// RTX 3070 at 1080p, a 4096 one 0.4 to 0.5 more); the reach costs next to nothing, and spreads the map's texels further, so blurs.
 constexpr std::uint32_t kShadowMapSizes[] = {1024, 2048, 2048, 4096};
 constexpr float         kShadowReaches[] = {0.5f, 0.75f, 1.0f, 1.5f};
 
@@ -840,8 +841,8 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
     // A river's or a lake's water, as real water: drawn from what's behind it, its own texture laid over as its pattern, lit by the sky (a waterfall,
     // standing upright, keeps its texture as the game drew it: Noktus's water_pattern).
     // Only its surface, as it covers or mixes over what's behind (not a layer it adds, which as water would add the screen to itself), mapped by its
-    // own uvs.
-    if (RiverWater() && !scene.draw.refracts && scene.draw.material.albedo != noktus::TextureId::None && scene.draw.uv_source == noktus::UvSource::Mesh &&
+    // own uvs. With the Water row's Original, as the game drew it: as clear water drawn from what's behind, it would lose its own colour.
+    if (RiverWater() && g_real_water && !scene.draw.refracts && scene.draw.material.albedo != noktus::TextureId::None && scene.draw.uv_source == noktus::UvSource::Mesh &&
         (scene.draw.material.blend == noktus::Blend::Opaque || scene.draw.material.blend == noktus::Blend::Alpha)) {
         scene.draw.refracts = true;
         scene.draw.water_pattern = scene.draw.material.albedo;

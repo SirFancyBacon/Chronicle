@@ -717,9 +717,14 @@ TEST(PlatformConfig, Hdr) {
 }
 
 TEST(PlatformConfig, Anisotropy) {
-    ASSERT_TRUE(ConfigParse("").anisotropy == 16);
+#if defined(__ANDROID__) || defined(__SWITCH__)
+    constexpr int kDefault = 0;
+#else
+    constexpr int kDefault = 16;
+#endif
+    ASSERT_TRUE(ConfigParse("").anisotropy == kDefault);
     ASSERT_TRUE(ConfigParse(R"({"video": {"anisotropy": 0}})").anisotropy == 0);
-    ASSERT_TRUE(ConfigParse(R"({"video": {"anisotropy": 3}})").anisotropy == 16);
+    ASSERT_TRUE(ConfigParse(R"({"video": {"anisotropy": 3}})").anisotropy == kDefault);
     ASSERT_TRUE(ConfigParse(ConfigSerialize(ConfigParse(R"({"video": {"anisotropy": 8}})"))).anisotropy == 8);
     ASSERT_TRUE(ConfigParse("").anti_aliasing == ConfigAntiAliasing::Smaa);
     ASSERT_TRUE(ConfigParse("").supersampling == 1);
@@ -734,8 +739,11 @@ TEST(PlatformConfig, Anisotropy) {
 
 // The Quality page's own rows (Noktus's step 12): read, written back as they were read, and what isn't one of their values left at the default.
 TEST(PlatformConfig, QualityPresets) {
-    // The defaults are High; each preset reads back as itself, and leaves the picture's size and Soft Focus alone.
+    // The defaults are High (but on Android and the Switch, which have no Quality row); each preset reads back as itself, and leaves the
+    // picture's size and Soft Focus alone.
+#if !defined(__ANDROID__) && !defined(__SWITCH__)
     EXPECT_EQ(ConfigQualityPreset(Config{}), 2);
+#endif
     for (int preset = 0; preset < kQualityPresets; preset++) {
         Config config;
         config.render_scale = 0.5f;
