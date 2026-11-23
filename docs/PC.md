@@ -199,7 +199,8 @@ key is optional; these are the defaults:
         "ambient_occlusion": true,  // corners and where things meet darkened; DC_NOKTUS_AO overrides
         "lights": 256,              // the most lamps and fires lighting a frame, the nearest the camera: 32, 64, 128 or 256
         "water": "real",            // real: clearer by depth, with small waves; original: as the game drew it. DC_NOKTUS_WATER_CLARITY overrides
-        "glow": true                // light past white spreads around what gives it, and flames and lamps glow; DC_NOKTUS_BLOOM overrides
+        "glow": true,               // light past white spreads around what gives it, and flames and lamps glow; DC_NOKTUS_BLOOM overrides
+        "quality_settled": true     // false from a first start's pick of the Quality preset until play has checked it (see Options)
     },
     "audio": {
         "master_volume": 1.0,       // 0 to 1
@@ -1405,12 +1406,20 @@ help. Retail's screen-position row is gone: `MGAdjustScreen` moves nothing on PC
 |---|---|
 | Game | save cursor position, clock, time speed, dungeon map, enemy damage, party damage, enemy HP, names, Discord Rich Presence, element quick select, swap keeps lock-on, autosave |
 | Display | window mode, resolution (the monitor's own and the sizes that fit it), V-Sync (`fifo`, `mailbox`, `immediate`), frame limit, aspect ratio, interface size (`ui_scale`), smooth motion (`interpolation`), FPS counter, FPS info (`fps_detail`), cloth (`cloth`), and on Windows HDR, Calibrate HDR, Paper White and Peak Brightness (`hdr`, `hdr_paper_white`, `hdr_peak`); on Android and the Switch also anisotropic filter and soft focus |
-| Quality | quality (Low, Medium, High or Ultra, setting the rows below it but render resolution, supersampling and soft focus; Custom once one is changed by hand, High being the defaults), render resolution, anti-aliasing, supersampling, anisotropic filter (`anisotropy`), shadows, ambient occlusion, lights, reflections, water, glow, soft focus |
+| Quality | quality (Low, Medium, High or Ultra, setting the rows below it but render resolution, supersampling and soft focus; Custom once one is changed by hand, High being the defaults; a first start picks it for the GPU, as below), render resolution, anti-aliasing, supersampling, anisotropic filter (`anisotropy`), shadows, ambient occlusion, lights, reflections, water, glow, soft focus |
 | Audio | volume, sound (mono, stereo, 5.1 or 7.1), soundtrack (PS2 or custom), interpolation (PS2 or cubic) |
 | Controls | vibration, mouse sensitivity (in hundredths below 1 and tenths above, whatever its unit), invert mouse Y, vertical return, mouse wheel zoom, reset zoom (its binding), stick sensitivity, invert stick X and Y, gyro, gyro sensitivity, invert gyro X and Y |
 | Text | language, message speed, button symbols (original or new), symbols shown (glyph device), text font (sharp or original), text shadow, symbol shadow, area name shadow, floor label shadow, boss name shadow |
 | Accessibility | always win QTEs |
 | Bindings | keyboard and mouse button bindings for game actions |
+
+On a first start (no `config.json` yet) with a window, Noktus drawing, the first tick picks the Quality preset for the GPU it found
+(`options/quality_pick`): Low for an integrated or software GPU and for any with 4 GB of its own or less, Medium for a laptop's (named Laptop,
+Mobile or Max-Q, or a model ending in M or S, as RX 6800M, RX 7600S or Arc A770M) with more, and a desktop's by its memory, Medium under 7 GB, High under 11 GB and Ultra from 11, an RTX or a Radeon RX 6000 or
+later at least High. Then `video.quality_settled` is false while play checks it: of the first six of the mirror's five-second reports in which
+the sun's shadows were wanted (a town, a dungeon, a house), with Options closed, one over 12.5 ms a frame on the GPU steps the preset down once
+(a stretch with Options open, or the one it closes in, doesn't count). A change in Options to which preset the settings match (another
+preset, or a row of one) ends the check as it is. The log says what was picked (`quality: ...`).
 
 Resolution choices are the sizes that fit the display (its usable area less
 the window's borders when windowed) and follow changes of mode. Desktop is

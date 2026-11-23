@@ -29,6 +29,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "noktus/vulkan_renderer.hpp"
@@ -141,6 +142,8 @@ struct Mirror {
     std::uint64_t                                            frames_at_rate = 0;
     std::chrono::steady_clock::time_point                    rate_since;
     double                                                   frames_per_second = 0.0;
+    bool                                                     play_seen = false; // the sun's shadows wanted since the last report: play, not a menu or the title
+    std::optional<double>                                    play_gpu_ms;       // the GPU's time a frame over the last report's stretch of play (MirrorTakePlayGpuMs)
     std::unordered_map<gfx::TextureHandle, Indexed>          indexed;
     std::unordered_map<gfx::TextureHandle, Palette>          palettes;
     std::map<std::pair<gfx::TextureHandle, gfx::TextureHandle>, Expanded> expanded;
@@ -232,13 +235,14 @@ Pass FromNoktusPass(noktus::Pass pass);
 
 void ReportGpu(const noktus::PaceReport &pace);
 
-void ReportPace(Mirror &mirror) {
+noktus::PaceReport ReportPace(Mirror &mirror) {
     const noktus::PaceReport pace = noktus::TakePace(*mirror.renderer);
     std::fprintf(stderr, "noktus pacing: %llu frames, %llu ticks, mean %.2f ms, slowest 1%% %.2f ms, worst %.2f ms, held %llu, missed %llu, %d ahead, display timing %s, %s, target lead %.1f ms, work: frame %.3f ms, of it waiting %.3f ms, tick %.3f ms, link %.3f ms, %d workers, late pipelines %llu\n",
                  static_cast<unsigned long long>(pace.frames), static_cast<unsigned long long>(pace.ticks), pace.mean_interval, pace.slowest_1_percent, pace.worst_interval,
                  static_cast<unsigned long long>(pace.held), static_cast<unsigned long long>(pace.missed), pace.frames_ahead, pace.display_timing ? "yes" : "no", pace.variable ? "variable" : "fixed", pace.lead,
                  pace.mean_frame_work, pace.mean_frame_wait, pace.mean_tick_work, pace.mean_link_work, pace.workers, static_cast<unsigned long long>(pace.late_pipelines));
     ReportGpu(pace);
+    return pace;
 }
 
 // How long the GPU took, by pass, and the memory it holds. With no window too (offscreen, as the harness runs), where pacing means nothing but these still do.
@@ -1133,6 +1137,7 @@ void SetSunShadows(float distance) {
     std::scoped_lock guard(mirror.lock);
     if (mirror.open) {
         mirror.sun_distance = distance * kShadowReaches[ShadowQuality(g_settings)];
+        mirror.play_seen = true;
     }
 }
 
@@ -1598,6 +1603,27 @@ void MirrorDropWindow() {
     g_ready = false;
 }
 
+std::optional<MirrorGpuFacts> MirrorGpu() {
+    Mirror                       &mirror = State();
+    std::scoped_lock              guard(mirror.lock);
+    std::optional<MirrorGpuFacts> facts;
+    if (MirrorOn()) {
+        Guarded([&] {
+            Start(mirror);
+            const noktus::GpuFacts gpu = noktus::RendererGpu(*mirror.renderer);
+            constexpr MirrorGpuKind kinds[] = {MirrorGpuKind::Discrete, MirrorGpuKind::Integrated, MirrorGpuKind::Software, MirrorGpuKind::Other};
+            facts = MirrorGpuFacts{.name = gpu.name, .kind = kinds[static_cast<int>(gpu.kind)], .memory = gpu.memory};
+        });
+    }
+    return facts;
+}
+
+std::optional<double> MirrorTakePlayGpuMs() {
+    Mirror          &mirror = State();
+    std::scoped_lock guard(mirror.lock);
+    return std::exchange(mirror.play_gpu_ms, std::nullopt);
+}
+
 std::string MirrorDeviceName() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
@@ -1705,10 +1731,16 @@ void MirrorEndTick() {
         // Every few seconds, so that a load doesn't hide how play went.
         if (++mirror.ticks_since_report == 300) {
             mirror.ticks_since_report = 0;
+            noktus::PaceReport pace;
             if (mirror.window != nullptr) {
-                ReportPace(mirror);
+                pace = ReportPace(mirror);
             } else {
-                ReportGpu(noktus::TakePace(*mirror.renderer));
+                pace = noktus::TakePace(*mirror.renderer);
+                ReportGpu(pace);
+            }
+            constexpr std::uint64_t kTimedEnough = 100;
+            if (std::exchange(mirror.play_seen, false) && pace.gpu.measured && pace.gpu.frames >= kTimedEnough) {
+                mirror.play_gpu_ms = pace.gpu.mean_frame;
             }
         }
     }

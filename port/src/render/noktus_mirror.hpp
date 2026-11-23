@@ -116,6 +116,25 @@ void MirrorDropWindow();
 /** The GPU drawing the game. */
 std::string MirrorDeviceName();
 
+/** What kind of GPU it is (noktus::GpuKind). */
+enum class MirrorGpuKind : std::uint8_t { Discrete, Integrated, Software, Other };
+
+/** The GPU Noktus draws on, for choosing settings by it. */
+struct MirrorGpuFacts {
+    std::string   name;
+    MirrorGpuKind kind = MirrorGpuKind::Other;
+    std::uint64_t memory = 0; /**< Bytes of its own memory (an integrated GPU's is the system's it may use). */
+};
+
+/** The GPU drawing the game, starting Noktus if it hasn't yet. Nothing where Noktus doesn't draw. */
+std::optional<MirrorGpuFacts> MirrorGpu();
+
+/**
+ * The GPU's time a frame over the last few seconds' report (every 300 ticks), once each, where that stretch was play: the sun's shadows were
+ * wanted (a town, a dungeon, a house) and enough frames were timed. Nothing otherwise.
+ */
+std::optional<double> MirrorTakePlayGpuMs();
+
 /** The last tick as it ended, as RGBA. False before there is one. */
 bool MirrorReadScreen(std::vector<std::uint8_t> &pixels, std::uint32_t &width, std::uint32_t &height);
 

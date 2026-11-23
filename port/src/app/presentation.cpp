@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "app/kazarov_presentation.hpp"
+#include "options/quality_pick.hpp"
 #include "platform/clock.hpp"
 #include "platform/input.hpp"
 #include "platform/overlay.hpp"
@@ -72,6 +73,7 @@ void GamePresentTickEnd() {
     }
     PollFpsToggle();
     g_polled = false;
+    options::QualityCheckTick();
 }
 
 bool GameShowingFps() {

@@ -23,6 +23,7 @@
 #include "menu_dungeon.hpp"
 #include "menu_manual.hpp"
 #include "menuetc.hpp"
+#include "options/quality_pick.hpp"
 #include "platform/display.hpp"
 #include "platform/input.hpp"
 #include "platform/window.hpp"
@@ -143,8 +144,10 @@ void ShowPageTab() {
 }
 
 void Apply(const Config &config) {
+    Config changed = config;
+    QualitySettleByHand(ConfigGet(), changed);
     // Written once, as the screen closes: a step at a time, writing the file each step could cost a hitch each.
-    g_screen.save_failed = !DisplayApply([&] { return ConfigChange(config, Saving::Later); });
+    g_screen.save_failed = !DisplayApply([&] { return ConfigChange(changed, Saving::Later); });
     ListResolutions();
 }
 

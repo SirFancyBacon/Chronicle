@@ -760,6 +760,9 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "video.glow") {
         return ReadBool(value, config.glow);
     }
+    if (name == "video.quality_settled") {
+        return ReadBool(value, config.quality_settled);
+    }
     if (name == "audio.soundtrack") {
         return ReadChoice(value, "ps2", "custom", config.soundtrack);
     }
@@ -989,6 +992,7 @@ std::string ConfigSerialize(const Config &config) {
     root["video"]["lights"] = config.point_lights;
     root["video"]["water"] = config.real_water ? "real" : "original";
     root["video"]["glow"] = config.glow;
+    root["video"]["quality_settled"] = config.quality_settled;
     root["audio"]["master_volume"] = Shortest(config.master_volume);
     root["audio"]["sound"] = SoundName(config);
     root["audio"]["soundtrack"] = config.soundtrack ? "custom" : "ps2";

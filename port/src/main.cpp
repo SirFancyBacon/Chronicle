@@ -46,6 +46,7 @@
 #include "menu_save.hpp"
 #include "nowload.hpp"
 #include "options/menu_option.hpp"
+#include "options/quality_pick.hpp"
 #include "options/rows.hpp"
 #include "platform/clock.hpp"
 #include "platform/config.hpp"
@@ -738,7 +739,7 @@ int Run(int argc, const char **argv) {
     }
     LoadInputScript(options.input);
 
-    ConfigLoad();
+    const bool first_start = !ConfigLoad();
     sound::SoundtrackEnsure();
     const Config &config = ConfigGet();
 
@@ -757,6 +758,9 @@ int Run(int argc, const char **argv) {
     WindowInit(window);
     render::MirrorTakeWindow(offscreen ? nullptr : WindowHandle());
     render::MirrorApply(MirrorSettingsOf(config));
+    if (first_start && !offscreen) {
+        options::QualityPickAtFirstTick(); // the Quality preset for the GPU found
+    }
     DC_ANDROID_TRACE("Run: window initialized");
     InputInit();
 #ifdef __ANDROID__
