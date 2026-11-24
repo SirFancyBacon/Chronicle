@@ -4,12 +4,15 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 
 #include "mglib.hpp"
 #include "rect.hpp"
 #include "render/draw2d.hpp"
 #include "render/gs_state.hpp"
+#include "render/passes.hpp"
 #include "render/types.hpp"
+#include "ui/framework/widgets.hpp"
 
 namespace dc::game {
 
@@ -17,10 +20,28 @@ using namespace dc::render;
 
 // Layers draw from the last to the first, so layer 0 ends up on top. The table blends with mglib's
 // ALPHA shadow whatever the register held, and leaves ALPHA, TEST and ZBUF at the shadows.
-void CSpriteTable::DrawTable() {
+void CSpriteTable::DrawTable(bool frame_pictures) {
     const draw2d::Services &services = draw2d::Get();
     render::DrawState       state = draw2d::SpriteState();
     MGPortApplyAlpha(state, mgAlpha);
+
+    const auto covers_frame = [](const SPRITE_TABLE &node) {
+        return node.x <= 0 && node.y <= 0 && node.x + node.width >= ui::metrics::kScreenWidth && node.y + node.height >= ui::metrics::kScreenHeight;
+    };
+    bool holds_frame_picture = false;
+    for (int layer = 0; frame_pictures && layer < list_count; layer++) {
+        for (SPRITE_TABLE *node = heads[layer]; node != tails[layer]; node = node->next) {
+            holds_frame_picture = holds_frame_picture || covers_frame(*node);
+        }
+    }
+    // A table holding a picture over the whole frame is composed against it (a lesson's page, what's laid on it): kept 4:3 and to the frame
+    // whatever the Interface Size, the page's sides filled from its own edges. Otherwise as the interface draws it.
+    std::optional<render::Layer2DScope>      kept_shape;
+    std::optional<render::FramePictureScope> kept_to_frame;
+    if (holds_frame_picture) {
+        kept_shape.emplace(render::Layer2D::Ui, render::Layer2DScope::kDiffersFromRule);
+        kept_to_frame.emplace();
+    }
 
     for (int layer = list_count - 1; layer >= 0; layer--) {
         for (SPRITE_TABLE *node = heads[layer]; node != tails[layer]; node = node->next) {
@@ -43,6 +64,10 @@ void CSpriteTable::DrawTable() {
                 draw2d::Vertex(x1, y1, 0.0f, u1, v1, r, g, b, a),
                 draw2d::Vertex(x0, y1, 0.0f, u0, v1, r, g, b, a),
             };
+            if (holds_frame_picture && covers_frame(*node)) {
+                ui::Picture::DrawSides(node->tex0, 1, state, ui::Rect(node->x, node->y, node->width, node->height),
+                                       ui::Rect(node->u, node->v, node->u_width, node->v_height), r, g, b, a);
+            }
             draw2d::DrawTextured(render::Primitive::Quads, quad, node->tex0, 1, state);
         }
     }

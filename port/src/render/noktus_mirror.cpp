@@ -2201,8 +2201,9 @@ void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> verti
     }
     const float centre_x = (low_x + high_x) * 0.5f;
     const float centre_y = (low_y + high_y) * 0.5f;
-    // Depth places a draw among the meshes, and a picture of the frame lies where the frame does.
-    draw.follows_interface_size = state.depth_test == gfx::DepthTest::Always && !state.depth_write && texture.texture != gfx::kPreviousFrame && !mirror.frame_images.contains(texture.texture);
+    // Depth places a draw among the meshes, and a picture of the frame, or one composed against it (FramePictureScope), lies where the frame does.
+    draw.follows_interface_size = state.depth_test == gfx::DepthTest::Always && !state.depth_write && texture.texture != gfx::kPreviousFrame &&
+                                  !mirror.frame_images.contains(texture.texture) && !DrawingFramePicture();
     if (draw.follows_interface_size) {
         draw.anchor.x = centre_x < anchor.left_until ? -1 : centre_x >= anchor.right_from ? 1
                                                                                           : 0;

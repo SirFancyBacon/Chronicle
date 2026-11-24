@@ -2,6 +2,7 @@
 
 #include <string_view>
 
+#include "gfx/gfx.hpp"
 #include "texture.hpp"
 #include "ui/framework/types.hpp"
 
@@ -60,6 +61,15 @@ public:
      * opened from.
      */
     static void DrawScreen(game::CTexture *texture, int alpha = 0x80);
+
+    /**
+     * In a window wider than the 4:3 frame, fills its sides from a picture drawn over the whole frame and kept 4:3: the column of the source
+     * at each of the frame's edges, drawn out to the window's edge, so a page bordered in white has white sides and one fading to black black
+     * ones. Drawn as the picture is (tex0, tex1: GS TEX0 and TEX1; its blend in state), in its tint (r, g, b) and alpha (0x80 opaque), so it fades
+     * with it. Nothing in a window no wider than the frame.
+     */
+    static void DrawSides(u_long tex0, u_long tex1, const gfx::DrawState &state, const Rect &destination, const Rect &source, int r, int g, int b,
+                          int alpha);
 };
 
 /**

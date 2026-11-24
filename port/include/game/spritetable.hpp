@@ -68,9 +68,11 @@ public:
     }
 
     /**
-     * Draws every queued sprite layer and restores the graphics register state.
+     * Draws every queued sprite layer and restores the graphics register state. With frame_pictures, a table holding a sprite over the whole frame
+     * is drawn as composed against the frame: kept 4:3 and to the frame whatever the Interface Size, that sprite's sides in a wide window filled
+     * from its own edges (ui::Picture::DrawSides).
      */
-    void DrawTable();
+    void DrawTable(bool frame_pictures = false);
 
     /**
      * Queues a textured sprite on one clamped layer.

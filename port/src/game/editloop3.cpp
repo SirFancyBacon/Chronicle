@@ -13,6 +13,7 @@
 #include <cstring>
 #include <format>
 #include <memory>
+#include <optional>
 #include <print>
 #include <string>
 #include <string_view>
@@ -64,6 +65,7 @@
 #include "platform/config.hpp"
 #include "quest/host.hpp"
 #include "rect.hpp"
+#include "render/draw2d.hpp"
 #include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
 #include "runscript.hpp"
@@ -72,6 +74,7 @@
 #include "spritetable.hpp"
 #include "sysmes.hpp"
 #include "textureanime.hpp"
+#include "ui/framework/widgets.hpp"
 #include "visualvu1.hpp"
 
 namespace dc::game {
@@ -9298,6 +9301,26 @@ int EdEventNPCStep() {
 }
 
 int EdEventSpriteDraw() {
+    const auto covers_frame = [](const ED_SPRITE &sprite) {
+        const int width = sprite.width < 0 ? sprite.source_width : sprite.width;
+        const int height = sprite.height < 0 ? sprite.source_height : sprite.height;
+        return sprite.enabled != 0 && sprite.layer != 0 && sprite.rotated == 0 && sprite.texture.block >= 45 && sprite.texture.block <= 49 &&
+               static_cast<int>(sprite.x) <= 0 && static_cast<int>(sprite.y) <= 0 &&
+               static_cast<int>(sprite.x) + width >= ui::metrics::kScreenWidth && static_cast<int>(sprite.y) + height >= ui::metrics::kScreenHeight;
+    };
+    bool holds_frame_picture = false;
+    for (int i = 0; i < 16 && GetSprite(i) != nullptr; i++) {
+        holds_frame_picture = holds_frame_picture || covers_frame(*GetSprite(i));
+    }
+    // Sprites with a picture over the whole frame among them are composed against it (an event's illustration, what's laid on it): kept 4:3 and to
+    // the frame whatever the Interface Size, the picture's sides filled from its own edges, and the sprite table drawn after them with it, as what's
+    // laid on the page. Otherwise as the interface draws them, the table deciding for itself (CSpriteTable::DrawTable).
+    std::optional<render::Layer2DScope>      kept_shape;
+    std::optional<render::FramePictureScope> kept_to_frame;
+    if (holds_frame_picture) {
+        kept_shape.emplace(render::Layer2D::Ui, render::Layer2DScope::kDiffersFromRule);
+        kept_to_frame.emplace();
+    }
     for (int block = 45; block <= 49; block++) {
         int texture_loaded = 0;
 
@@ -9347,6 +9370,11 @@ int EdEventSpriteDraw() {
             sprite->y += sprite->move_y;
 
             if (sprite->rotated == 0) {
+                if (holds_frame_picture && screen.x <= 0 && screen.y <= 0 && screen.x + screen.width >= ui::metrics::kScreenWidth &&
+                    screen.y + screen.height >= ui::metrics::kScreenHeight) {
+                    ui::Picture::DrawSides(sprite->texture.tex0, sprite->bilinear != 0 ? 0x61 : 0x41, render::draw2d::SpriteState(), ui::Rect(screen.x, screen.y, screen.width, screen.height),
+                                           ui::Rect(texel.x, texel.y, texel.width, texel.height), sprite->red, sprite->green, sprite->blue, sprite->alpha);
+                }
                 set2DSprite(GetVif1Packet(), &sprite->texture, screen, texel, static_cast<u_char>(sprite->red), static_cast<u_char>(sprite->green), static_cast<u_char>(sprite->blue), static_cast<u_char>(sprite->alpha));
             } else {
                 set2DSpriteRot(GetVif1Packet(), &sprite->texture, screen, texel, sprite->rotation_x, sprite->rotation_y, sprite->rotation, static_cast<u_char>(sprite->red), static_cast<u_char>(sprite->green), static_cast<u_char>(sprite->blue), static_cast<u_char>(sprite->alpha));
@@ -9355,7 +9383,7 @@ int EdEventSpriteDraw() {
     }
 
     TexManager.ReloadTexture(GetVif1Packet(), 45);
-    SpriteTable.DrawTable();
+    SpriteTable.DrawTable(true);
     return 1;
 }
 

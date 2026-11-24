@@ -186,6 +186,20 @@ bool Refracting() {
 }
 
 namespace {
+bool g_frame_picture = false;
+} // namespace
+
+FramePictureScope::FramePictureScope() : previous_(std::exchange(g_frame_picture, true)) {}
+
+FramePictureScope::~FramePictureScope() {
+    g_frame_picture = previous_;
+}
+
+bool DrawingFramePicture() {
+    return g_frame_picture;
+}
+
+namespace {
 bool g_river_water = false;
 bool g_shadow_only = false;
 } // namespace

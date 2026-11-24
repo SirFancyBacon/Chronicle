@@ -145,6 +145,24 @@ private:
 bool Refracting();
 
 /**
+ * The 2D drawn inside it keeps to the frame whatever the Interface Size, where depthless 2D otherwise follows it: a picture composed against the
+ * frame (an event's illustration over the whole frame, and what's laid on it), which isn't the interface.
+ */
+class FramePictureScope {
+public:
+    FramePictureScope();
+    ~FramePictureScope();
+    FramePictureScope(const FramePictureScope &) = delete;
+    FramePictureScope &operator=(const FramePictureScope &) = delete;
+
+private:
+    bool previous_;
+};
+
+/** Whether the 2D drawn now keeps to the frame whatever the Interface Size (FramePictureScope). */
+bool DrawingFramePicture();
+
+/**
  * The textured meshes drawn inside it are the towns' rivers and lakes, which become real water where Noktus draws (the owner's decision of
  * 2026-11-16): drawn from what's behind them as CWater's surfaces are, their own scrolling texture laid over as the surface's pattern
  * (noktus::MeshDraw::water_pattern). Off, it leaves what's drawn inside it as the game drew it.

@@ -2675,12 +2675,7 @@ void DunMainDraw() {
     }
 
     if (BtEventMode != 0) {
-        {
-            // The interface, drawn at the window's resolution, but kept as named: a full-frame picture (a lesson's page) keeps its 4:3 shape,
-            // as it had drawn among the effects, rather than being stretched to the window as the interface's rule would.
-            render::Layer2DScope layer(render::Layer2D::Ui, render::Layer2DScope::kDiffersFromRule);
-            EdEventSpriteDraw();
-        }
+        EdEventSpriteDraw();
         EBDraw();
         TexManager.ReloadTexture(Vif1Packet, 0x1A);
         BtEventMes0.DrawMesWin();
