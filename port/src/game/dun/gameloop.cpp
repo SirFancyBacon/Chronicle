@@ -2658,6 +2658,9 @@ void DunMainDraw() {
         setbilinear(1);
     }
 
+    // The rest is over the world whether or not the status was drawn: with it hidden (an event's pictures, the Fairy King's lessons), they'd be
+    // drawn among the effects, and the scene's bloom laid over them.
+    render::SetPass(render::Pass::Overlay);
     if (MonstorNameOff == 0) {
         MonsterNameDraw();
     }
@@ -2672,7 +2675,12 @@ void DunMainDraw() {
     }
 
     if (BtEventMode != 0) {
-        EdEventSpriteDraw();
+        {
+            // The interface, drawn at the window's resolution, but kept as named: a full-frame picture (a lesson's page) keeps its 4:3 shape,
+            // as it had drawn among the effects, rather than being stretched to the window as the interface's rule would.
+            render::Layer2DScope layer(render::Layer2D::Ui, render::Layer2DScope::kDiffersFromRule);
+            EdEventSpriteDraw();
+        }
         EBDraw();
         TexManager.ReloadTexture(Vif1Packet, 0x1A);
         BtEventMes0.DrawMesWin();

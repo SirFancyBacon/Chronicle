@@ -880,8 +880,10 @@ bool Prepare(Mirror &mirror, const gfx::MeshConstants &constants, const gfx::Tex
     }
     mirror.renderer->SetCamera(scene.camera);
     mirror.camera = scene.camera;
+    // The opening and the attract movie are each one pass for the whole frame, their world among it: without its camera, their fires fall back to
+    // the game's halo and a core sprite, and their lights light nothing.
     const bool world_pass = mirror.pass == noktus::Pass::Ground || mirror.pass == noktus::Pass::Characters || mirror.pass == noktus::Pass::MovingParts ||
-                            mirror.pass == noktus::Pass::Opening;
+                            mirror.pass == noktus::Pass::Opening || mirror.pass == noktus::Pass::Attract;
     const bool of_the_world = world_pass && mirror.on_screen && scene.draw.material.lit && !Draw3DSelfLit();
     if (!mirror.world_camera && of_the_world) {
         mirror.world_camera = scene.camera;
