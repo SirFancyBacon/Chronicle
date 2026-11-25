@@ -23,7 +23,6 @@ using gfx::MeshConstants;
 using gfx::MeshTransform;
 using gfx::Primitive;
 using gfx::Rect;
-using gfx::RenderLease;
 using gfx::TextureBinding;
 using gfx::TextureDesc;
 using gfx::TextureFormat;

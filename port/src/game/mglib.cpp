@@ -80,9 +80,9 @@ namespace {
 
 using EndFrameClock = std::chrono::steady_clock;
 
-void NoteEndFramePhases(const std::array<EndFrameClock::time_point, 5> &stamps, uint32_t picks) {
-    static std::array<double, 4> totals{};
-    static std::array<double, 4> maxima{};
+void NoteEndFramePhases(const std::array<EndFrameClock::time_point, 4> &stamps, uint32_t picks) {
+    static std::array<double, 3> totals{};
+    static std::array<double, 3> maxima{};
     static uint32_t              frames = 0;
     static uint32_t              depth_picks = 0;
     for (size_t i = 0; i < totals.size(); i++) {
@@ -92,9 +92,9 @@ void NoteEndFramePhases(const std::array<EndFrameClock::time_point, 5> &stamps, 
     }
     depth_picks += picks;
     if (++frames == 120) {
-        std::fprintf(stderr, "cpu endframe %u frames: lease %.3f/%.3f preDraw %.3f/%.3f draw %.3f/%.3f depth %.3f/%.3f picks %u\n",
+        std::fprintf(stderr, "cpu endframe %u frames: preDraw %.3f/%.3f draw %.3f/%.3f depth %.3f/%.3f picks %u\n",
                      frames, totals[0] / frames, maxima[0], totals[1] / frames, maxima[1],
-                     totals[2] / frames, maxima[2], totals[3] / frames, maxima[3], depth_picks);
+                     totals[2] / frames, maxima[2], depth_picks);
         frames = 0;
         depth_picks = 0;
         totals.fill(0.0);
@@ -446,27 +446,16 @@ void MGBeginFrame() {
 // it is pumped first to see whether a tick went by.
 void MGEndFrame() {
     platform::HitchTickWorkEnds();
-    if (!render::KazarovDraws()) {
-        render::MirrorSetTarget(render::kMainTarget);
-    }
+    render::MirrorSetTarget(render::kMainTarget);
     DrawAreaCardOverGame();
-    if (!render::KazarovDraws()) {
-        app::GameDrawFps();
-    }
+    app::GameDrawFps();
     static const bool                        trace_phases = std::getenv("DC_PERF_END_FRAME") != nullptr;
-    std::array<EndFrameClock::time_point, 5> stamps{};
+    std::array<EndFrameClock::time_point, 4> stamps{};
     uint32_t                                 depth_picks = 0;
     if (trace_phases) {
         stamps[0] = EndFrameClock::now();
     }
     {
-        std::optional<render::RenderLease> lease; // only Kazarov's renderer has a thread to hold off
-        if (render::KazarovDraws()) {
-            lease.emplace();
-        }
-        if (trace_phases) {
-            stamps[1] = EndFrameClock::now();
-        }
         if (render::MirrorDepthProbe()) {
             mgPickZBuff[15].enable = true;
             mgPickZBuff[15].x = 320;
@@ -506,19 +495,19 @@ void MGEndFrame() {
         if (recording) {
             render::DisplayListRef list = render::EndRecording();
             if (trace_phases) {
-                stamps[2] = EndFrameClock::now();
+                stamps[1] = EndFrameClock::now();
             }
             app::GameTickDone(std::move(list));
             sceVu0CopyMatrix(g_tick_view, mgRenderInfo.view_scaled);
             g_have_tick_view = true;
         } else {
             if (trace_phases) {
-                stamps[2] = EndFrameClock::now();
+                stamps[1] = EndFrameClock::now();
             }
             render::EndFrame();
         }
         if (trace_phases) {
-            stamps[3] = EndFrameClock::now();
+            stamps[2] = EndFrameClock::now();
         }
 
         for (int i = 0; i < 16; i++) {
@@ -535,7 +524,7 @@ void MGEndFrame() {
             }
         }
         if (trace_phases) {
-            stamps[4] = EndFrameClock::now();
+            stamps[3] = EndFrameClock::now();
         }
     }
     if (trace_phases) {

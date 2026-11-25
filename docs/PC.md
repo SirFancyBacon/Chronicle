@@ -887,22 +887,19 @@ them.
 
 ## Rendering
 
-`tools/kazarov/src/cpp/gfx` is a Vulkan 1.3+ renderer: one graphics queue that presents,
-two frames in flight, dynamic rendering, synchronization2, a bindless texture
-array, every pipeline created at start-up against the on-disk pipeline
-cache, reverse-Z D32 depth with stencil, an immediate 2D API in the game's 640x480 logical
-space (centred in the window) and a mesh API in 3D, named render targets,
-copies, blits, depth readback and screenshots. `tools/kazarov/src/cpp/gfx/README.md` is its
-contract: spaces, colour and alpha units, how the GS blend equation maps to
-Vulkan blending and where it does not.
+Noktus Nimbus (`tools/noktus`, documented in its own repository) draws the game, with the window or, in a headless run, into a picture.
+Game code draws through `render::` (`render/passes.hpp` for draws, `render/renderer_calls.hpp` for everything else), which counts each draw
+against a pass and hands it to Noktus through `render/noktus_mirror.cpp`. The game's calls keep their PS2 terms up to that adapter.
 
-### Which renderer draws the window
+Kazarov's renderer (`tools/kazarov/src/cpp/gfx`) drew the game until Noktus took over, and left the build at Noktus's step 13
+(2026-11-25), as did the `DC_RENDERER=kazarov` switch that brought it back for comparing. Its `gfx/gfx.hpp` still names the types the calls
+use, and `render/gfx_host.cpp` answers what game code and Kazarov's platform code still ask of a renderer: where the frame lies in the
+window, and what's known of each texture and target, from Kazarov's layout rules (MIT, `text/LICENSE.kazarov`).
 
-Noktus Nimbus draws the game, with the window or, in a headless run, into a picture. `port/src/render/gfx_host.cpp` answers what game code still asks of a renderer, and Kazarov's renderer doesn't start.
+### Noktus and the host
 
-`DC_RENDERER=kazarov` has Kazarov's renderer draw instead, for telling which renderer a bug is in. It's a test tool, so it's in the environment only: older builds saved `video.renderer` as `kazarov`, and that setting is read and dropped. With it, `--perf-log`, `--display-per-tick`, `DC_PRESENT_STATS` and `DC_RENDER_THREAD` work, and `app/kazarov_presentation.cpp` presents the frames. HDR is Noktus's alone. Add `DC_NOKTUS_MIRROR=<path>` and Noktus draws everything alongside with no window, writing its last picture to the path, for comparing the two.
-
-Both are in one program. Kazarov's renderer sources are built with `render/kazarov_names.hpp` forced in, which gives the calls `gfx_host.cpp` also defines other names, so `tools/kazarov` needs no change. `gfx_host.cpp` answers to the real names and passes each call on when Kazarov's renderer is drawing.
+Noktus draws on a thread of its own, paced to the display. `video.renderer` and `video.render_thread`, which older builds saved, are
+read and dropped.
 
 The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion, Anisotropic Filter, Anti-Aliasing, HDR, Paper White and
 Peak Brightness change as the game runs. TAA's pipelines are made at start whatever the setting, so turning it on doesn't pause; `DC_NOKTUS_ANTI_ALIASING`

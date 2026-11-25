@@ -13,14 +13,6 @@ constexpr float kWide = 1.5f; // 720 rows over the frame's 480
 
 } // namespace
 
-TEST(GfxHost, OnlyKazarovByNameBringsTheOldRendererBack) {
-    EXPECT_TRUE(render::KazarovAsked("kazarov"));
-    EXPECT_FALSE(render::KazarovAsked("noktus"));
-    EXPECT_FALSE(render::KazarovAsked("Kazarov"));
-    EXPECT_FALSE(render::KazarovAsked(""));
-    EXPECT_FALSE(render::KazarovAsked(nullptr));
-}
-
 // The picture's size by the window's: the render scale, held to a quarter to 1, or a named height by the window's, never past it; supersampling enlarges
 // it.
 TEST(RenderScale, ScaleHeightAndSamples) {

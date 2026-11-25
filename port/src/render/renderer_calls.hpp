@@ -13,7 +13,7 @@
 #include "render/noktus_mirror.hpp"
 
 namespace gfx {
-/** The names render targets are kept under: Chronicle's host keeps them while Noktus draws; none under the old renderer, which keeps its own. */
+/** The names render targets are kept under, which Chronicle's host keeps. */
 std::vector<std::string> NamedRenderTargetNames();
 } // namespace gfx
 
@@ -37,8 +37,7 @@ struct FocusSettings {
     float haze_end = 0.0f;
 };
 
-/** Whether the renderer draws depth of field and heat haze itself (ApplyFocus), in place of the game's layered copies: whenever Noktus draws. The
- * copies remain for the builds Kazarov draws. */
+/** Whether the renderer draws depth of field and heat haze itself (ApplyFocus), in place of the game's layered copies: whenever Noktus draws. */
 bool ModernFocus();
 
 /** Whether the game's light becomes modern light: Noktus drawing the scene in linear light. The towns' sun and moon then follow their arcs. */
@@ -238,20 +237,10 @@ inline bool UpdateTextureNow(gfx::TextureHandle texture, std::uint32_t mip, std:
 
 inline void ReadDepth(std::uint32_t id, float x, float y, float width, float height) {
     MirrorReadDepth(id, {x, y, width, height});
-    if (KazarovDraws()) {
-        gfx::ReadDepth(id, x, y, width, height);
-    }
 }
 
 inline std::optional<float> DepthResult(std::uint32_t id) {
-    if (!KazarovDraws()) {
-        return MirrorDepthResult(id);
-    }
-    const std::optional<float> depth = gfx::DepthResult(id);
-    if (depth) {
-        MirrorCompareDepth(id, *depth);
-    }
-    return depth;
+    return MirrorDepthResult(id);
 }
 
 inline void CutInterpolation() {
@@ -274,18 +263,12 @@ inline void UpdateMeshVertices(gfx::MeshHandle mesh, std::uint32_t first, std::s
     gfx::UpdateMeshVertices(mesh, first, vertices);
 }
 
-inline void Clear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect = nullptr, const gfx::LogicalRect *presentation_rect = nullptr) {
+inline void Clear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect = nullptr) {
     MirrorClear(color, rgba, depth, depth_value, rect);
-    if (KazarovDraws()) {
-        gfx::Clear(color, rgba, depth, depth_value, rect, presentation_rect);
-    }
 }
 
-inline void ClearStencil(std::uint8_t value, const gfx::LogicalRect *rect = nullptr) {
+inline void ClearStencil(std::uint8_t /*value*/, const gfx::LogicalRect * /*rect*/ = nullptr) {
     MirrorClearStencil();
-    if (KazarovDraws()) {
-        gfx::ClearStencil(value, rect);
-    }
 }
 
 inline void SetRenderTarget(gfx::TextureHandle target) {
@@ -312,19 +295,12 @@ inline gfx::TextureHandle NamedRenderTarget(std::string_view name, std::uint32_t
 }
 
 inline bool CopyMainDepthToTarget(const gfx::LogicalRect &source) {
-    if (!KazarovDraws()) {
-        return MirrorCopyDepth(source);
-    }
-    if (!gfx::CopyMainDepthToTarget(source)) {
-        return false;
-    }
-    MirrorCopyDepth(source);
-    return true;
+    return MirrorCopyDepth(source);
 }
 
 inline bool SnapshotFrame(gfx::TextureHandle target) {
     MirrorSnapshotFrame(target);
-    return !KazarovDraws() || gfx::SnapshotFrame(target);
+    return true;
 }
 
 inline void DestroyTexture(gfx::TextureHandle texture) {

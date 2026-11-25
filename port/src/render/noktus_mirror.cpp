@@ -64,10 +64,6 @@ noktus::Vec3 ShadowsFallingFrom(const noktus::Vec3 &falling) {
     return {falling.x / across * std::cos(kLowestSun), -std::sin(kLowestSun), falling.z / across * std::cos(kLowestSun)};
 }
 
-// How many of Noktus's depth answers to look through for one of Kazarov's: the two answer a tick or so apart.
-constexpr std::size_t kDepthAnswersKept = 4;
-constexpr float       kDepthAgrees = 0.0005f;
-
 // Whether Noktus draws the scene in linear light, where the game's light becomes modern light (ModernLight).
 std::atomic<bool> g_linear = false;
 // Whether bloom spreads light past white (VulkanHost::bloom above 0), which glows need.
@@ -176,12 +172,6 @@ struct Mirror {
     std::uint64_t                                            draws_last_tick = 0;
     HdrOutput                                                hdr;
     MirrorHdr                                                hdr_asked = MirrorHdr::Off;
-    std::uint64_t                                            depth_compared = 0;
-    float                                                    depth_difference = 0.0f; // the largest seen
-    std::uint64_t                                            depth_differing = 0;
-    std::uint64_t                                            depth_on_something = 0;  // not open sky: a read of nothing but sky would prove little
-    std::array<std::array<float, kDepthAnswersKept>, noktus::Renderer::kDepthReads> depth_answers{}; // Noktus's latest, per slot, going round
-    std::array<std::uint32_t, noktus::Renderer::kDepthReads>                       depth_answer_count{};
 };
 
 bool        g_failed = false;
@@ -200,11 +190,6 @@ void Guarded(Work work) {
         work();
     } catch (const std::exception &error) {
         std::fprintf(stderr, "noktus: stopped: %s\n", error.what());
-        if (KazarovDraws()) {
-            g_failed = true; // only a comparison stops: the game is still on screen
-            State().open = false; // no more reaches a renderer that failed
-            return;
-        }
         if (g_game_window != nullptr) {
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Noktus Nimbus", error.what(), g_game_window);
         }
@@ -338,10 +323,6 @@ void WriteLastPicture() {
         std::fprintf(stderr, "noktus mirror: %llu drawn, %llu skipped for a texture it lacks, %llu to other targets, %llu dropped, %zu paletted pictures\n",
                      static_cast<unsigned long long>(mirror.drawn + mirror.meshes_drawn), static_cast<unsigned long long>(mirror.skipped),
                      static_cast<unsigned long long>(mirror.elsewhere), static_cast<unsigned long long>(mirror.renderer->DroppedDraws()), mirror.expanded.size());
-        if (mirror.depth_compared != 0) {
-            std::fprintf(stderr, "noktus depth: %llu reads compared, %llu on something, %llu differing, largest difference %.6f\n", static_cast<unsigned long long>(mirror.depth_compared),
-                         static_cast<unsigned long long>(mirror.depth_on_something), static_cast<unsigned long long>(mirror.depth_differing), static_cast<double>(mirror.depth_difference));
-        }
         if (mirror.window != nullptr) {
             ReportPace(mirror);
         } else {
@@ -1002,21 +983,6 @@ HdrOutput ChooseHdr(const MirrorSettings &settings, bool display_hdr, float whit
     return output;
 }
 
-bool KazarovAsked(const char *setting) {
-    return setting != nullptr && std::string_view(setting) == "kazarov";
-}
-
-bool KazarovDraws() {
-    static const bool asked = [] {
-        const char *const setting = std::getenv("DC_RENDERER");
-        if (setting != nullptr && !KazarovAsked(setting) && std::string_view(setting) != "noktus") {
-            std::fprintf(stderr, "DC_RENDERER: %s isn't a renderer, so Noktus draws: it takes noktus or kazarov\n", setting);
-        }
-        return KazarovAsked(setting);
-    }();
-    return asked;
-}
-
 bool MirrorOn() {
     return g_ready && !g_failed;
 }
@@ -1132,15 +1098,15 @@ Step FromNoktusStep(noktus::Step step) {
 } // namespace
 
 bool ModernFocus() {
-    return !KazarovDraws() && MirrorOn();
+    return MirrorOn();
 }
 
 bool ModernLight() {
-    return g_linear && !KazarovDraws() && MirrorOn();
+    return g_linear && MirrorOn();
 }
 
 bool ModernWater() {
-    return g_real_water && !KazarovDraws() && MirrorOn();
+    return g_real_water && MirrorOn();
 }
 
 // Real shadows from the sun, unless DC_NOKTUS_SHADOWS=0: for comparing with the game's own.
@@ -1584,31 +1550,6 @@ std::optional<float> MirrorDepthResult(std::uint32_t slot) {
     return mirror.renderer ? mirror.renderer->DepthResult(slot) : std::nullopt;
 }
 
-void MirrorCompareDepth(std::uint32_t slot, float today) {
-    Mirror          &mirror = State();
-    std::scoped_lock guard(mirror.lock);
-    if (!mirror.renderer || slot >= noktus::Renderer::kDepthReads) {
-        return;
-    }
-    const std::optional<float> answer = mirror.renderer->DepthResult(slot);
-    if (!answer) {
-        return;
-    }
-    std::array<float, kDepthAnswersKept> &kept = mirror.depth_answers[slot];
-    std::uint32_t                        &count = mirror.depth_answer_count[slot];
-    kept[count++ % kDepthAnswersKept] = *answer;
-    if (count >= kDepthAnswersKept) {
-        float nearest = std::numeric_limits<float>::infinity();
-        for (const float value : kept) {
-            nearest = std::min(nearest, std::abs(today - value));
-        }
-        mirror.depth_compared++;
-        mirror.depth_on_something += today > 0.0f ? 1 : 0;
-        mirror.depth_differing += nearest > kDepthAgrees ? 1 : 0;
-        mirror.depth_difference = std::max(mirror.depth_difference, nearest);
-    }
-}
-
 double MirrorFramesPerSecond() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
@@ -1616,8 +1557,8 @@ double MirrorFramesPerSecond() {
 }
 
 void MirrorTakeWindow(SDL_Window *window) {
-    g_game_window = KazarovDraws() ? nullptr : window;
-    g_ready = !KazarovDraws() || RequestedPath() != nullptr;
+    g_game_window = window;
+    g_ready = true;
 }
 
 void MirrorDropWindow() {
@@ -1692,7 +1633,7 @@ void MirrorBeginTick() {
     std::scoped_lock      guard(mirror.lock);
     Guarded([&] {
         Start(mirror);
-        // What's being drawn to: the window, or with none the size the run asked for, which beside Kazarov's renderer is what it's drawing.
+        // What's being drawn to: the window, or with none the size the run asked for.
         const gfx::LogicalMapping main = gfx::GetLogicalMapping(gfx::kMainTarget);
         int                       width = static_cast<int>(main.pixel_width);
         int                       height = static_cast<int>(main.pixel_height);

@@ -47,15 +47,12 @@ endforeach()
 # After the staged copies are named: it fetches as it's included.
 include(${CMAKE_SOURCE_DIR}/cmake/ChronicleFormats.cmake)
 kz_port_host_library(dc_host)
-# Noktus draws the game, and Kazarov's renderer is only there for DC_RENDERER=kazarov. Both define the gfx calls, so its sources are built with
-# other names for them: port/src/render/gfx_host.cpp answers to the real names, and passes a call on when Kazarov's renderer is drawing.
 get_target_property(dc_host_sources dc_host SOURCES)
-# Noktus plays the game's sound (port/src/sound): Kazarov's audio, its mixer and output, isn't built (the owner, 2026-11-21).
+# Noktus draws the game (Noktus's step 13) and plays its sound (port/src/sound, the owner, 2026-11-21): Kazarov's renderer, its shaders, and its
+# audio's mixer and output aren't built. port/src/render/gfx_host.cpp answers the gfx calls game code and Kazarov's platform code still make.
 list(FILTER dc_host_sources EXCLUDE REGEX "/audio/[a-z_]+\\.cpp$|/platform/audio\\.cpp$")
+list(FILTER dc_host_sources EXCLUDE REGEX "/gfx/(displaylist|draw|memory|pipelines|readback|renderer|requirements|resources|thread|vulkan_android)\\.cpp$|\\.spv\\.hpp$")
 set_property(TARGET dc_host PROPERTY SOURCES ${dc_host_sources})
-set(kazarov_renderer_sources "${dc_host_sources}")
-list(FILTER kazarov_renderer_sources INCLUDE REGEX "/gfx/(displaylist|draw|memory|pipelines|readback|renderer|requirements|resources|thread|vulkan_android)\\.cpp$")
-set_source_files_properties(${kazarov_renderer_sources} PROPERTIES COMPILE_OPTIONS "-include;${CMAKE_CURRENT_SOURCE_DIR}/src/render/kazarov_names.hpp")
 # Called from static constructors, so a global that needs constructing here would be used before it was: see G() in the file.
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set_source_files_properties(src/render/gfx_host.cpp PROPERTIES COMPILE_OPTIONS "-Werror=global-constructors")

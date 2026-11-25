@@ -621,7 +621,6 @@ void FirstRunIfNoData(bool headless) {
     renderer.logical_width = kScreenWidth;
     renderer.logical_height = kScreenHeight;
     renderer.display_aspect = 4.0f / 3.0f;
-    renderer.pipeline_cache = PathsSaveRoot() / "pipeline_cache.bin";
     renderer.offscreen = offscreen;
     renderer.validation = renderer.validation || SettingsEnv("VULKAN_VALIDATION") != nullptr;
     gfx::RendererInit(WindowHandle(), renderer);
