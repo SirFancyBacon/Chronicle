@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Named one by one, so that a build missing any of them fails here and not on the other PC.
-$needed = @('darkcloud.exe', 'dcdata.exe', 'SDL3.dll', 'lang', 'glyphs', 'assets/data.zip', 'assets/datapacks')
+$needed = @('darkcloud.exe', 'dcdata.exe', 'noktus-launcher.exe', 'SDL3.dll', 'lang', 'glyphs', 'assets/data.zip', 'assets/datapacks')
 $missing = @($needed | Where-Object { -not (Test-Path -LiteralPath (Join-Path $Build $_)) })
 if ($missing.Count -gt 0) {
     throw "release: the build has no $($missing -join ', ')"
@@ -16,7 +16,7 @@ if ($missing.Count -gt 0) {
 
 New-Item -ItemType Directory -Force $Folder | Out-Null
 # The executables first: a game left running from this folder locks them, and the build should stop before anything has changed.
-foreach ($name in 'darkcloud.exe', 'dcdata.exe') {
+foreach ($name in 'darkcloud.exe', 'dcdata.exe', 'noktus-launcher.exe') {
     Copy-Item -LiteralPath (Join-Path $Build $name) -Destination $Folder -Force
 }
 Get-ChildItem -LiteralPath $Build -Filter '*.dll' -File | Copy-Item -Destination $Folder -Force

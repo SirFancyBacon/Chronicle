@@ -6,7 +6,7 @@ $build = Resolve-WindowsBuild $root $BuildDirectory
 $cmake = Find-WindowsTool cmake 'C:/Program Files/CMake/bin/cmake.exe'
 $env:CARGO_HOME = "$root/deps/rust/cargo-home"
 $env:PATH = "$root/deps/rust/1.99.0-gnullvm/bin;$root/deps/llvm/llvm-mingw-20260922-ucrt-x86_64/bin;$env:PATH"
-$targets = @('darkcloud', 'dcdata')
+$targets = @('darkcloud', 'dcdata', 'noktus_launcher')
 if ($Tests) { $targets += 'darkcloud_tests' }
 & $cmake --build $build --target $targets -j $Jobs *> "$build/build.log"
 $code = $LASTEXITCODE

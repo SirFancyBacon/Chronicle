@@ -408,6 +408,9 @@ template <class... Args>
 void Log(std::FILE *log, std::format_string<Args...> format, Args &&...args) {
     if (log) {
         std::fputs(std::format(format, std::forward<Args>(args)...).c_str(), log);
+        // Each line as it's said, even into a pipe: the launcher shows each stage as it ends, which a full buffer would hold back to the end
+        // (and Windows' C library buffers a pipe whole, whatever line buffering asks).
+        std::fflush(log);
     }
 }
 

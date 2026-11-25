@@ -151,6 +151,10 @@ file(CONFIGURE OUTPUT ${SHADER_HEADER_DIR}/options/credits.hpp
 
 kz_port_sce_sources(DC_SCE_SOURCES LIBS libvu0 libpad libmc sifdev sifrpc eekernel libcdvd libgraph libdma libpkt)
 add_subdirectory(${NOKTUS_SOURCE_DIR} ${CMAKE_BINARY_DIR}/noktus)
+# Noktus's launcher sets the game up, looks after its datapacks and starts it: beside the game, which it finds there.
+if(TARGET noktus_launcher)
+    set_target_properties(noktus_launcher PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+endif()
 add_library(dc_port OBJECT ${PORT_LIB_SOURCES} ${DC_SCE_SOURCES})
 target_link_libraries(dc_port PRIVATE dc_options SDL3::SDL3 Vulkan::Vulkan nlohmann_json::nlohmann_json fastgltf::fastgltf kz_port_headers chronicle_zstd)
 # port/src, the generated headers, dcdata's header-only core and the stb directories: captionfont.cpp
@@ -209,6 +213,9 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS darkcloud RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+if(TARGET noktus_launcher)
+    install(TARGETS noktus_launcher RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 
 # The strings the port draws itself, translated (docs/LOCALIZATION.md): lang/ beside the executable, where the
 # game reads its language files.

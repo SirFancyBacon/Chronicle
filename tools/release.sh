@@ -7,7 +7,7 @@ build=$1
 folder=$2
 
 # Named one by one, so that a build missing any of them fails here and not later.
-for name in darkcloud dcdata lang glyphs assets/data.zip assets/datapacks; do
+for name in darkcloud dcdata noktus-launcher lang glyphs assets/data.zip assets/datapacks; do
     if [ ! -e "$build/$name" ]; then
         echo "release: the build has no $name" >&2
         exit 1
@@ -19,7 +19,7 @@ for name in lang glyphs assets; do
     rm -rf "${folder:?}/$name"
     cp -r "$build/$name" "$folder/"
 done
-cp -f "$build/darkcloud" "$build/dcdata" "$folder/"
+cp -f "$build/darkcloud" "$build/dcdata" "$build/noktus-launcher" "$folder/"
 # SDL3 is the one library most machines won't have. The rest come with any recent system.
 sdl=$(ldd "$build/darkcloud" 2>/dev/null | awk '/libSDL3/ { print $3; exit }' || true)
 if [ -z "$sdl" ] || [ ! -e "$sdl" ]; then

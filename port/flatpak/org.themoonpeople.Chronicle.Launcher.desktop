@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Chronicle Launcher
+Comment=Sets the game up from your own disc, looks after its mods, and starts it
+Exec=noktus-launcher
+Icon=org.themoonpeople.Chronicle
+Terminal=false
+Categories=Game;RolePlaying;
+Keywords=rpg;setup;mods;launcher;
