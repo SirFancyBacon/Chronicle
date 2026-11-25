@@ -186,7 +186,7 @@ key is optional; these are the defaults:
         "fps_detail": "all",        // what it shows: fps (the frame rate alone), ticks (and the logic ticks) or all (and the draws)
         "detail_distance": 0,       // how far full detail reaches (world units); 0: at any distance
         "shadow_distance": 0,       // how far town parts cast full shadows (world units); 0: at any distance
-        "anisotropy": 16,           // anisotropic filtering of 3D textures: 0 (off), 2, 4, 8 or 16 samples; 0 by default on Android and the Switch
+        "anisotropy": 16,           // anisotropic filtering of 3D textures: 0 (off), 2, 4, 8 or 16 samples
         "anti_aliasing": "smaa",    // off, smaa (each frame alone, the default) or taa (many); before the interface goes on
         "supersampling": 1,         // samples a pixel: 1 (off), 2 or 4, the picture drawn larger and filtered down; with any anti-aliasing
         "hdr": "off",               // off, hdr10 or scrgb; a display not in HDR stays SDR. On the Options screen on Windows only
@@ -1405,7 +1405,7 @@ help. Retail's screen-position row is gone: `MGAdjustScreen` moves nothing on PC
 | Page | Rows |
 |---|---|
 | Game | save cursor position, clock, time speed, dungeon map, enemy damage, party damage, enemy HP, names, Discord Rich Presence, element quick select, swap keeps lock-on, autosave |
-| Display | window mode, resolution (the monitor's own and the sizes that fit it), V-Sync (`fifo`, `mailbox`, `immediate`), frame limit, aspect ratio, interface size (`ui_scale`), smooth motion (`interpolation`), FPS counter, FPS info (`fps_detail`), cloth (`cloth`), and on Windows HDR, Calibrate HDR, Paper White and Peak Brightness (`hdr`, `hdr_paper_white`, `hdr_peak`); on Android and the Switch also anisotropic filter and soft focus |
+| Display | window mode, resolution (the monitor's own and the sizes that fit it), V-Sync (`fifo`, `mailbox`, `immediate`), frame limit, aspect ratio, interface size (`ui_scale`), smooth motion (`interpolation`), FPS counter, FPS info (`fps_detail`), cloth (`cloth`), and on Windows HDR, Calibrate HDR, Paper White and Peak Brightness (`hdr`, `hdr_paper_white`, `hdr_peak`) |
 | Quality | quality (Low, Medium, High or Ultra, setting the rows below it but render resolution, supersampling and soft focus; Custom once one is changed by hand, High being the defaults; a first start picks it for the GPU, as below), render resolution, anti-aliasing, supersampling, anisotropic filter (`anisotropy`), shadows, ambient occlusion, lights, reflections, water, glow, soft focus |
 | Audio | volume, sound (mono, stereo, 5.1 or 7.1), soundtrack (PS2 or custom), interpolation (PS2 or cubic) |
 | Controls | vibration, mouse sensitivity (in hundredths below 1 and tenths above, whatever its unit), invert mouse Y, vertical return, mouse wheel zoom, reset zoom (its binding), stick sensitivity, invert stick X and Y, gyro, gyro sensitivity, invert gyro X and Y |
@@ -2006,8 +2006,8 @@ open: the files to mod from. The glTF bundles in the data itself point at PNGs
 that aren't there, since the game never reads a glTF's images.
 The game's own first run extracts the files itself, for its progress screen,
 then runs the `dcdata` beside it with `extract` to do the rest, so its data is
-the same as a shell's (`platform/firstrun.cpp`). Where there's no `dcdata`, as
-on Android, the data stays raw and the game decodes the disc's textures itself.
+the same as a shell's (`platform/firstrun.cpp`). Where there's no `dcdata`, the
+data stays raw and the game decodes the disc's textures itself.
 `extract` and `publish-gameplay` write the gameplay documents tracked in
 `port/gameplay` into the data under `gameplay/`, from the seed the build
 seals beside `dcdata` (`assets/data.zip`), so a package ships that folder with
@@ -2132,6 +2132,5 @@ for unavailable fixtures or test-environment features and one disabled latency b
 Coverage includes alpha-tested and fogged meshes, depth copies and planes,
 display-list lifetimes, draw order, archive integrity and source-cache invalidation.
 A populated Norune replay matched the pre-cleanup raw RGBA image exactly and
-retained all 34 shadow-geometry hash batches. See [Switch](SWITCH.md) for the scope
-of physical hardware checks; Android and interactive resize/fullscreen transitions
-are not qualified by these runs.
+retained all 34 shadow-geometry hash batches. Interactive resize and fullscreen
+transitions are not qualified by these runs.

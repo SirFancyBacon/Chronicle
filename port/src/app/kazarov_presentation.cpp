@@ -21,10 +21,6 @@
 #include "text/caption_text.hpp"
 #include "text/textwipe.hpp"
 
-#if defined(__SWITCH__)
-#include "switch_main.hpp"
-#endif
-
 // How frames reach the window under Kazarov's renderer, for DC_RENDERER=kazarov only: Noktus paces and moves its own.
 
 namespace dc::app::kazarov {
@@ -60,16 +56,6 @@ struct PerfLog {
     Span                     tail_publish_previous;
     Span                     tail_publish_overlay;
     Span                     tail_publish_settings;
-#if defined(__SWITCH__)
-    std::uint64_t thread_tick_end = 0;
-    std::uint64_t thread_render_end = 0;
-    bool          thread_tick_valid = false;
-    bool          thread_render_valid = false;
-    Span          thread_interval;
-    Span          thread_work;
-    Span          thread_render;
-    Span          thread_tail;
-#endif
 };
 
 PerfLog g_perf;
@@ -151,28 +137,11 @@ void PerfReport(PresentClock::time_point now) {
                               g_perf.tail_publish_list.count, g_perf.tail_publish_previous.count,
                               g_perf.tail_publish_overlay.count, g_perf.tail_publish_settings.count));
     }
-#if defined(__SWITCH__)
-    if (g_perf.thread_interval.count != 0) {
-        WriteLine(std::format("cpu main scheduled ms: interval {} work {} render {} tail {} | wall work {} render {} "
-                              "tail {} | samples {} {} {}\n",
-                              PerfSpan(g_perf.thread_interval), PerfSpan(g_perf.thread_work),
-                              PerfSpan(g_perf.thread_render), PerfSpan(g_perf.thread_tail), PerfSpan(g_perf.work),
-                              PerfSpan(g_perf.render), PerfSpan(g_perf.wait), g_perf.thread_work.count,
-                              g_perf.thread_render.count, g_perf.thread_tail.count));
-    }
-    platform::SwitchLogClockRates();
-    const std::uint64_t thread_tick_end = g_perf.thread_tick_end;
-    const bool          thread_tick_valid = g_perf.thread_tick_valid;
-#endif
     const bool on = g_perf.on;
     g_perf = {};
     g_perf.on = on;
     g_perf.window_start = now;
     g_perf.tick_end = now;
-#if defined(__SWITCH__)
-    g_perf.thread_tick_end = thread_tick_end;
-    g_perf.thread_tick_valid = thread_tick_valid;
-#endif
 }
 
 // The end of a tick: MGEndFrame's wait for the next one is over.
@@ -181,17 +150,9 @@ void PerfTickEnd() {
         return;
     }
     const PresentClock::time_point now = PresentClock::now();
-#if defined(__SWITCH__)
-    std::uint64_t thread_now = 0;
-    const bool    thread_valid = platform::SwitchReadThreadTicks(thread_now);
-#endif
     if (g_perf.window_start == PresentClock::time_point{}) {
         g_perf.window_start = now;
         g_perf.tick_end = now;
-#if defined(__SWITCH__)
-        g_perf.thread_tick_end = thread_now;
-        g_perf.thread_tick_valid = thread_valid;
-#endif
         gfx::TakeFrameTimings();
         return;
     }
@@ -202,19 +163,7 @@ void PerfTickEnd() {
     }
     if (g_perf.render_end > g_perf.tick_end) {
         g_perf.wait.Add(Milliseconds(now - g_perf.render_end));
-#if defined(__SWITCH__)
-        if (thread_valid && g_perf.thread_render_valid && thread_now >= g_perf.thread_render_end) {
-            g_perf.thread_tail.Add(platform::SwitchThreadTicksMilliseconds(thread_now - g_perf.thread_render_end));
-        }
-#endif
     }
-#if defined(__SWITCH__)
-    if (thread_valid && g_perf.thread_tick_valid && thread_now >= g_perf.thread_tick_end) {
-        g_perf.thread_interval.Add(platform::SwitchThreadTicksMilliseconds(thread_now - g_perf.thread_tick_end));
-    }
-    g_perf.thread_tick_end = thread_now;
-    g_perf.thread_tick_valid = thread_valid;
-#endif
     g_perf.tick_end = now;
     if (now - g_perf.window_start >= std::chrono::seconds(1)) {
         PerfReport(now);
@@ -394,28 +343,12 @@ void GameSetPresentSettings(const GamePresentSettings &settings) {
 
 void GameRenderTick(gfx::DisplayListRef list) {
     PresentClock::time_point start = PresentClock::now();
-#if defined(__SWITCH__)
-    std::uint64_t thread_start = 0;
-    const bool    thread_start_valid = PerfWindowOpen() && platform::SwitchReadThreadTicks(thread_start);
-#endif
     gfx::RenderList(*list, 1.0f, {.canonical = true});
     g_stats.canonical_seconds += SecondsSince(start);
     if (PerfWindowOpen()) {
         g_perf.render_end = PresentClock::now();
         g_perf.work.Add(Milliseconds(start - g_perf.tick_end));
         g_perf.render.Add(Milliseconds(g_perf.render_end - start));
-#if defined(__SWITCH__)
-        std::uint64_t thread_end = 0;
-        const bool    thread_end_valid = platform::SwitchReadThreadTicks(thread_end);
-        if (thread_start_valid && g_perf.thread_tick_valid && thread_start >= g_perf.thread_tick_end) {
-            g_perf.thread_work.Add(platform::SwitchThreadTicksMilliseconds(thread_start - g_perf.thread_tick_end));
-        }
-        if (thread_start_valid && thread_end_valid && thread_end >= thread_start) {
-            g_perf.thread_render.Add(platform::SwitchThreadTicksMilliseconds(thread_end - thread_start));
-        }
-        g_perf.thread_render_end = thread_end;
-        g_perf.thread_render_valid = thread_end_valid;
-#endif
     }
     const bool               measure_tail = PerfWindowOpen() && PerfTickTailEnabled();
     PresentClock::time_point tail_start;

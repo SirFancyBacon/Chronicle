@@ -1,9 +1,4 @@
 #include <SDL3/SDL_stdinc.h>
-#ifdef __SWITCH__
-#include <SDL3/SDL.h>
-
-#include "switch_main.hpp"
-#endif
 
 #include <algorithm>
 #include <chrono>
@@ -20,13 +15,6 @@
 #include <thread>
 #include <utility>
 #include <vector>
-
-#ifdef __ANDROID__
-#include <android/log.h>
-#define DC_ANDROID_TRACE(message) __android_log_write(ANDROID_LOG_INFO, "Chronicle", message)
-#else
-#define DC_ANDROID_TRACE(message) ((void) 0)
-#endif
 
 #include "app/exitcodes.hpp"
 #include "app/gameloop.hpp"
@@ -61,7 +49,6 @@
 #include "platform/paths.hpp"
 #include "platform/settings.hpp"
 #include "platform/speaker_test.hpp"
-#include "platform/touch_overlay.hpp"
 #include "platform/window.hpp"
 #include "qol/features.hpp"
 #include "render/noktus_mirror.hpp"
@@ -114,23 +101,15 @@ struct Options {
     const char  *export_gameplay = nullptr;
     const char  *font = nullptr;
     const char  *seed_save = nullptr;
-#ifdef __SWITCH__
-    bool switch_core_affinity = true;
-#endif
 };
 
 Options g_options;
-#ifdef __SWITCH__
-float g_switch_render_scale = 0.0f;
-#endif
 
 [[noreturn]] void Usage(const char *program) {
     std::fprintf(stderr,
                  "usage: %s [--data DIR] [--save DIR] [--headless] [--frames N] [--screenshot PATH]\n"
                  "          [--input FILE]"
-#ifndef __SWITCH__
                  " [--width W] [--height H]"
-#endif
                  " [--offscreen]\n"
                  " [--show-fps] [--jump MODE[:MAP]] [--fast-load]\n"
                  "          [--give ITEM,...]\n"
@@ -146,9 +125,7 @@ float g_switch_render_scale = 0.0f;
                  "  --frames N         stop after N frames of the game's main loop\n"
                  "  --screenshot PATH  write the last tick's picture to PATH on exit, with the FPS counter if it's on\n"
                  "  --input FILE       drive pad 1 from a script (default: DC_INPUT); see docs/PC.md\n"
-#ifndef __SWITCH__
                  "  --width, --height  window size in pixels (default: config.json, then the monitor's)\n"
-#endif
                  "  --screenshot-fps   with --screenshot: fail if the FPS counter is off\n"
                  "  --export-text DIR  write the game's message files to DIR as language JSON (docs/LOCALIZATION.md)\n"
                  "  --export-gameplay DIR  write the item, fishing and Georama tables to DIR as gameplay documents,\n"
@@ -156,9 +133,7 @@ float g_switch_render_scale = 0.0f;
                  "  --font FILE        draw message text from this TrueType font (else lang/font.ttf)\n"
                  "  --show-fps         draw the FPS counter on presented frames when headless too\n"
                  "with DC_RENDERER=kazarov, which has the old renderer draw for comparing:\n"
-#ifndef __SWITCH__
                  "  --display-per-tick N  headless: also render N interpolated display frames per tick\n"
-#endif
                  "  --perf-log         log tick, render and GPU timings once a second\n"
                  "test hooks:\n"
                  "  --jump MODE[:MAP]  start in edit:<map>, e01/e03/e04 (populated presets), dungeon:<0-6>, title, rush, opening or menu,\n"
@@ -177,10 +152,6 @@ float g_switch_render_scale = 0.0f;
                  "  --dungeon-ura      swap to the floor's back side once the dungeon plays\n"
                  "  --dungeon-open X   once a floor plays, open the nearest atla or chest (DC_DUNGEON_OPEN)\n",
                  program);
-#ifdef __SWITCH__
-    std::fprintf(stderr, "  --switch-core-affinity separate|auto  pin game and render to separate cores "
-                         "(default: separate)\n");
-#endif
     std::exit(kExitUsage);
 }
 
@@ -215,12 +186,10 @@ Options ParseOptions(int argc, const char **argv) {
             options.input = value();
         } else if (arg == "--seed-save") {
             options.seed_save = value();
-#ifndef __SWITCH__
         } else if (arg == "--width") {
             options.width = static_cast<int>(number());
         } else if (arg == "--height") {
             options.height = static_cast<int>(number());
-#endif
         } else if (arg == "--jump") {
             options.jump = value();
         } else if (arg == "--give") {
@@ -255,18 +224,8 @@ Options ParseOptions(int argc, const char **argv) {
             options.screenshot_fps = true;
         } else if (arg == "--perf-log") {
             options.perf_log = true;
-#ifndef __SWITCH__
         } else if (arg == "--display-per-tick") {
             options.display_per_tick = static_cast<int>(number());
-#endif
-#ifdef __SWITCH__
-        } else if (arg == "--switch-core-affinity") {
-            std::string_view mode = value();
-            if (mode != "separate" && mode != "auto") {
-                Usage(argv[0]);
-            }
-            options.switch_core_affinity = mode == "separate";
-#endif
         } else {
             Usage(argv[0]);
         }
@@ -303,9 +262,6 @@ void RequireData() {
                      "no game data: %s %s; extract the disc with `dcdata extract <disc image> %s` "
                      "or place data.zip beside it\n",
                      PathsDisplay(root).c_str(), why, PathsDisplay(root).c_str());
-#ifdef __SWITCH__
-        SwitchShowMissingData();
-#endif
         std::exit(kExitNoData);
     }
 }
@@ -313,46 +269,9 @@ void RequireData() {
 // The Options screen keeps the interface at 100%, so a size that takes the HUD past the window
 // cannot take the screen's own controls with it.
 gfx::FrameLayout Layout(const Config &config) {
-#ifdef __SWITCH__
-    return {.aspect = gfx::AspectMode::Fill, .ui_scale = MenuOptionOpen() ? 1.0f : config.ui_scale};
-#else
     return {.aspect = config.aspect == ConfigAspect::Auto ? gfx::AspectMode::Fill : gfx::AspectMode::Letterbox,
             .ui_scale = MenuOptionOpen() ? 1.0f : config.ui_scale};
-#endif
 }
-
-#ifdef __SWITCH__
-void UpdateSwitchRenderScale() {
-    if (gfx::InFrame()) {
-        return;
-    }
-    int width = 0;
-    int height = 0;
-    SwitchDisplaySize(width, height);
-    if (height <= 0) {
-        return;
-    }
-    const float scale = static_cast<float>(height) / static_cast<float>(kScreenHeight);
-    if (scale != g_switch_render_scale) {
-        if (!SDL_SetWindowSize(WindowHandle(), width, height)) {
-            std::fprintf(stderr, "switch: cannot set SDL output size to %dx%d: %s\n", width, height,
-                         SDL_GetError());
-        }
-        gfx::RendererResize();
-        int window_width = 0;
-        int window_height = 0;
-        if (!SDL_GetWindowSizeInPixels(WindowHandle(), &window_width, &window_height)) {
-            std::fprintf(stderr, "switch: cannot query SDL output size: %s\n", SDL_GetError());
-        }
-        std::fprintf(stderr, "switch: mode target=%dx%d, SDL=%dx%d, render scale=%.2f\n", width, height,
-                     window_width, window_height, static_cast<double>(scale));
-        if (render::KazarovDraws()) {
-            gfx::SetRenderScale(scale);
-        }
-        g_switch_render_scale = scale;
-    }
-}
-#endif
 
 // DC_BGM_TEST=<set>:<track>: a test aid. From frame 150 of the run (the title has started) the music
 // stops and sound set <set> plays its sequence number <track> on the music port, so DC_AUDIO_WAV
@@ -383,9 +302,6 @@ void PumpHost() {
         GameRequestStop();
     }
     DisplayPump();
-#ifdef __SWITCH__
-    UpdateSwitchRenderScale();
-#endif
     // A change of video.aspect or video.ui_scale, or the Options screen opening or closing, waits
     // for a pump outside a frame.
     if (!gfx::InFrame()) {
@@ -395,9 +311,6 @@ void PumpHost() {
             gfx::SetFrameLayout(layout);
         }
     }
-#ifdef __ANDROID__
-    platform::TouchOverlayPoll();
-#endif
     InputPoll();
     InputScriptApply(GameFrameCount());
 }
@@ -442,10 +355,6 @@ void ReportShaderProgress(uint32_t done, uint32_t total) {
 }
 
 gfx::PresentMode PresentMode(ConfigPresentMode mode) {
-#ifdef __SWITCH__
-    static_cast<void>(mode);
-    return gfx::PresentMode::Fifo;
-#else
     switch (mode) {
         case ConfigPresentMode::Mailbox:
             return gfx::PresentMode::Mailbox;
@@ -454,19 +363,11 @@ gfx::PresentMode PresentMode(ConfigPresentMode mode) {
         default:
             return gfx::PresentMode::Fifo;
     }
-#endif
 }
 
-
 render::MirrorSettings MirrorSettingsOf(const Config &config) {
-    // Android's render scale is Kazarov's, to 200%.
-#if defined(__ANDROID__) || defined(__SWITCH__)
-    const float render_scale = 1.0f;
-    const int   render_height = 0;
-#else
     const float render_scale = config.render_scale;
     const int   render_height = config.render_height;
-#endif
     const render::MirrorHdr hdr = config.hdr == ConfigHdr::Hdr10 ? render::MirrorHdr::Hdr10 : config.hdr == ConfigHdr::ScRgb ? render::MirrorHdr::ScRgb : render::MirrorHdr::Off;
     return {.interpolate = config.interpolation,
             .present_mode = PresentMode(config.present_mode),
@@ -490,19 +391,11 @@ render::MirrorSettings MirrorSettingsOf(const Config &config) {
 }
 
 GamePresentSettings PresentSettings(const Config &config) {
-#ifdef __SWITCH__
-    return {.interpolation = false,
-            .max_fps = 60.0,
-            .display_per_tick = 0,
-            .show_fps = g_options.show_fps || (config.show_fps && !g_options.headless),
-            .fps_detail = config.fps_detail};
-#else
     return {.interpolation = config.interpolation,
             .max_fps = config.max_fps,
             .display_per_tick = g_options.display_per_tick,
             .show_fps = g_options.show_fps || (config.show_fps && !g_options.headless),
             .fps_detail = config.fps_detail};
-#endif
 }
 
 void ApplyDiscord(const Config &config) {
@@ -519,14 +412,10 @@ void ApplyConfigChange(const Config &before, const Config &after) {
     sound::Audio().SetSurround(after.surround, after.seven_one);
     sound::Audio().SetInterpolation(after.cubic_interpolation);
     InputApplyConfig(after);
-#ifdef __SWITCH__
-    ClockSetTickRate(60.0);
-#else
     if (after.tick_rate != before.tick_rate) {
         ClockSetTickRate(after.tick_rate);
         render::MirrorTickRate(after.tick_rate);
     }
-#endif
     // Noktus takes the first two through MirrorApply, and these settings put back an FPS counter the player toggled.
     const bool kazarov_pacing = render::KazarovDraws() && (after.interpolation != before.interpolation || after.max_fps != before.max_fps);
     if (kazarov_pacing || after.show_fps != before.show_fps || after.fps_detail != before.fps_detail) {
@@ -537,16 +426,6 @@ void ApplyConfigChange(const Config &before, const Config &after) {
         gfx::SetPresentMode(PresentMode(after.present_mode));
         gfx::SetAnisotropy(after.anisotropy);
     }
-#ifdef __ANDROID__
-    if (render::KazarovDraws() && after.render_scale != before.render_scale) {
-        gfx::SetRenderScale(after.render_scale);
-    }
-#endif
-#ifdef __ANDROID__
-    if (after.touch_overlay_opacity != before.touch_overlay_opacity) {
-        platform::TouchOverlaySetOpacity(after.touch_overlay_opacity / 100.0f);
-    }
-#endif
     if (after.discord_rich_presence != before.discord_rich_presence) {
         ApplyDiscord(after);
     }
@@ -610,10 +489,8 @@ int Screenshot(const char *path) {
 }
 
 int Run(int argc, const char **argv) {
-    DC_ANDROID_TRACE("Run: enter");
     CrashReportInstall();
     GameSetIdentity();
-    DC_ANDROID_TRACE("Run: identity set");
     const char *explicit_save = nullptr;
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg = argv[i];
@@ -654,7 +531,6 @@ int Run(int argc, const char **argv) {
                                                                                                                     : kExitFailure;
     }
     FirstRunIfNoData(options.headless);
-    DC_ANDROID_TRACE("Run: first-run check passed");
     if (options.jump == nullptr) {
         options.jump = std::getenv("DC_JUMP");
     }
@@ -726,7 +602,6 @@ int Run(int argc, const char **argv) {
     GameSetFastLoad(options.fast_load || (fast_load != nullptr && *fast_load != '\0' && *fast_load != '0'));
     RequireData();
     GameLoadTraceCheckpoint("data_ready");
-    DC_ANDROID_TRACE("Run: data available");
     if (!options.headless) {
         GameSetDataIcon();
     }
@@ -743,16 +618,8 @@ int Run(int argc, const char **argv) {
     sound::SoundtrackEnsure();
     const Config &config = ConfigGet();
 
-#ifdef __SWITCH__
-    DisplaySetOverrides(0, 0, options.headless);
-#else
     DisplaySetOverrides(options.width, options.height, options.headless);
-#endif
     WindowConfig window = DisplayWindowConfig(config);
-#ifdef __SWITCH__
-    SwitchDisplaySize(window.width, window.height);
-    window.fullscreen = false;
-#endif
     bool offscreen = options.offscreen || (options.headless && !gfx::HeadlessSurfaceAvailable());
     window.vulkan = !offscreen;
     WindowInit(window);
@@ -761,11 +628,7 @@ int Run(int argc, const char **argv) {
     if (first_start && !offscreen) {
         options::QualityPickAtFirstTick(); // the Quality preset for the GPU found
     }
-    DC_ANDROID_TRACE("Run: window initialized");
     InputInit();
-#ifdef __ANDROID__
-    platform::TouchOverlaySetOpacity(config.touch_overlay_opacity / 100.0f);
-#endif
 
     gfx::RendererConfig renderer;
     renderer.app_name = "Chronicle: Dark Cloud";
@@ -774,10 +637,6 @@ int Run(int argc, const char **argv) {
     renderer.display_aspect = 4.0f / 3.0f;
     renderer.present_mode = PresentMode(config.present_mode);
     renderer.pipeline_cache = PathsSaveRoot() / "pipeline_cache.bin";
-#ifdef __SWITCH__
-    SwitchConfigureRenderer(renderer);
-    g_switch_render_scale = renderer.render_scale;
-#endif
     renderer.progress = ReportShaderProgress;
     renderer.offscreen = offscreen || !render::KazarovDraws();
     if (render::KazarovDraws()) {
@@ -794,34 +653,16 @@ int Run(int argc, const char **argv) {
         }
     }
     renderer.layout = Layout(config);
-#ifdef __ANDROID__
-    renderer.render_scale = config.render_scale;
-#endif
     renderer.validation = renderer.validation || SettingsEnv("VULKAN_VALIDATION") != nullptr;
     gfx::RendererInit(WindowHandle(), renderer);
     GameLoadTraceCheckpoint("renderer_ready");
-    DC_ANDROID_TRACE("Run: renderer initialized");
-#ifdef __SWITCH__
-    if (options.switch_core_affinity) {
-        SwitchConfigureThreads();
-    }
-#endif
-#ifdef __ANDROID__
-    if (render::KazarovDraws()) {
-        gfx::SetRenderScale(config.render_scale);
-    }
-#endif
 
     sound::Audio().SetMasterGain(config.master_volume);
     sound::Audio().SetSurround(config.surround, config.seven_one);
     sound::Audio().SetInterpolation(config.cubic_interpolation);
     sound::Audio().StartOutput();
 
-#ifdef __SWITCH__
-    ClockSetTickRate(60.0);
-#else
     ClockSetTickRate(config.tick_rate);
-#endif
     // Its first texture starts Noktus, which takes the tick rate as it then stands.
     glyphs::Preload();
     ListDisplayModesAhead();
@@ -880,20 +721,8 @@ int Run(int argc, const char **argv) {
 } // namespace dc::app
 
 int main(int argc, const char **argv) {
-#ifdef __SWITCH__
-    return dc::platform::SwitchMain(argc, argv, dc::app::Run);
-#else
     return dc::app::Run(argc, argv);
-#endif
 }
-
-#ifdef __ANDROID__
-// SDLActivity resolves SDL_main from the native application library.
-extern "C" int SDL_main(int argc, char **argv) {
-    DC_ANDROID_TRACE("SDL_main: entry");
-    return dc::app::Run(argc, const_cast<const char **>(argv));
-}
-#endif
 
 #ifdef _WIN32
 int wmain(int argc, wchar_t **wide_argv) {

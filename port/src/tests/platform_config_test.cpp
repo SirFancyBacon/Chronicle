@@ -305,9 +305,7 @@ TEST(PlatformConfig, SerializeRoundTrips) {
     ASSERT_TRUE(again.tick_rate == 60.0 && !again.debug_mode);
     ASSERT_TRUE(again.present_mode == ConfigPresentMode::Mailbox && again.aspect == ConfigAspect::FourThree);
     ASSERT_TRUE(again.ui_scale == 1.5f && again.window_width == 1920 && again.window_height == 0);
-#ifndef __SWITCH__
     ASSERT_EQ(again.render_scale, 0.7f);
-#endif
     ASSERT_EQ(again.render_height, 1080);
     ASSERT_TRUE(again.max_fps == 144.0 && again.master_volume == 0.5f);
     ASSERT_TRUE(again.mouse_release_keys.empty());
@@ -717,11 +715,7 @@ TEST(PlatformConfig, Hdr) {
 }
 
 TEST(PlatformConfig, Anisotropy) {
-#if defined(__ANDROID__) || defined(__SWITCH__)
-    constexpr int kDefault = 0;
-#else
     constexpr int kDefault = 16;
-#endif
     ASSERT_TRUE(ConfigParse("").anisotropy == kDefault);
     ASSERT_TRUE(ConfigParse(R"({"video": {"anisotropy": 0}})").anisotropy == 0);
     ASSERT_TRUE(ConfigParse(R"({"video": {"anisotropy": 3}})").anisotropy == kDefault);
@@ -739,11 +733,9 @@ TEST(PlatformConfig, Anisotropy) {
 
 // The Quality page's own rows (Noktus's step 12): read, written back as they were read, and what isn't one of their values left at the default.
 TEST(PlatformConfig, QualityPresets) {
-    // The defaults are High (but on Android and the Switch, which have no Quality row); each preset reads back as itself, and leaves the
+    // The defaults are High; each preset reads back as itself, and leaves the
     // picture's size and Soft Focus alone.
-#if !defined(__ANDROID__) && !defined(__SWITCH__)
     EXPECT_EQ(ConfigQualityPreset(Config{}), 2);
-#endif
     for (int preset = 0; preset < kQualityPresets; preset++) {
         Config config;
         config.render_scale = 0.5f;

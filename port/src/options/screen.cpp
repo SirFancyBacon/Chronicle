@@ -416,11 +416,6 @@ bool Inside(float x, float y, int left, int top, int right, int bottom) {
 
 void RunMouse() {
     InputMenuMouse mouse = InputTakeMenuMouse();
-#ifdef __ANDROID__
-    if (InputTouchOverlayVisible()) {
-        mouse.dx = mouse.dy = mouse.wheel = 0.0f;
-    }
-#endif
     std::uint32_t clicked = mouse.buttons & ~g_screen.mouse_buttons;
     bool          moved = mouse.dx != 0.0f || mouse.dy != 0.0f;
     g_screen.mouse_buttons = mouse.buttons;

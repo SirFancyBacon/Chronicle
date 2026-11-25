@@ -80,18 +80,6 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
-        },
-        {
-            "name": "switch",
-            "displayName": "Nintendo Switch homebrew (devkitA64)",
-            "generator": "Ninja",
-            "binaryDir": "${sourceDir}/port/build/switch",
-            "toolchainFile": "$env{DEVKITPRO}/cmake/Switch.cmake",
-            "cacheVariables": {
-                "PLATFORM": "SWITCH",
-                "CMAKE_BUILD_TYPE": "Release",
-                "DC_BUILD_TESTS": "OFF"
-            }
         }
     ],
     "buildPresets": [
@@ -110,10 +98,6 @@
         {
             "name": "macos-arm64-release",
             "configurePreset": "macos-arm64-release"
-        },
-        {
-            "name": "switch",
-            "configurePreset": "switch"
         }
     ],
     "testPresets": [

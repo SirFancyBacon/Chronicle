@@ -14,9 +14,7 @@ those 5 seconds on the loading screen, since its floor select draws the frame
 before as its backdrop. See `AreaCardAlpha` and `HandOverLoadingCard` in
 `nowload.cpp`.
 
-The 2026-10-26 measurements in this document are PC measurements. Console build
-and runtime qualification of these new changes is pending. Earlier console
-rendering results in [SWITCH.md](SWITCH.md) do not qualify these loading changes.
+The 2026-10-26 measurements in this document are PC measurements.
 
 ## Source lookup: the largest character-switch cost
 

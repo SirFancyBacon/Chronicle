@@ -65,19 +65,10 @@ struct Config : HostSettings {
     bool swap_keeps_lock_on = false;
     bool autosave = true;
     bool text_wipe = false; /**< Enables the developer text comparison and tuning tool. */
-#if defined(__SWITCH__)
-    bool interpolation = false;
-#else
     bool interpolation = true;
-#endif
     ConfigAspect          aspect = ConfigAspect::Auto;
     float                 ui_scale = 1.0f;
-#if defined(__ANDROID__)
-    float render_scale = 0.5f;
-    int   touch_overlay_opacity = 100;
-#else
     float render_scale = 1.0f;
-#endif
     /**
      * video.render_height: a height the world is drawn at, picked from Render Resolution's named steps (720p, 1080p...), kept on any screen and held
      * to the window's; 0 takes video.render_scale, a share of the window's height.
@@ -85,11 +76,7 @@ struct Config : HostSettings {
     int               render_height = 0;
     float             detail_distance = 0.0f;
     float             shadow_distance = 0.0f;
-#if defined(__ANDROID__) || defined(__SWITCH__)
-    int               anisotropy = 0; // off where Noktus doesn't draw, and phone GPUs pay more for it
-#else
     int               anisotropy = 16; // the Quality row's High
-#endif
     ConfigAntiAliasing anti_aliasing = ConfigAntiAliasing::Smaa; /**< The cheaper of the two, the owner's choice of 2026-11-16. */
     int               supersampling = 1; /**< video.supersampling: samples a pixel, 1 (off), 2 or 4: the picture drawn larger and filtered down. */
     ConfigHdr         hdr = ConfigHdr::Off;
@@ -131,16 +118,7 @@ struct Config : HostSettings {
     int floor_shadow = 50;
     int boss_shadow = 50;
 
-    Config() {
-#if defined(__SWITCH__)
-        present_mode = ConfigPresentMode::Fifo;
-        max_fps = 60.0;
-        window_width = 0;
-        window_height = 0;
-        fullscreen = true;
-        aspect = ConfigAspect::FourThree;
-#endif
-    }
+    Config() {}
 
     bool operator==(const Config &) const = default;
 };

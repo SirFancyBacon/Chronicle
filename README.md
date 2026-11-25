@@ -35,7 +35,6 @@ The project aims to produce **100% matching text and data sections** for:
   game SDL3 3.4 and a Vulkan 1.3 driver with its loader.
 - **macOS:** Xcode's command line tools and the Homebrew packages in
   [`docs/MACOS.md`](docs/MACOS.md).
-- **Nintendo Switch:** Docker on Linux or in WSL (see [`docs/SWITCH.md`](docs/SWITCH.md)).
 
 ### 1. Clone the repository
 
@@ -94,13 +93,6 @@ for files elsewhere. Build output stays in `port/build/`.
 | `macos-arm64`         | macOS ARM64     | Debug                               |
 | `windows-x64-release` | Windows x64     | Release                             |
 | `windows-x64`         | Windows x64     | Debug                               |
-| `switch`              | Nintendo Switch | Homebrew `.nro` (see [`docs/SWITCH.md`](docs/SWITCH.md)) |
-| `assembleDebug`       | Android         | Debug APK (experimental)            |
-| `assembleProfile`     | Android         | Profile APK (experimental)          |
-
-Run Android Gradle tasks from `port/android` with `gradlew.bat <task>` on
-Windows; see the [Android build
-documentation](https://github.com/TheMoonPeople/Chronicle/blob/master/port/android/README.md).
 
 ### Build Options
 

@@ -277,17 +277,11 @@ TEST(MenuOption, PagesInOrder) {
     for (const options::Page &page : pages) {
         names.emplace_back(page.name);
     }
-#if defined(__ANDROID__) || defined(__SWITCH__)
-    ASSERT_TRUE((names == std::vector<std::string_view>{"Game", "Display", "Audio", "Controls", "Text", "Accessibility",
-                                                        "Bindings"}));
-#else
     ASSERT_TRUE((names == std::vector<std::string_view>{"Game", "Display", "Quality", "Audio", "Controls", "Text",
                                                         "Accessibility", "Bindings"}));
-#endif
     ASSERT_TRUE(std::string_view(PageNamed("Accessibility").rows[0].key) == "game.qte_always_win");
 }
 
-#if !defined(__ANDROID__) && !defined(__SWITCH__)
 TEST(MenuOption, QualityPresetRow) {
     std::span<const options::Row> rows = PageNamed("Quality").rows;
     ASSERT_FALSE(rows.empty());
@@ -319,7 +313,6 @@ TEST(MenuOption, QualityPresetRow) {
     options::ResetPage(PageNamed("Quality"), back);
     EXPECT_EQ(options::RowValue(quality, back), "High");
 }
-#endif
 
 TEST(MenuOption, BindingRowsSetAndReset) {
     std::span<const options::Row> bindings = PageNamed("Bindings").rows;

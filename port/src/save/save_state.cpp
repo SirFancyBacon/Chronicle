@@ -84,12 +84,6 @@ bool SaveStateSeed(const std::filesystem::path &source, const std::filesystem::p
         return fail("seed source is not a readable directory");
     }
     auto resolved = [&](const fs::path &path) {
-#if defined(__SWITCH__)
-        // Mounted devices are absolute to devoptab, but not to std::filesystem's POSIX parser.
-        if (path.begin() != path.end() && path.begin()->string().ends_with(':')) {
-            return path.lexically_normal();
-        }
-#endif
         return fs::weakly_canonical(path, code);
     };
     const fs::path from = resolved(source);

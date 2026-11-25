@@ -7,8 +7,7 @@
 # the cases that need no Vulkan device. The Flatpak job (docs/FLATPAK.md)
 # packages the Linux build in Flathub's freedesktop 26.08 image. Its manifest
 # uses the commit under test as a git source, and its smoke run checks that the
-# packaged binary reaches its data check. macOS and the Switch have their own
-# workflows (macos.yml, switch.yml).
+# packaged binary reaches its data check. macOS has its own workflow (macos.yml).
 name: PC builds
 
 on:

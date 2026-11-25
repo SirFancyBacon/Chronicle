@@ -12,12 +12,7 @@ enable_language(CXX)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-if(NINTENDO_SWITCH)
-    # newlib exposes some POSIX declarations only outside strict ISO mode.
-    set(CMAKE_CXX_EXTENSIONS ON)
-else()
-    set(CMAKE_CXX_EXTENSIONS OFF)
-endif()
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # darkcloud is position-independent (DC_LINK_OPTIONS below).
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -33,10 +28,6 @@ if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
 include(${KZ_ROOT}/cmake/KazarovPort.cmake)
-
-if(NINTENDO_SWITCH)
-    include(${CMAKE_CURRENT_SOURCE_DIR}/switch/switch.cmake)
-endif()
 
 # Python runs the port override script from the Kazarov submodule.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -69,18 +60,12 @@ set_source_files_properties(${kazarov_renderer_sources} PROPERTIES COMPILE_OPTIO
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set_source_files_properties(src/render/gfx_host.cpp PROPERTIES COMPILE_OPTIONS "-Werror=global-constructors")
 endif()
-if(NINTENDO_SWITCH)
-    dc_switch_host(dc_host)
-endif()
 
 set(GAME_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/game)
 set(PORT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS ${GAME_DIR}/*.cpp)
 file(GLOB_RECURSE PORT_SOURCES CONFIGURE_DEPENDS ${PORT_DIR}/*.cpp)
 list(FILTER PORT_SOURCES EXCLUDE REGEX "/tests/|^${GAME_DIR}/")
-if(NINTENDO_SWITCH)
-    list(FILTER PORT_SOURCES EXCLUDE REGEX "/platform/(discord|firstrun)\.cpp$")
-endif()
 set(PORT_DEFINITIONS PORT PAL)
 
 # What both halves are compiled with. The game was written for MWCC, which
@@ -101,10 +86,6 @@ endif()
 # arm64 clang fuses a*b+c into one rounding by default; x86-64 has no FMA in its
 # baseline. Off everywhere so the game's arithmetic rounds the same on both.
 target_compile_options(dc_options INTERFACE -ffp-contract=off)
-if(ANDROID)
-    # PS2's s8 is plain char; arm64 clang otherwise treats its table sentinels as unsigned.
-    target_compile_options(dc_options INTERFACE -fsigned-char)
-endif()
 
 if(WIN32 AND (NOT MINGW OR NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     message(FATAL_ERROR "The Windows build requires clang/llvm-mingw")
@@ -136,9 +117,6 @@ target_compile_options(dc_ps2 PRIVATE -Wall -Wno-writable-strings -Wno-unknown-p
     -Wno-void-pointer-to-int-cast -Wno-unused-variable -Wno-unused-but-set-variable
     -Wno-unused-local-typedef -Wno-unused-label -Wno-unused-function -Wno-unused-value
     -Wno-unused-const-variable -Wno-undefined-internal -Wno-self-assign -Wno-deprecated-volatile)
-if(ANDROID)
-    target_compile_options(dc_ps2 PRIVATE -Wno-format-security -Wno-return-type)
-endif()
 
 set(PORT_LIB_SOURCES ${PORT_SOURCES})
 list(FILTER PORT_LIB_SOURCES EXCLUDE REGEX "/tests/|/main\\.cpp$")
@@ -177,9 +155,6 @@ file(CONFIGURE OUTPUT ${SHADER_HEADER_DIR}/options/credits.hpp
 kz_port_sce_sources(DC_SCE_SOURCES LIBS libvu0 libpad libmc sifdev sifrpc eekernel libcdvd libgraph libdma libpkt)
 add_subdirectory(${NOKTUS_SOURCE_DIR} ${CMAKE_BINARY_DIR}/noktus)
 add_library(dc_port OBJECT ${PORT_LIB_SOURCES} ${DC_SCE_SOURCES})
-if(NINTENDO_SWITCH)
-    dc_switch_port(dc_port)
-endif()
 target_link_libraries(dc_port PRIVATE dc_options SDL3::SDL3 Vulkan::Vulkan nlohmann_json::nlohmann_json fastgltf::fastgltf kz_port_headers chronicle_zstd)
 # port/src, the generated headers, dcdata's header-only core and the stb directories: captionfont.cpp
 # rasterizes with stb_truetype and platform/png_image.cpp decodes with stb_image, which Kazarov stages
@@ -208,19 +183,12 @@ target_compile_options(dc_port PRIVATE -Wall -Wno-mismatched-tags -Wno-unused-la
 # ordinary definitions in the game units (EditGaijiTbl in
 # port/src/game/clsmes.cpp). GetItem in port/src/game/dngstatusdata.cpp reads WeaponList directly rather than
 # through ItemPutListTbl12_bytes.
-if(NINTENDO_SWITCH)
-    set(DC_LINK_OPTIONS -Wl,--gc-sections)
-elseif(WIN32)
+if(WIN32)
     set(DC_LINK_OPTIONS -fuse-ld=lld -Wl,--gc-sections -Wl,--error-limit=0)
 elseif(APPLE)
     set(DC_LINK_OPTIONS -Wl,-dead_strip)
 else()
-    set(DC_LINK_OPTIONS -fuse-ld=lld -Wl,--gc-sections -Wl,--error-limit=0)
-    if(ANDROID)
-        list(APPEND DC_LINK_OPTIONS -Wl,-z,max-page-size=16384)
-    else()
-        list(APPEND DC_LINK_OPTIONS -pie -Wl,-z,separate-code)
-    endif()
+    set(DC_LINK_OPTIONS -fuse-ld=lld -Wl,--gc-sections -Wl,--error-limit=0 -pie -Wl,-z,separate-code)
 endif()
 
 function(dc_link_game target)
@@ -233,20 +201,9 @@ function(dc_link_game target)
     target_link_options(${target} PRIVATE ${DC_LINK_OPTIONS})
 endfunction()
 
-if(ANDROID)
-    add_library(main SHARED ${PORT_DIR}/main.cpp)
-    target_link_libraries(main PRIVATE log)
-    set_target_properties(main PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-    set(darkcloud_target main)
-else()
-    add_executable(darkcloud ${PORT_DIR}/main.cpp)
-    set_target_properties(darkcloud PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-    set(darkcloud_target darkcloud)
-endif()
-dc_link_game(${darkcloud_target})
-if(NINTENDO_SWITCH)
-    dc_switch_nro(darkcloud)
-endif()
+add_executable(darkcloud ${PORT_DIR}/main.cpp)
+set_target_properties(darkcloud PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+dc_link_game(darkcloud)
 if(WIN32)
     target_link_options(darkcloud PRIVATE -municode)
     enable_language(RC)
@@ -254,62 +211,44 @@ if(WIN32)
 endif()
 
 include(GNUInstallDirs)
-if(NOT ANDROID AND NOT NINTENDO_SWITCH)
-    install(TARGETS darkcloud RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-endif()
+install(TARGETS darkcloud RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # The strings the port draws itself, translated (docs/LOCALIZATION.md): lang/ beside the executable, where the
 # game reads its language files.
-if(ANDROID)
-    set(ANDROID_ASSETS ${CMAKE_SOURCE_DIR}/port/android/app/src/main/assets)
-    file(MAKE_DIRECTORY ${ANDROID_ASSETS}/lang ${ANDROID_ASSETS}/glyphs)
-    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/lang/ DESTINATION ${ANDROID_ASSETS}/lang)
-    configure_file(${CMAKE_SOURCE_DIR}/tools/font/ChronicleSharp-Bold.ttf ${ANDROID_ASSETS}/lang/font.ttf COPYONLY)
-    configure_file(${CMAKE_SOURCE_DIR}/tools/font/ChronicleSharp-Regular.ttf ${ANDROID_ASSETS}/lang/font_thin.ttf COPYONLY)
-else()
-    add_custom_target(dc_lang
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/lang $<TARGET_FILE_DIR:darkcloud>/lang
-        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/tools/font/ChronicleSharp-Bold.ttf
-                $<TARGET_FILE_DIR:darkcloud>/lang/font.ttf
-        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/tools/font/ChronicleSharp-Regular.ttf
-                $<TARGET_FILE_DIR:darkcloud>/lang/font_thin.ttf
-        COMMENT "Copying the port's translated strings and text fonts")
-    add_dependencies(${darkcloud_target} dc_lang)
-    install(DIRECTORY lang/ DESTINATION ${CMAKE_INSTALL_BINDIR}/lang)
-    install(FILES ${CMAKE_SOURCE_DIR}/tools/font/ChronicleSharp-Bold.ttf DESTINATION ${CMAKE_INSTALL_BINDIR}/lang RENAME font.ttf)
-    install(FILES ${CMAKE_SOURCE_DIR}/tools/font/ChronicleSharp-Regular.ttf DESTINATION ${CMAKE_INSTALL_BINDIR}/lang RENAME font_thin.ttf)
-endif()
+add_custom_target(dc_lang
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/lang $<TARGET_FILE_DIR:darkcloud>/lang
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/tools/font/ChronicleSharp-Bold.ttf
+            $<TARGET_FILE_DIR:darkcloud>/lang/font.ttf
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/tools/font/ChronicleSharp-Regular.ttf
+            $<TARGET_FILE_DIR:darkcloud>/lang/font_thin.ttf
+    COMMENT "Copying the port's translated strings and text fonts")
+add_dependencies(darkcloud dc_lang)
+install(DIRECTORY lang/ DESTINATION ${CMAKE_INSTALL_BINDIR}/lang)
+install(FILES ${CMAKE_SOURCE_DIR}/tools/font/ChronicleSharp-Bold.ttf DESTINATION ${CMAKE_INSTALL_BINDIR}/lang RENAME font.ttf)
+install(FILES ${CMAKE_SOURCE_DIR}/tools/font/ChronicleSharp-Regular.ttf DESTINATION ${CMAKE_INSTALL_BINDIR}/lang RENAME font_thin.ttf)
 
 # The button symbols (docs/GLYPHS.md): glyphs/ beside the executable. Rebuilt from art by tools/glyphs/build_glyphs.py.
-if(ANDROID)
-    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/glyphs/ DESTINATION ${ANDROID_ASSETS}/glyphs)
-else()
-    add_custom_target(dc_glyphs
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/glyphs $<TARGET_FILE_DIR:darkcloud>/glyphs
-        COMMENT "Copying the button symbols")
-    add_dependencies(${darkcloud_target} dc_glyphs)
-    install(DIRECTORY glyphs/ DESTINATION ${CMAKE_INSTALL_BINDIR}/glyphs)
-endif()
+add_custom_target(dc_glyphs
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/glyphs $<TARGET_FILE_DIR:darkcloud>/glyphs
+    COMMENT "Copying the button symbols")
+add_dependencies(darkcloud dc_glyphs)
+install(DIRECTORY glyphs/ DESTINATION ${CMAKE_INSTALL_BINDIR}/glyphs)
 
 # The packs the game ships (port/datapacks/README.md): assets/datapacks beside the executable, each off
 # until a player names it in datapacks/datapacks.json. The packages carry assets/ already.
-if(NOT ANDROID)
-    add_custom_target(dc_datapacks
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/datapacks/enhanced_fishing
-                $<TARGET_FILE_DIR:darkcloud>/assets/datapacks/enhanced_fishing
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/datapacks/qol
-                $<TARGET_FILE_DIR:darkcloud>/assets/datapacks/qol
-        COMMENT "Copying the packs the game ships")
-    add_dependencies(${darkcloud_target} dc_datapacks)
-    install(DIRECTORY datapacks/enhanced_fishing datapacks/qol DESTINATION ${CMAKE_INSTALL_BINDIR}/assets/datapacks)
-endif()
+add_custom_target(dc_datapacks
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/datapacks/enhanced_fishing
+            $<TARGET_FILE_DIR:darkcloud>/assets/datapacks/enhanced_fishing
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/datapacks/qol
+            $<TARGET_FILE_DIR:darkcloud>/assets/datapacks/qol
+    COMMENT "Copying the packs the game ships")
+add_dependencies(darkcloud dc_datapacks)
+install(DIRECTORY datapacks/enhanced_fishing datapacks/qol DESTINATION ${CMAKE_INSTALL_BINDIR}/assets/datapacks)
 
 # The tests use an installed GoogleTest, or fetch one at configure time; a build with neither turns them off.
 option(DC_BUILD_TESTS "Build darkcloud_tests" ON)
-if(DC_BUILD_TESTS AND NOT ANDROID AND NOT NINTENDO_SWITCH)
+if(DC_BUILD_TESTS)
     enable_testing()
     add_subdirectory(src/tests)
 endif()
-if(NOT ANDROID AND NOT NINTENDO_SWITCH)
-    add_subdirectory(${CMAKE_SOURCE_DIR}/tools/dcdata ${CMAKE_BINARY_DIR}/tools/dcdata)
-endif()
+add_subdirectory(${CMAKE_SOURCE_DIR}/tools/dcdata ${CMAKE_BINARY_DIR}/tools/dcdata)

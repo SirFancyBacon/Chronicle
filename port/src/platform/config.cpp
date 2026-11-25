@@ -490,16 +490,12 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         return ApplyBindings(config, value);
     }
     if (name == "game.tick_rate") {
-#ifdef __SWITCH__
-        return true;
-#else
         double rate = 0.0;
         if (!ReadNumber(value, rate) || !(rate > 0.0) || !std::isfinite(rate)) {
             return false;
         }
         config.tick_rate = rate;
         return true;
-#endif
     }
     if (name == "game.qte_always_win") {
         return ReadBool(value, config.qte_always_win);
@@ -542,58 +538,38 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         return ReadLanguage(value, config.language);
     }
     if (name == "video.present_mode") {
-#ifdef __SWITCH__
-        return true;
-#else
         return ReadPresentMode(value, config.present_mode);
-#endif
     }
     if (name == "video.interpolation") {
-#ifdef __SWITCH__
-        return true;
-#else
         return ReadBool(value, config.interpolation);
-#endif
     }
     // Settings of a renderer that has gone: saved files still hold them.
     if (name == "video.render_thread" || name == "video.renderer") {
         return true;
     }
     if (name == "video.max_fps") {
-#ifdef __SWITCH__
-        return true;
-#else
         double fps = 0.0;
         if (!ReadNumber(value, fps) || !(fps >= 0.0) || !std::isfinite(fps)) {
             return false;
         }
         config.max_fps = fps;
         return true;
-#endif
     }
     if (name == "video.vsync") {
-#ifdef __SWITCH__
-        return true;
-#else
         bool vsync = true;
         if (!ReadBool(value, vsync)) {
             return false;
         }
         config.present_mode = vsync ? ConfigPresentMode::Fifo : ConfigPresentMode::Immediate;
         return true;
-#endif
     }
     if (name == "video.width" || name == "video.height") {
-#ifdef __SWITCH__
-        return true;
-#else
         if (!value.is_number_integer() || value.get<std::int64_t>() < 0 ||
             value.get<std::int64_t>() > std::numeric_limits<int>::max()) {
             return false;
         }
         (name == "video.width" ? config.window_width : config.window_height) = value.get<int>();
         return true;
-#endif
     }
     if (name == "video.render_height") {
         if (!value.is_number_integer() || value.get<std::int64_t>() < 0 || value.get<std::int64_t>() > 100000) {
@@ -603,18 +579,10 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         return true;
     }
     if (name == "video.fullscreen") {
-#ifdef __SWITCH__
-        return true;
-#else
         return ReadBool(value, config.fullscreen);
-#endif
     }
     if (name == "video.aspect") {
-#ifdef __SWITCH__
-        return true;
-#else
         return ReadAspect(value, config.aspect);
-#endif
     }
     if (name == "video.ui_scale") {
         float scale = 0.0f;
@@ -624,21 +592,6 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         config.ui_scale = scale;
         return true;
     }
-#ifdef __SWITCH__
-    if (name == "video.render_scale") {
-        return true;
-    }
-#endif
-#ifdef __ANDROID__
-    if (name == "video.render_scale") {
-        float scale = 0.0f;
-        if (!ReadNumber(value, scale) || !(scale >= 0.5f && scale <= 2.0f)) {
-            return false;
-        }
-        config.render_scale = scale;
-        return true;
-    }
-#elif !defined(__SWITCH__)
     // Of the window's size: supersampling is the larger picture.
     if (name == "video.render_scale") {
         float scale = 0.0f;
@@ -648,20 +601,6 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         config.render_scale = scale;
         return true;
     }
-#endif
-#ifdef __ANDROID__
-    if (name == "video.touch_overlay_opacity") {
-        if (!value.is_number_integer()) {
-            return false;
-        }
-        const int opacity = value.get<int>();
-        if (opacity < 10 || opacity > 100 || opacity % 10 != 0) {
-            return false;
-        }
-        config.touch_overlay_opacity = opacity;
-        return true;
-    }
-#endif
     if (name == "video.show_fps") {
         return ReadBool(value, config.show_fps);
     }
@@ -968,12 +907,7 @@ std::string ConfigSerialize(const Config &config) {
     root["video"]["render_height"] = config.render_height;
     root["video"]["aspect"] = config.aspect == ConfigAspect::FourThree ? "4:3" : "auto";
     root["video"]["ui_scale"] = Shortest(config.ui_scale);
-#ifndef __SWITCH__
     root["video"]["render_scale"] = Shortest(config.render_scale);
-#endif
-#ifdef __ANDROID__
-    root["video"]["touch_overlay_opacity"] = config.touch_overlay_opacity;
-#endif
     root["video"]["show_fps"] = config.show_fps;
     root["video"]["fps_detail"] = FpsDetailName(config.fps_detail);
     root["video"]["detail_distance"] = Shortest(config.detail_distance);

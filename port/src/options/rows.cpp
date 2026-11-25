@@ -179,12 +179,7 @@ int Fullscreen(const Config &config) {
 
 // In fullscreen the window is the screen's own size: the row shows it, and Render Resolution sets the size the world is drawn at.
 bool ScreenSized(const Config &config) {
-#if defined(__ANDROID__) || defined(__SWITCH__)
-    static_cast<void>(config);
-    return false;
-#else
     return Fullscreen(config) == 1;
-#endif
 }
 
 int ResolutionCount(const Config &config) {
@@ -411,20 +406,6 @@ int UiScaleCount(const Config & /*config*/) {
     return 16;
 }
 
-#ifdef __ANDROID__
-// 50% to 200% in tenths, Kazarov's render scale.
-int RenderScaleChoice(const Config &config) {
-    return std::clamp(static_cast<int>(std::lround(config.render_scale * 10.0f)) - 5, 0, 15);
-}
-
-int RenderScaleCount(const Config & /*config*/) { return 16; }
-
-void SetRenderScale(Config &config, int choice) { config.render_scale = (choice + 5) / 10.0f; }
-
-std::string RenderScaleText(const Config &config) {
-    return std::format("{}%", static_cast<int>(std::lround(config.render_scale * 100.0f)));
-}
-#elif !defined(__SWITCH__)
 // The steps for the window's height in pixels, which ListResolutions keeps: a share of it, or a named height (720p, 1080p...), kept as that height.
 std::vector<OptionRenderStep> g_render_steps = OptionRenderSteps(0);
 int                           g_render_window_height = 0;
@@ -477,7 +458,6 @@ std::string RenderScaleText(const Config &config) {
     return g_render_window_height > 0 ? std::format("{}% ({}p)", percent, static_cast<int>(std::lround(share * static_cast<float>(g_render_window_height))))
                                       : std::format("{}%", percent);
 }
-#endif
 
 int UiScaleChoice(const Config &config) {
     return std::clamp(static_cast<int>(std::lround(config.ui_scale * 10.0f)) - 5, 0, 15);
@@ -490,16 +470,6 @@ void SetUiScale(Config &config, int choice) {
 std::string UiScaleText(const Config &config) {
     return std::format("{:.0f}%", config.ui_scale * 100.0f);
 }
-
-#ifdef __ANDROID__
-int TouchOpacityCount(const Config & /*config*/) { return 10; }
-
-int TouchOpacityChoice(const Config &config) { return config.touch_overlay_opacity / 10 - 1; }
-
-void SetTouchOpacity(Config &config, int choice) { config.touch_overlay_opacity = (choice + 1) * 10; }
-
-std::string TouchOpacityText(const Config &config) { return std::format("{}%", config.touch_overlay_opacity); }
-#endif
 
 // 0% to 100% in fives.
 int VolumeCount(const Config & /*config*/) {
@@ -810,12 +780,10 @@ constexpr Row kGameRows[] = {
     OnOffRow<&Config::autosave>("game.autosave", "Autosave", "\"Autosave\"\nSaves on arriving in a\ntown or dungeon floor.")
 };
 
-#ifndef __SWITCH__
 constexpr Row kRenderScaleRow =
     SettingRow("video.render_scale", "Render Resolution",
                "\"Render Resolution\"\nThe game's internal image\nsize. Lower values improve\nspeed and battery life.",
                RenderScaleCount, RenderScaleChoice, SetRenderScale, RenderScaleText);
-#endif
 
 // The Quality page's own rows (Noktus's step 12): what the picture costs, Low to Ultra.
 int ShadowQualityChoice(const Config &config) {
@@ -858,9 +826,7 @@ constexpr Row kDisplayRows[] = {
     SettingRow("video.width", "Resolution",
                "\"Resolution\"\nThe window's size.\nFullscreen and Desktop\nuse the whole monitor.", ResolutionCount,
                ResolutionChoice, SetResolution, ResolutionText),
-#if !defined(__ANDROID__) && !defined(__SWITCH__)
     kRenderScaleRow,
-#endif
     SettingRow("video.present_mode", "V-Sync", "\"V-Sync\"\nOn: no tearing.\nFast: no tearing, less\ndelay. Off: may tear.",
                PresentModeCount, PresentModeChoice, SetPresentMode, nullptr, "On|Fast|Off"),
     SettingRow("video.max_fps", "Frame Limit", "\"Frame Limit\"\nThe most frames drawn\nin a second.", MaxFpsCount,
@@ -871,11 +837,6 @@ constexpr Row kDisplayRows[] = {
     SettingRow("video.ui_scale", "Interface Size",
                "\"Interface Size\"\nThe size of the HUD\nand menus, from when\nOptions closes.", UiScaleCount,
                UiScaleChoice, SetUiScale, UiScaleText),
-#ifdef __ANDROID__
-    SettingRow("video.touch_overlay_opacity", "Touch Opacity",
-               "\"Touch Opacity\"\nHow visible the on-screen\nbuttons are.", TouchOpacityCount,
-               TouchOpacityChoice, SetTouchOpacity, TouchOpacityText),
-#endif
     OnOffRow<&Config::interpolation>("video.interpolation", "Smooth Motion",
                                      "\"Smooth Motion\"\nDraws frames between\nthe game's steps."),
     OnOffRow<&Config::show_fps>("video.show_fps", "FPS Counter", "\"FPS Counter\"\nShows the frame rate\nin the corner."),
@@ -912,33 +873,6 @@ constexpr Row kDisplayRows[] = {
 // The last rows of kDisplayRows. Windows is the only place HDR has been tried.
 constexpr std::size_t kHdrRows = 4;
 
-#ifdef __ANDROID__
-constexpr Row kAndroidDisplayRows[] = {
-    kRenderScaleRow,
-    kDisplayRows[2],
-    kDisplayRows[3],
-    kDisplayRows[4],
-    kDisplayRows[5],
-    kDisplayRows[6],
-    kDisplayRows[7],
-    kDisplayRows[8],
-    kDisplayRows[9],
-    kDisplayRows[10],
-    kDisplayRows[13],
-    kDisplayRows[14],
-};
-#elifdef __SWITCH__
-constexpr Row kSwitchDisplayRows[] = {
-    kDisplayRows[5],
-    kDisplayRows[7],
-    kDisplayRows[8],
-    kDisplayRows[9],
-    kDisplayRows[12],
-    kDisplayRows[13],
-};
-#endif
-
-#if !defined(__ANDROID__) && !defined(__SWITCH__)
 // The desktop's Display keeps the window and what it's sent; what the picture costs is on Quality. Both are picked from kDisplayRows, HDR's rows last.
 constexpr Row kDesktopDisplayRows[] = {
     kDisplayRows[0],  // Window Mode
@@ -977,14 +911,9 @@ constexpr Row kQualityRows[] = {
     OnOffRow<&Config::glow>("video.glow", "Glow", "\"Glow\"\nBright light spreads,\nand flames and lamps\nglow."),
     kDisplayRows[13], // Soft Focus
 };
-#endif
 
 std::span<const Row> DisplayRows() {
-#ifdef __ANDROID__
-    return kAndroidDisplayRows;
-#elifdef __SWITCH__
-    return kSwitchDisplayRows;
-#elifdef _WIN32
+#ifdef _WIN32
     return kDesktopDisplayRows;
 #else
     return std::span(kDesktopDisplayRows).first(std::size(kDesktopDisplayRows) - kHdrRows);
@@ -1177,9 +1106,7 @@ std::span<const Page> Pages() {
     static const std::vector<Page> pages = {
         {"Game",          "\"Game\"\nHow the game plays.",                           kGameRows         },
         {"Display",       "\"Display\"\nThe window and screen.",                     DisplayRows()     },
-#if !defined(__ANDROID__) && !defined(__SWITCH__)
         {"Quality",       "\"Quality\"\nHow the picture is\ndrawn, and its cost.",       kQualityRows      },
-#endif
         {"Audio",         "\"Audio\"\nSound and music.",                             kAudioRows        },
         {"Controls",      "\"Controls\"\nMouse, gamepad and gyro.",                  kControlRows      },
         {"Text",          "\"Text\"\nLanguage, lettering and\nsymbols.",             kTextRows         },
@@ -1307,10 +1234,8 @@ void ListResolutions() {
     int           width = 0;
     int           height = 0;
     bool          known = WindowDisplaySize(width, height, !config.fullscreen && !Desktop(config));
-#if !defined(__ANDROID__) && !defined(__SWITCH__)
     g_render_window_height = WindowPixelHeight();
     g_render_steps = OptionRenderSteps(g_render_window_height);
-#endif
     g_sizes = OptionResolutionList(DisplayModes(), config.window_width, config.window_height, known, width,
                                    height);
 }
