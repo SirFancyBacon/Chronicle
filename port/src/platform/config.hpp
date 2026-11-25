@@ -6,7 +6,6 @@
 #include <string_view>
 #include <vector>
 
-#include "gfx/gfx.hpp"
 #include "platform/settings.hpp"
 
 namespace dc::platform {

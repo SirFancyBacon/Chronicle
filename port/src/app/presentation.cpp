@@ -44,7 +44,7 @@ void GameSetPresentSettings(const GamePresentSettings &settings) {
     g_fps.detail = settings.fps_detail;
 }
 
-void GameTickDone(gfx::DisplayListRef /*list*/) {
+void GameTickDone(render::DisplayListRef /*list*/) {
     render::PassTraceTick(static_cast<std::uint32_t>(render::MirrorDrawsLastTick()), true);
     g_fps.ticks.Count(PresentClock::now());
 }

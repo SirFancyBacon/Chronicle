@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-#include "gfx/gfx.hpp"
+#include "render/types.hpp"
 #include "texture.hpp"
 #include "ui/framework/types.hpp"
 
@@ -68,7 +68,7 @@ public:
      * ones. Drawn as the picture is (tex0, tex1: GS TEX0 and TEX1; its blend in state), in its tint (r, g, b) and alpha (0x80 opaque), so it fades
      * with it. Nothing in a window no wider than the frame.
      */
-    static void DrawSides(u_long tex0, u_long tex1, const gfx::DrawState &state, const Rect &destination, const Rect &source, int r, int g, int b,
+    static void DrawSides(u_long tex0, u_long tex1, const render::DrawState &state, const Rect &destination, const Rect &source, int r, int g, int b,
                           int alpha);
 };
 

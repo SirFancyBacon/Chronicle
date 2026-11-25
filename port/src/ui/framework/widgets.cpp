@@ -125,10 +125,10 @@ void Picture::DrawScreen(CTexture *texture, int alpha) {
     DrawFullSizePicture(texture, 0, 0, alpha);
 }
 
-void Picture::DrawSides(u_long tex0, u_long tex1, const gfx::DrawState &state, const Rect &destination, const Rect &source, int r, int g, int b,
+void Picture::DrawSides(u_long tex0, u_long tex1, const render::DrawState &state, const Rect &destination, const Rect &source, int r, int g, int b,
                         int alpha) {
     const float               frame_w = static_cast<float>(metrics::kScreenWidth);
-    const gfx::LogicalRect    visible = render::VisibleLogicalRect(gfx::kMainTarget);
+    const render::LogicalRect visible = render::VisibleLogicalRect(render::kMainTarget);
     if (destination.w <= 0 || destination.h <= 0 || source.w <= 0 || source.h <= 0 || !(visible.x < -0.5f) || !(visible.x + visible.w > frame_w + 0.5f)) {
         return;
     }
@@ -148,13 +148,13 @@ void Picture::DrawSides(u_long tex0, u_long tex1, const gfx::DrawState &state, c
     const std::array<std::array<float, 3>, 2> sides = {{{visible.x, 0.0f, 0.0f}, {frame_w, visible.x + visible.w, frame_w - 1.0f}}};
     for (const auto &[left, right, at] : sides) {
         const float                  u = column(at);
-        std::array<gfx::Vertex2D, 4> quad = {
+        std::array<render::Vertex2D, 4> quad = {
             render::draw2d::Vertex(left, top, 0.0f, u, v0, channel(r), channel(g), channel(b), channel(alpha)),
             render::draw2d::Vertex(right, top, 0.0f, u, v0, channel(r), channel(g), channel(b), channel(alpha)),
             render::draw2d::Vertex(right, bottom, 0.0f, u, v1, channel(r), channel(g), channel(b), channel(alpha)),
             render::draw2d::Vertex(left, bottom, 0.0f, u, v1, channel(r), channel(g), channel(b), channel(alpha)),
         };
-        render::draw2d::DrawTextured(gfx::Primitive::Quads, quad, tex0, tex1, state);
+        render::draw2d::DrawTextured(render::Primitive::Quads, quad, tex0, tex1, state);
     }
 }
 

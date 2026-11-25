@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "gfx/gfx.hpp"
+#include "render/types.hpp"
 #include "platform/config.hpp"
 
 namespace dc::app {
@@ -20,7 +20,7 @@ struct GamePresentSettings {
 void GameSetPresentSettings(const GamePresentSettings &settings);
 
 /** A tick's drawing is finished. Noktus has no use for the list, which is null when it's drawing alone. */
-void GameTickDone(gfx::DisplayListRef list);
+void GameTickDone(render::DisplayListRef list);
 
 /** While the game waits for the next tick. False, as nothing here has frames to show. */
 bool GamePresentBetweenTicks(double fraction, std::chrono::steady_clock::time_point next_tick);
