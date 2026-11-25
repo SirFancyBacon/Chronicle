@@ -278,11 +278,16 @@ void ReportGpu(const noktus::PaceReport &pace) {
             passes += std::format(", {} {:.3f}", PassName(FromNoktusPass(static_cast<noktus::Pass>(i))), gpu.mean_pass[i]);
         }
     }
+    // How long frames waited between being sent and the GPU beginning them (or the window giving back the image they're drawn into), where the GPU's clock
+    // can be read beside the host's; and saying so where it can't, so a report without the figure isn't taken for one where nothing waited.
+    const std::string queued = gpu.mean_queued >= 0.0 ? std::format("; begun after sending: mean {:.3f} ms, most {:.3f} ms", gpu.mean_queued, gpu.most_queued)
+                               : !gpu.clock_read     ? std::string("; begun after sending: not known, as the GPU's clock can't be read beside the host's")
+                                                     : std::string();
     std::fprintf(stderr,
                  "noktus gpu: %llu frames, mean %.3f ms, worst %.3f ms; before the scene: shadows %.3f, occlusion %.3f, reflection %.3f, probe %.3f; by pass%s, "
-                 "finishing %.3f\n",
+                 "finishing %.3f%s\n",
                  static_cast<unsigned long long>(gpu.frames), gpu.mean_frame, gpu.worst_frame, gpu.mean_shadows, gpu.mean_occlusion, gpu.mean_reflection,
-                 gpu.mean_probe, passes.c_str(), gpu.mean_finish);
+                 gpu.mean_probe, passes.c_str(), gpu.mean_finish, queued.c_str());
 }
 
 // With DC_NOKTUS_MOTION_OUT=<prefix>, the last tick drawn halfway, then at its end, and the second frame's motion: what the harness's motion check moves
