@@ -28,7 +28,7 @@ unsigned                                                        g_visual_sweep_f
 
 void Release(Draw3DVisual &visual) {
     if (visual.mesh != gfx::kNullMesh) {
-        MirrorDestroyMesh(visual.mesh);
+        NoktusDestroyMesh(visual.mesh);
         gfx::DestroyMesh(visual.mesh);
         visual.mesh = gfx::kNullMesh;
     }
@@ -135,7 +135,7 @@ void Draw3DFinishVisual(Draw3DVisual &visual) {
         return;
     }
     visual.mesh = gfx::CreateMesh(visual.vertices, visual.indices);
-    MirrorCreateMesh(visual.mesh, visual.vertices, visual.indices);
+    NoktusCreateMesh(visual.mesh, visual.vertices, visual.indices);
     visual.indices.clear();
     visual.indices.shrink_to_fit();
 }

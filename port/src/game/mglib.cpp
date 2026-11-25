@@ -399,7 +399,7 @@ void MGInitVif1Packet(u_long128 * /*buffer0*/, u_long128 * /*buffer1*/) {}
 // A tick runs from here to MGEndFrame. A frame someone opened with render::BeginFrame is drawn into as it is.
 void MGBeginFrame() {
     render::PassTraceBeginTick();
-    render::MirrorBeginTick();
+    render::NoktusBeginTick();
     if (!render::InFrame()) {
         render::BeginRecording();
         if (MGPortTakeInterpolationCut()) {
@@ -446,7 +446,7 @@ void MGBeginFrame() {
 // it is pumped first to see whether a tick went by.
 void MGEndFrame() {
     platform::HitchTickWorkEnds();
-    render::MirrorSetTarget(render::kMainTarget);
+    render::NoktusSetTarget(render::kMainTarget);
     DrawAreaCardOverGame();
     app::GameDrawFps();
     static const bool                        trace_phases = std::getenv("DC_PERF_END_FRAME") != nullptr;
@@ -456,7 +456,7 @@ void MGEndFrame() {
         stamps[0] = EndFrameClock::now();
     }
     {
-        if (render::MirrorDepthProbe()) {
+        if (render::NoktusDepthProbe()) {
             mgPickZBuff[15].enable = true;
             mgPickZBuff[15].x = 320;
             mgPickZBuff[15].y = SCREEN_HEIGHT / 2;
@@ -491,7 +491,7 @@ void MGEndFrame() {
         if (recording) {
             textwipe::DrawDivider();
         }
-        render::MirrorEndTick(); // last: the picks and the divider are part of the tick
+        render::NoktusEndTick(); // last: the picks and the divider are part of the tick
         if (recording) {
             render::DisplayListRef list = render::EndRecording();
             if (trace_phases) {

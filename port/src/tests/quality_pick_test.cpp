@@ -13,18 +13,18 @@ namespace {
 
 constexpr std::uint64_t kMiB = 1024ull * 1024ull;
 
-int Pick(render::MirrorGpuKind kind, std::string name, std::uint64_t mib) {
+int Pick(render::NoktusGpuKind kind, std::string name, std::uint64_t mib) {
     return options::QualityForGpu({.name = std::move(name), .kind = kind, .memory = mib * kMiB});
 }
 
-constexpr auto kDiscrete = render::MirrorGpuKind::Discrete;
+constexpr auto kDiscrete = render::NoktusGpuKind::Discrete;
 
 } // namespace
 
 TEST(QualityPick, TheOwnersTable) {
     // Integrated and software GPUs, however much of the system's memory they may use: Low.
-    EXPECT_EQ(Pick(render::MirrorGpuKind::Integrated, "AMD Radeon Graphics (RADV PHOENIX)", 16384), 0);
-    EXPECT_EQ(Pick(render::MirrorGpuKind::Software, "llvmpipe (LLVM 20.1.0, 256 bits)", 32768), 0);
+    EXPECT_EQ(Pick(render::NoktusGpuKind::Integrated, "AMD Radeon Graphics (RADV PHOENIX)", 16384), 0);
+    EXPECT_EQ(Pick(render::NoktusGpuKind::Software, "llvmpipe (LLVM 20.1.0, 256 bits)", 32768), 0);
     // 4 GB or less: Low, a laptop's or a desktop's.
     EXPECT_EQ(Pick(kDiscrete, "NVIDIA T1200 Laptop GPU", 4096), 0);
     EXPECT_EQ(Pick(kDiscrete, "AMD Radeon RX 6500 XT", 4096), 0);
@@ -44,7 +44,7 @@ TEST(QualityPick, TheOwnersTable) {
     EXPECT_EQ(Pick(kDiscrete, "AMD Radeon RX 7600", 8192), 2);
     EXPECT_EQ(Pick(kDiscrete, "AMD Radeon RX 9070 XT", 16304), 3);
     // Neither Vulkan's kind nor a name known: by memory.
-    EXPECT_EQ(Pick(render::MirrorGpuKind::Other, "Virtual GPU", 2048), 0);
+    EXPECT_EQ(Pick(render::NoktusGpuKind::Other, "Virtual GPU", 2048), 0);
 }
 
 TEST(QualityPick, CheckedInPlay) {

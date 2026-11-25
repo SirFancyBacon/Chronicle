@@ -3,7 +3,7 @@
 
 #include "gfx_fixture.hpp"
 #include "platform/window.hpp"
-#include "render/noktus_mirror.hpp"
+#include "render/noktus_host.hpp"
 
 namespace dc::test {
 
@@ -16,53 +16,53 @@ constexpr float kWide = 1.5f; // 720 rows over the frame's 480
 // The picture's size by the window's: the render scale, held to a quarter to 1, or a named height by the window's, never past it; supersampling enlarges
 // it.
 TEST(RenderScale, ScaleHeightAndSamples) {
-    EXPECT_FLOAT_EQ(render::MirrorRenderScale({}, 2400, 1), 1.0f);
-    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.render_scale = 0.5f}, 2400, 1), 0.5f);
-    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.render_scale = 0.25f}, 2160, 1), 0.25f);
-    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.render_scale = 0.1f}, 2160, 1), 0.25f) << "held to a quarter";
-    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.render_scale = 2.0f}, 2160, 1), 1.0f) << "supersampling is the larger picture";
-    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.render_scale = 0.5f, .render_height = 1080}, 2160, 1), 0.5f) << "1080p on a 4K screen";
-    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.render_height = 1080}, 2400, 1), 0.45f) << "and on a 16:10 laptop";
-    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.render_height = 2160}, 1080, 1), 1.0f) << "never past the window";
-    EXPECT_FLOAT_EQ(render::MirrorRenderScale({.render_height = 1080}, 0, 1), 1.0f) << "no window yet: the scale";
-    EXPECT_NEAR(render::MirrorRenderScale({.render_height = 1080}, 2160, 2), 0.70710678f, 1e-6f);
-    EXPECT_FLOAT_EQ(render::MirrorRenderScale({}, 1080, 4), 2.0f);
+    EXPECT_FLOAT_EQ(render::NoktusRenderScale({}, 2400, 1), 1.0f);
+    EXPECT_FLOAT_EQ(render::NoktusRenderScale({.render_scale = 0.5f}, 2400, 1), 0.5f);
+    EXPECT_FLOAT_EQ(render::NoktusRenderScale({.render_scale = 0.25f}, 2160, 1), 0.25f);
+    EXPECT_FLOAT_EQ(render::NoktusRenderScale({.render_scale = 0.1f}, 2160, 1), 0.25f) << "held to a quarter";
+    EXPECT_FLOAT_EQ(render::NoktusRenderScale({.render_scale = 2.0f}, 2160, 1), 1.0f) << "supersampling is the larger picture";
+    EXPECT_FLOAT_EQ(render::NoktusRenderScale({.render_scale = 0.5f, .render_height = 1080}, 2160, 1), 0.5f) << "1080p on a 4K screen";
+    EXPECT_FLOAT_EQ(render::NoktusRenderScale({.render_height = 1080}, 2400, 1), 0.45f) << "and on a 16:10 laptop";
+    EXPECT_FLOAT_EQ(render::NoktusRenderScale({.render_height = 2160}, 1080, 1), 1.0f) << "never past the window";
+    EXPECT_FLOAT_EQ(render::NoktusRenderScale({.render_height = 1080}, 0, 1), 1.0f) << "no window yet: the scale";
+    EXPECT_NEAR(render::NoktusRenderScale({.render_height = 1080}, 2160, 2), 0.70710678f, 1e-6f);
+    EXPECT_FLOAT_EQ(render::NoktusRenderScale({}, 1080, 4), 2.0f);
 }
 
 TEST(HdrChoice, OffStaysOffWhateverTheDisplayIs) {
-    EXPECT_EQ(render::ChooseHdr({.paper_white = 200.0f}, true, 3.0f, 4.0f).mode, render::MirrorHdr::Off);
+    EXPECT_EQ(render::ChooseHdr({.paper_white = 200.0f}, true, 3.0f, 4.0f).mode, render::NoktusHdr::Off);
 }
 
 TEST(HdrChoice, ADisplayNotInHdrStaysSdr) {
-    EXPECT_EQ(render::ChooseHdr({.hdr = render::MirrorHdr::Hdr10}, false, 1.0f, 1.0f).mode, render::MirrorHdr::Off);
+    EXPECT_EQ(render::ChooseHdr({.hdr = render::NoktusHdr::Hdr10}, false, 1.0f, 1.0f).mode, render::NoktusHdr::Off);
 }
 
 TEST(HdrChoice, ASavedPaperWhiteDoesntTurnHdrOnForADisplayNotInIt) {
-    EXPECT_EQ(render::ChooseHdr({.hdr = render::MirrorHdr::Hdr10, .paper_white = 200.0f, .peak = 800.0f}, false, 1.0f, 1.0f).mode, render::MirrorHdr::Off);
+    EXPECT_EQ(render::ChooseHdr({.hdr = render::NoktusHdr::Hdr10, .paper_white = 200.0f, .peak = 800.0f}, false, 1.0f, 1.0f).mode, render::NoktusHdr::Off);
 }
 
 TEST(HdrChoice, ForcingSaysTheDisplayIsInHdr) {
-    const render::HdrOutput output = render::ChooseHdr({.hdr = render::MirrorHdr::ScRgb, .paper_white = 150.0f, .force_hdr = true}, false, 1.0f, 1.0f);
-    EXPECT_EQ(output.mode, render::MirrorHdr::ScRgb);
+    const render::HdrOutput output = render::ChooseHdr({.hdr = render::NoktusHdr::ScRgb, .paper_white = 150.0f, .force_hdr = true}, false, 1.0f, 1.0f);
+    EXPECT_EQ(output.mode, render::NoktusHdr::ScRgb);
     EXPECT_EQ(output.paper_white, 150.0f);
     EXPECT_EQ(output.peak, 1000.0f);
 }
 
 TEST(HdrChoice, AutoTakesWhatTheSystemSays) {
-    const render::HdrOutput output = render::ChooseHdr({.hdr = render::MirrorHdr::Hdr10}, true, 2.5f, 4.0f);
-    EXPECT_EQ(output.mode, render::MirrorHdr::Hdr10);
+    const render::HdrOutput output = render::ChooseHdr({.hdr = render::NoktusHdr::Hdr10}, true, 2.5f, 4.0f);
+    EXPECT_EQ(output.mode, render::NoktusHdr::Hdr10);
     EXPECT_EQ(output.paper_white, 200.0f);
     EXPECT_EQ(output.peak, 800.0f);
 }
 
 TEST(HdrChoice, SettingsBeatTheSystem) {
-    const render::HdrOutput output = render::ChooseHdr({.hdr = render::MirrorHdr::Hdr10, .paper_white = 120.0f, .peak = 600.0f}, true, 2.5f, 4.0f);
+    const render::HdrOutput output = render::ChooseHdr({.hdr = render::NoktusHdr::Hdr10, .paper_white = 120.0f, .peak = 600.0f}, true, 2.5f, 4.0f);
     EXPECT_EQ(output.paper_white, 120.0f);
     EXPECT_EQ(output.peak, 600.0f);
 }
 
 TEST(HdrChoice, WhiteNeverPassesThePeak) {
-    const render::HdrOutput output = render::ChooseHdr({.hdr = render::MirrorHdr::Hdr10, .paper_white = 500.0f, .peak = 400.0f}, true, 1.0f, 1.0f);
+    const render::HdrOutput output = render::ChooseHdr({.hdr = render::NoktusHdr::Hdr10, .paper_white = 500.0f, .peak = 400.0f}, true, 1.0f, 1.0f);
     EXPECT_EQ(output.paper_white, 400.0f);
 }
 

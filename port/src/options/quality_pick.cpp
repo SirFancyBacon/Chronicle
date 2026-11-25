@@ -54,8 +54,8 @@ constexpr std::uint64_t GiB(double gib) {
 
 } // namespace
 
-int QualityForGpu(const render::MirrorGpuFacts &gpu) {
-    if (gpu.kind == render::MirrorGpuKind::Integrated || gpu.kind == render::MirrorGpuKind::Software) {
+int QualityForGpu(const render::NoktusGpuFacts &gpu) {
+    if (gpu.kind == render::NoktusGpuKind::Integrated || gpu.kind == render::NoktusGpuKind::Software) {
         return kLow;
     }
     // A 4 GB card says 4,096 MB, or a little more.
@@ -95,7 +95,7 @@ bool QualityCheckStretch(Config &config, double gpu_ms, int *stretches) {
 namespace {
 
 void PickForGpu() {
-    const std::optional<render::MirrorGpuFacts> gpu = render::MirrorGpu();
+    const std::optional<render::NoktusGpuFacts> gpu = render::NoktusGpu();
     if (!gpu) {
         std::println(stderr, "quality: no GPU of Noktus's to pick for: the defaults stay");
         return;
@@ -133,11 +133,11 @@ void QualityCheckTick() {
         return;
     }
     if (g_screen.open) {
-        render::MirrorTakePlayGpuMs();
+        render::NoktusTakePlayGpuMs();
         options_seen = true;
         return;
     }
-    const std::optional<double> gpu_ms = render::MirrorTakePlayGpuMs();
+    const std::optional<double> gpu_ms = render::NoktusTakePlayGpuMs();
     if (!gpu_ms || std::exchange(options_seen, false)) {
         return;
     }

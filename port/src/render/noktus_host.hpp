@@ -33,30 +33,30 @@ enum class Step : std::uint8_t;
 // DC_NOKTUS_WORKERS=<n> sets the threads sharing the work, and DC_NOKTUS_PARALLEL_FROM=<draws> how many mesh draws a tick needs before they're shared.
 
 /** What's sent to a display in HDR. */
-enum class MirrorHdr : std::uint8_t {
+enum class NoktusHdr : std::uint8_t {
     Off,
     Hdr10,
     ScRgb,
 };
 
 /** How edges are smoothed, at the picture's own size. */
-enum class MirrorAntiAliasing : std::uint8_t {
+enum class NoktusAntiAliasing : std::uint8_t {
     Off,
     Smaa,
     Taa,
 };
 
 /** What the Options screen says about drawing. */
-struct MirrorSettings {
+struct NoktusSettings {
     bool             interpolate = true;
     gfx::PresentMode present_mode = gfx::PresentMode::Fifo;
     double           max_fps = 0.0;
     int              anisotropy = 0;
-    MirrorAntiAliasing anti_aliasing = MirrorAntiAliasing::Off;
+    NoktusAntiAliasing anti_aliasing = NoktusAntiAliasing::Off;
     int              supersampling = 1; // samples a pixel: 1, 2 or 4
     float            render_scale = 1.0f; // the world's size by the window's each way, a quarter to 1, scaled up to fill it; the interface stays at the window's
     int              render_height = 0;   // a height the world is drawn at in place of render_scale, held to the window's; 0 for none
-    MirrorHdr        hdr = MirrorHdr::Off;
+    NoktusHdr        hdr = NoktusHdr::Off;
     float            paper_white = 0.0f; // nits; 0 takes what the system says
     float            peak = 0.0f;        // nits; 0 takes what the system says
     bool             force_hdr = false;  // DC_NOKTUS_HDR_FORCE: the display is in HDR, whatever the system says
@@ -70,14 +70,14 @@ struct MirrorSettings {
 
 /** What goes to the window, once the settings have met what the system says. */
 struct HdrOutput {
-    MirrorHdr mode = MirrorHdr::Off;
+    NoktusHdr mode = NoktusHdr::Off;
     float     paper_white = 203.0f;
     float     peak = 1000.0f;
     bool      operator==(const HdrOutput &) const = default;
 };
 
 /** A rectangle of the frame shown at nits of its own in HDR, past the peak, for setting HDR by eye. */
-struct MirrorHdrPatch {
+struct NoktusHdrPatch {
     float x = 0.0f;
     float y = 0.0f;
     float width = 0.0f;
@@ -89,66 +89,66 @@ struct MirrorHdrPatch {
  * Works out HDR's output. The system's white is in scRGB's terms, where 1 is 80 nits, and its headroom is how far past that white the display goes.
  * A display not in HDR stays SDR whatever's saved, as it would be sent far too bright a picture, unless force_hdr says it's known to be in HDR, for when the system can't tell.
  */
-HdrOutput ChooseHdr(const MirrorSettings &settings, bool display_hdr, float white, float headroom);
+HdrOutput ChooseHdr(const NoktusSettings &settings, bool display_hdr, float white, float headroom);
 
 /**
  * The picture's size by the window's, each way, as Noktus's render scale: the render height by the window's, never past 1, or the render scale, held to a
  * quarter to 1; supersampling's samples a pixel enlarge it.
  */
-float MirrorRenderScale(const MirrorSettings &settings, std::uint32_t window_height, int samples);
+float NoktusRenderScale(const NoktusSettings &settings, std::uint32_t window_height, int samples);
 
 /** Whether Noktus can be drawn to: not before it has its window, or after it stops. */
-bool MirrorOn();
+bool NoktusOn();
 
 /** Noktus draws to this window, on its own thread and paced to the display, or into a picture with no window at all. Nothing is drawn before this. */
-void MirrorTakeWindow(SDL_Window *window); // null for a run with no window
+void NoktusTakeWindow(SDL_Window *window); // null for a run with no window
 
 /** Lets go of a window about to be closed, for the first-run screen, which has one of its own. */
-void MirrorDropWindow();
+void NoktusDropWindow();
 
 /** The GPU drawing the game. */
-std::string MirrorDeviceName();
+std::string NoktusDeviceName();
 
 /** What kind of GPU it is (noktus::GpuKind). */
-enum class MirrorGpuKind : std::uint8_t { Discrete, Integrated, Software, Other };
+enum class NoktusGpuKind : std::uint8_t { Discrete, Integrated, Software, Other };
 
 /** The GPU Noktus draws on, for choosing settings by it. */
-struct MirrorGpuFacts {
+struct NoktusGpuFacts {
     std::string   name;
-    MirrorGpuKind kind = MirrorGpuKind::Other;
+    NoktusGpuKind kind = NoktusGpuKind::Other;
     std::uint64_t memory = 0; /**< Bytes of its own memory (an integrated GPU's is the system's it may use). */
 };
 
 /** The GPU drawing the game, starting Noktus if it hasn't yet. Nothing where Noktus doesn't draw. */
-std::optional<MirrorGpuFacts> MirrorGpu();
+std::optional<NoktusGpuFacts> NoktusGpu();
 
 /**
  * The GPU's time a frame over the last few seconds' report (every 300 ticks), once each, where that stretch was play: the sun's shadows were
  * wanted (a town, a dungeon, a house) and enough frames were timed. Nothing otherwise.
  */
-std::optional<double> MirrorTakePlayGpuMs();
+std::optional<double> NoktusTakePlayGpuMs();
 
 /** The last tick as it ended, as RGBA. False before there is one. */
-bool MirrorReadScreen(std::vector<std::uint8_t> &pixels, std::uint32_t &width, std::uint32_t &height);
+bool NoktusReadScreen(std::vector<std::uint8_t> &pixels, std::uint32_t &width, std::uint32_t &height);
 
 /** Whether it has the game's window. */
-bool MirrorHasWindow();
+bool NoktusHasWindow();
 
-/** Takes the settings as they stand, now and for when the mirror starts. */
-void MirrorApply(const MirrorSettings &settings);
+/** Takes the settings as they stand, now and for when Noktus starts. */
+void NoktusApply(const NoktusSettings &settings);
 
 /** The most supersampling, 1, 2 or 4, the GPU's memory has room for at the window's size with this anti-aliasing: what the Options screen offers. 4 with no Noktus drawing. */
-int MirrorMostSupersampling(MirrorAntiAliasing anti_aliasing);
+int NoktusMostSupersampling(NoktusAntiAliasing anti_aliasing);
 
 /** Names the pass Noktus records drawing in from now on. */
-void MirrorSetPass(Pass pass);
+void NoktusSetPass(Pass pass);
 
 /** Steps reach Noktus as they're begun and ended. */
-void MirrorBeginStep(Step step);
-void MirrorEndStep();
+void NoktusBeginStep(Step step);
+void NoktusEndStep();
 
 /** A step of the tick Noktus last ended, and what it found it reads and writes. */
-struct MirrorStepReport {
+struct NoktusStepReport {
     Step          step{};
     std::uint32_t commands = 0;
     bool          reads_screen = false;
@@ -159,90 +159,90 @@ struct MirrorStepReport {
     std::uint32_t textures_written = 0;
 };
 
-std::vector<MirrorStepReport> MirrorTickSteps();
+std::vector<NoktusStepReport> NoktusTickSteps();
 
 /** A run of the last tick's draws and blits in one pass, as Noktus recorded them. */
-struct MirrorPassStretch {
+struct NoktusPassStretch {
     Pass          pass;
     std::uint32_t draws = 0;
     std::uint32_t copies = 0;
 };
 
 /** The passes of the last tick Noktus was given, in order. Empty when Noktus isn't drawing. */
-std::vector<MirrorPassStretch> MirrorTickPasses();
+std::vector<NoktusPassStretch> NoktusTickPasses();
 
 /** How many draws Noktus put in each class since the last call, by pass and by the rule that classed them. */
-struct MirrorClassTally {
+struct NoktusClassTally {
     Pass          pass;
     const char   *draw_class = ""; /**< Lives as long as the program, as rule does. */
     const char   *rule = "";
     std::uint64_t draws = 0;
 };
-std::vector<MirrorClassTally> MirrorTakeClassTally();
+std::vector<NoktusClassTally> NoktusTakeClassTally();
 
 /** What the window is being sent: Off without HDR, a window or Noktus drawing it, or when HDR asked for fell back to SDR. */
-HdrOutput MirrorHdrShown();
+HdrOutput NoktusHdrShown();
 
 /** Patches drawn over the picture in HDR until others are given: up to two, later over earlier. Empty takes them away. */
-void MirrorHdrPatches(std::span<const MirrorHdrPatch> patches);
+void NoktusHdrPatches(std::span<const NoktusHdrPatch> patches);
 
 /** The ticks a second to expect, as the setting changes. */
-void MirrorTickRate(double ticks_per_second);
+void NoktusTickRate(double ticks_per_second);
 
 /** Mesh and 2D draws the last tick made. */
-std::uint64_t MirrorDrawsLastTick();
+std::uint64_t NoktusDrawsLastTick();
 
-/** Asks how far away the scene is under part of the frame, as the tick stands now. Answers come some ticks later: see MirrorDepthResult. */
-void MirrorReadDepth(std::uint32_t slot, const gfx::LogicalRect &area);
-std::optional<float> MirrorDepthResult(std::uint32_t slot);
+/** Asks how far away the scene is under part of the frame, as the tick stands now. Answers come some ticks later: see NoktusDepthResult. */
+void NoktusReadDepth(std::uint32_t slot, const gfx::LogicalRect &area);
+std::optional<float> NoktusDepthResult(std::uint32_t slot);
 /** Whether DC_NOKTUS_DEPTH_PROBE asked for a read every tick. */
-bool MirrorDepthProbe();
+bool NoktusDepthProbe();
 
 /** Frames shown a second, over the last few ticks. */
-double MirrorFramesPerSecond();
+double NoktusFramesPerSecond();
 
 /** The moment asked for by DC_NOKTUS_MOMENT, if any. */
-std::optional<float> MirrorMoment();
+std::optional<float> NoktusMoment();
 
-void MirrorBeginTick();
-void MirrorEndTick();
+void NoktusBeginTick();
+void NoktusEndTick();
 
-/** Finishes the mirror while its window can still be used. */
-void MirrorStop();
+/** Finishes Noktus while its window can still be used. */
+void NoktusStop();
 
 /** Who the mesh draws from now on belong to, and how they move between ticks. */
-void MirrorMotion(gfx::InterpKey key, bool no_interpolation, float teleport_distance, bool blend_vertices);
-void MirrorCutMotion();
-void MirrorCutCameraMotion();
+void NoktusMotion(gfx::InterpKey key, bool no_interpolation, float teleport_distance, bool blend_vertices);
+void NoktusCutMotion();
+void NoktusCutCameraMotion();
 
 /** Notes a texture's contents, for the textures Chronicle makes itself. */
-void MirrorTexture(gfx::TextureHandle texture, const gfx::TextureDesc &desc);
-void MirrorTexturePixels(gfx::TextureHandle texture, std::uint32_t level, std::uint32_t x, std::uint32_t y, std::uint32_t width,
+void NoktusTexture(gfx::TextureHandle texture, const gfx::TextureDesc &desc);
+void NoktusTexturePixels(gfx::TextureHandle texture, std::uint32_t level, std::uint32_t x, std::uint32_t y, std::uint32_t width,
                          std::uint32_t height, const void *pixels);
-void MirrorDestroyTexture(gfx::TextureHandle texture);
+void NoktusDestroyTexture(gfx::TextureHandle texture);
 
-void MirrorCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHandle to, std::int32_t x, std::int32_t y);
-void MirrorClear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect);
-void MirrorClearStencil();
+void NoktusCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHandle to, std::int32_t x, std::int32_t y);
+void NoktusClear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect);
+void NoktusClearStencil();
 
-void MirrorSurface(gfx::TextureHandle target, std::uint32_t width, std::uint32_t height, bool has_alpha, bool shares_depth, bool frame_target);
-void MirrorSetTarget(gfx::TextureHandle target);
-void MirrorSnapshotFrame(gfx::TextureHandle target);
+void NoktusSurface(gfx::TextureHandle target, std::uint32_t width, std::uint32_t height, bool has_alpha, bool shares_depth, bool frame_target);
+void NoktusSetTarget(gfx::TextureHandle target);
+void NoktusSnapshotFrame(gfx::TextureHandle target);
 /** A palette's colours from first on, for the paletted textures drawn through it. */
-void MirrorPalette(gfx::TextureHandle palette, const std::uint32_t *colors, std::uint32_t first, std::uint32_t count);
+void NoktusPalette(gfx::TextureHandle palette, const std::uint32_t *colors, std::uint32_t first, std::uint32_t count);
 
-bool MirrorCopyDepth(const gfx::LogicalRect &source);
-void MirrorBlit(gfx::TextureHandle from, gfx::Rect from_rect, gfx::TextureHandle to, gfx::Rect to_rect, gfx::Filter filter);
+bool NoktusCopyDepth(const gfx::LogicalRect &source);
+void NoktusBlit(gfx::TextureHandle from, gfx::Rect from_rect, gfx::TextureHandle to, gfx::Rect to_rect, gfx::Filter filter);
 
-void MirrorCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices);
-void MirrorUpdateMesh(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices);
-void MirrorDestroyMesh(gfx::MeshHandle mesh);
-void MirrorDrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint32_t index_count, const gfx::MeshConstants &constants,
+void NoktusCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices);
+void NoktusUpdateMesh(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices);
+void NoktusDestroyMesh(gfx::MeshHandle mesh);
+void NoktusDrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint32_t index_count, const gfx::MeshConstants &constants,
                     const gfx::TextureBinding &texture, const gfx::DrawState &state, const gfx::MeshTransform *transform);
-void MirrorDrawImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices, const gfx::MeshConstants &constants,
+void NoktusDrawImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices, const gfx::MeshConstants &constants,
                          const gfx::TextureBinding &texture, const gfx::DrawState &state, const gfx::MeshTransform *transform);
 
-void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
+void NoktusDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
                   const gfx::DrawState &state, bool over_the_window = false);
 
 } // namespace dc::render

@@ -7,7 +7,7 @@
 #include <span>
 
 #include "gfx/gfx.hpp"
-#include "render/noktus_mirror.hpp"
+#include "render/noktus_host.hpp"
 
 namespace dc::render {
 
@@ -240,7 +240,7 @@ inline void Draw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vert
     CountDraw();
     Note2D(primitive, vertices, texture, state);
     const Routed routed = Route(texture, state);
-    MirrorDraw2D(primitive, vertices, routed.texture, routed.state);
+    NoktusDraw2D(primitive, vertices, routed.texture, routed.state);
 }
 
 inline void DrawDepthPlanes2D(const gfx::DepthPlanes2D &planes, std::span<const gfx::Vertex2D, 4> quad,
@@ -254,7 +254,7 @@ inline void DrawDepthPlanes2D(const gfx::DepthPlanes2D &planes, std::span<const 
             vertex.z = planes.depth[i];
             vertex.color[3] = planes.alpha[i];
         }
-        MirrorDraw2D(gfx::Primitive::Quads, plane, routed.texture, routed.state);
+        NoktusDraw2D(gfx::Primitive::Quads, plane, routed.texture, routed.state);
     }
 }
 
@@ -264,7 +264,7 @@ inline void DrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint3
     CountDraw();
     NoteMesh(constants, transform, texture, state);
     const Routed routed = Route(texture, state);
-    MirrorDrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
+    NoktusDrawMesh(mesh, first_index, index_count, constants, routed.texture, routed.state, transform);
 }
 
 inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices,
@@ -273,14 +273,14 @@ inline void DrawMeshImmediate(std::span<const gfx::Vertex3D> vertices, std::span
     CountDraw();
     NoteMesh(constants, transform, texture, state);
     const Routed routed = Route(texture, state);
-    MirrorDrawImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
+    NoktusDrawImmediate(vertices, indices, constants, routed.texture, routed.state, transform);
 }
 
 inline bool CopyTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::TextureHandle dst, std::int32_t dst_x,
                         std::int32_t dst_y) {
     CountCopy();
     NoteCopy(src_rect, gfx::Rect{dst_x, dst_y, src_rect.w, src_rect.h});
-    MirrorCopyTexture(src, src_rect, dst, dst_x, dst_y);
+    NoktusCopyTexture(src, src_rect, dst, dst_x, dst_y);
     return true;
 }
 
@@ -288,7 +288,7 @@ inline bool BlitTexture(gfx::TextureHandle src, gfx::Rect src_rect, gfx::Texture
                         gfx::Filter filter) {
     CountCopy();
     NoteCopy(src_rect, dst_rect);
-    MirrorBlit(src, src_rect, dst, dst_rect, filter);
+    NoktusBlit(src, src_rect, dst, dst_rect, filter);
     return true;
 }
 

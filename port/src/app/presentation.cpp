@@ -8,7 +8,7 @@
 #include "platform/clock.hpp"
 #include "platform/input.hpp"
 #include "platform/overlay.hpp"
-#include "render/noktus_mirror.hpp"
+#include "render/noktus_host.hpp"
 #include "render/passes.hpp"
 #include "text/textwipe.hpp"
 
@@ -45,7 +45,7 @@ void GameSetPresentSettings(const GamePresentSettings &settings) {
 }
 
 void GameTickDone(render::DisplayListRef /*list*/) {
-    render::PassTraceTick(static_cast<std::uint32_t>(render::MirrorDrawsLastTick()), true);
+    render::PassTraceTick(static_cast<std::uint32_t>(render::NoktusDrawsLastTick()), true);
     g_fps.ticks.Count(PresentClock::now());
 }
 
@@ -66,12 +66,12 @@ bool GameShowingFps() {
 
 std::string GameFpsText() {
     // With no window, frames are ticks.
-    std::string text = std::format("FPS {:.1f}", render::MirrorHasWindow() ? render::MirrorFramesPerSecond() : g_fps.ticks.PerSecond());
+    std::string text = std::format("FPS {:.1f}", render::NoktusHasWindow() ? render::NoktusFramesPerSecond() : g_fps.ticks.PerSecond());
     if (g_fps.detail != ConfigFpsDetail::Fps) {
         text += std::format("  TICK {:.1f}/{:g}", g_fps.ticks.PerSecond(), ClockTickRate());
     }
     if (g_fps.detail == ConfigFpsDetail::All) {
-        text += std::format("  DRAWS {}", render::MirrorDrawsLastTick());
+        text += std::format("  DRAWS {}", render::NoktusDrawsLastTick());
     }
     return text;
 }
@@ -86,7 +86,7 @@ void GameDrawFps() {
 }
 
 bool GameScreenshot(std::vector<std::uint8_t> &rgba, std::uint32_t &width, std::uint32_t &height) {
-    return render::MirrorReadScreen(rgba, width, height);
+    return render::NoktusReadScreen(rgba, width, height);
 }
 
 } // namespace dc::app

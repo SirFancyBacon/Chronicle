@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "gfx/gfx.hpp"
-#include "render/noktus_mirror.hpp"
+#include "render/noktus_host.hpp"
 
 namespace gfx {
 /** The names render targets are kept under, which Chronicle's host keeps. */
@@ -202,83 +202,83 @@ DC_RENDERER_CALL(VisibleLogicalRect)
 inline bool BeginFrame() {
     const bool open = gfx::BeginFrame();
     if (open) {
-        MirrorBeginTick();
+        NoktusBeginTick();
     }
     return open;
 }
 
 inline void EndFrame() {
-    MirrorEndTick();
+    NoktusEndTick();
     gfx::EndFrame();
 }
 
 inline gfx::TextureHandle CreateTexture(const gfx::TextureDesc &desc) {
     const gfx::TextureHandle texture = gfx::CreateTexture(desc);
     if (texture != gfx::kNullTexture) {
-        MirrorTexture(texture, desc);
+        NoktusTexture(texture, desc);
     }
     return texture;
 }
 
 inline bool UpdateTexture(gfx::TextureHandle texture, std::uint32_t mip, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, const void *pixels) {
-    MirrorTexturePixels(texture, mip, x, y, width, height, pixels);
+    NoktusTexturePixels(texture, mip, x, y, width, height, pixels);
     return gfx::UpdateTexture(texture, mip, x, y, width, height, pixels);
 }
 
 inline bool UpdatePalette(gfx::TextureHandle palette, const std::uint32_t *colors, std::uint32_t first = 0, std::uint32_t count = 256) {
-    MirrorPalette(palette, colors, first, count);
+    NoktusPalette(palette, colors, first, count);
     return gfx::UpdatePalette(palette, colors, first, count);
 }
 
 inline bool UpdateTextureNow(gfx::TextureHandle texture, std::uint32_t mip, std::uint32_t x, std::uint32_t y, std::uint32_t width, std::uint32_t height, const void *pixels) {
-    MirrorTexturePixels(texture, mip, x, y, width, height, pixels);
+    NoktusTexturePixels(texture, mip, x, y, width, height, pixels);
     return gfx::UpdateTextureNow(texture, mip, x, y, width, height, pixels);
 }
 
 inline void ReadDepth(std::uint32_t id, float x, float y, float width, float height) {
-    MirrorReadDepth(id, {x, y, width, height});
+    NoktusReadDepth(id, {x, y, width, height});
 }
 
 inline std::optional<float> DepthResult(std::uint32_t id) {
-    return MirrorDepthResult(id);
+    return NoktusDepthResult(id);
 }
 
 inline void CutInterpolation() {
-    MirrorCutMotion();
+    NoktusCutMotion();
     gfx::CutInterpolation();
 }
 
 inline void CutCameraInterpolation() {
-    MirrorCutCameraMotion();
+    NoktusCutCameraMotion();
     gfx::CutCameraInterpolation();
 }
 
 inline void SetInterpKey(gfx::InterpKey key, bool no_interpolation = false, float teleport_distance = std::numeric_limits<float>::infinity(), bool blend_vertices = false) {
-    MirrorMotion(key, no_interpolation, teleport_distance, blend_vertices);
+    NoktusMotion(key, no_interpolation, teleport_distance, blend_vertices);
     gfx::SetInterpKey(key, no_interpolation, teleport_distance, blend_vertices);
 }
 
 inline void UpdateMeshVertices(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices) {
-    MirrorUpdateMesh(mesh, first, vertices);
+    NoktusUpdateMesh(mesh, first, vertices);
     gfx::UpdateMeshVertices(mesh, first, vertices);
 }
 
 inline void Clear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect = nullptr) {
-    MirrorClear(color, rgba, depth, depth_value, rect);
+    NoktusClear(color, rgba, depth, depth_value, rect);
 }
 
 inline void ClearStencil(std::uint8_t /*value*/, const gfx::LogicalRect * /*rect*/ = nullptr) {
-    MirrorClearStencil();
+    NoktusClearStencil();
 }
 
 inline void SetRenderTarget(gfx::TextureHandle target) {
-    MirrorSetTarget(target);
+    NoktusSetTarget(target);
     gfx::SetRenderTarget(target);
 }
 
 inline gfx::TextureHandle CreateRenderTarget(std::uint32_t width, std::uint32_t height, bool has_alpha, bool share_main_depth = false, bool frame_target = false) {
     const gfx::TextureHandle target = gfx::CreateRenderTarget(width, height, has_alpha, share_main_depth, frame_target);
-    MirrorSurface(target, width, height, has_alpha, share_main_depth, frame_target);
+    NoktusSurface(target, width, height, has_alpha, share_main_depth, frame_target);
     return target;
 }
 
@@ -288,23 +288,23 @@ inline gfx::TextureHandle NamedRenderTarget(std::string_view name, std::uint32_t
     const gfx::TextureHandle target = gfx::NamedRenderTarget(name, width, height, has_alpha, share_main_depth, frame_target);
     // A name asked for in a new shape is a new target, and the old one is gone.
     if (before != gfx::kNullTexture && before != target) {
-        MirrorDestroyTexture(before);
+        NoktusDestroyTexture(before);
     }
-    MirrorSurface(target, width, height, has_alpha, share_main_depth, frame_target);
+    NoktusSurface(target, width, height, has_alpha, share_main_depth, frame_target);
     return target;
 }
 
 inline bool CopyMainDepthToTarget(const gfx::LogicalRect &source) {
-    return MirrorCopyDepth(source);
+    return NoktusCopyDepth(source);
 }
 
 inline bool SnapshotFrame(gfx::TextureHandle target) {
-    MirrorSnapshotFrame(target);
+    NoktusSnapshotFrame(target);
     return true;
 }
 
 inline void DestroyTexture(gfx::TextureHandle texture) {
-    MirrorDestroyTexture(texture);
+    NoktusDestroyTexture(texture);
     gfx::DestroyTexture(texture);
 }
 
@@ -318,11 +318,11 @@ inline void DropNamedRenderTarget(std::string_view name) {
 
 // What HDR is sending now, mode Off when it isn't, and the patches shown over the picture for calibrating it.
 inline HdrOutput HdrShown() {
-    return MirrorHdrShown();
+    return NoktusHdrShown();
 }
 
-inline void ShowHdrPatches(std::span<const MirrorHdrPatch> patches) {
-    MirrorHdrPatches(patches);
+inline void ShowHdrPatches(std::span<const NoktusHdrPatch> patches) {
+    NoktusHdrPatches(patches);
 }
 
 inline void SetUiAnchor(const gfx::UiAnchor &anchor) {

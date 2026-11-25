@@ -148,7 +148,7 @@ void WriteTrace() {
 }
 
 // What Noktus found a step reads and writes, in words.
-std::string StepUses(const MirrorStepReport &step) {
+std::string StepUses(const NoktusStepReport &step) {
     const auto side = [](bool screen, bool depth, std::uint32_t textures) {
         std::string out = screen && depth ? "the screen's colour and depth" : screen ? "the screen's colour" : depth ? "the screen's depth" : "";
         if (textures != 0) {
@@ -235,7 +235,7 @@ const char *PassName(Pass pass) {
 
 void SetPass(Pass pass) {
     g_pass = pass;
-    MirrorSetPass(pass);
+    NoktusSetPass(pass);
 }
 
 const char *StepName(Step step) {
@@ -247,13 +247,13 @@ void BeginStep(Step step) {
         g_tick_steps.push_back(step);
     }
     g_step_open = true;
-    MirrorBeginStep(step);
+    NoktusBeginStep(step);
 }
 
 void EndStep() {
     if (g_step_open) {
         g_step_open = false;
-        MirrorEndStep();
+        NoktusEndStep();
     }
 }
 
@@ -469,8 +469,8 @@ void PassTraceTick(std::uint32_t drawn, bool list_has_draws) {
     g_drawn += drawn;
     g_mismatched_ticks += list_has_draws && counted != drawn ? 1 : 0;
     // Noktus is told each pass as it's named, and has to have recorded the same runs of draws and copies.
-    if (MirrorOn()) {
-        const std::vector<MirrorPassStretch> recorded = MirrorTickPasses();
+    if (NoktusOn()) {
+        const std::vector<NoktusPassStretch> recorded = NoktusTickPasses();
         bool                                 same = recorded.size() == g_spans.size();
         std::string                          theirs;
         for (std::size_t i = 0; i < recorded.size(); i++) {
@@ -478,7 +478,7 @@ void PassTraceTick(std::uint32_t drawn, bool list_has_draws) {
             same = same && recorded[i].pass == g_spans[i].pass && recorded[i].draws == g_spans[i].draws && recorded[i].copies == g_spans[i].copies;
         }
         g_noktus_checked++;
-        for (const MirrorClassTally &counted : MirrorTakeClassTally()) {
+        for (const NoktusClassTally &counted : NoktusTakeClassTally()) {
             g_classes[{PassName(counted.pass), counted.draw_class, counted.rule}] += counted.draws;
         }
         if (!same) {
@@ -490,7 +490,7 @@ void PassTraceTick(std::uint32_t drawn, bool list_has_draws) {
             g_kinds["noktus passes " + ours + "| " + theirs]++;
         }
         // And the same steps, in order, each of which it says what it reads and writes.
-        const std::vector<MirrorStepReport> steps = MirrorTickSteps();
+        const std::vector<NoktusStepReport> steps = NoktusTickSteps();
         bool                                steps_same = steps.size() == g_tick_steps.size();
         for (std::size_t i = 0; i < steps.size(); i++) {
             steps_same = steps_same && steps[i].step == g_tick_steps[i];

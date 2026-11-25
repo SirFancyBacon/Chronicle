@@ -17,7 +17,7 @@
 #include "options/menu_option.hpp"
 #include "platform/input.hpp"
 #include "platform/window.hpp"
-#include "render/noktus_mirror.hpp"
+#include "render/noktus_host.hpp"
 
 namespace dc::options {
 
@@ -328,10 +328,10 @@ constexpr int kSupersampling[] = {1, 2, 4};
 
 // As far as the GPU's memory has room for at the window's size, with the anti-aliasing chosen: past that, more samples run it out.
 int SupersamplingCount(const Config &config) {
-    const render::MirrorAntiAliasing anti_aliasing = config.anti_aliasing == ConfigAntiAliasing::Taa    ? render::MirrorAntiAliasing::Taa
-                                                     : config.anti_aliasing == ConfigAntiAliasing::Smaa ? render::MirrorAntiAliasing::Smaa
-                                                                                                        : render::MirrorAntiAliasing::Off;
-    const int most = render::MirrorMostSupersampling(anti_aliasing);
+    const render::NoktusAntiAliasing anti_aliasing = config.anti_aliasing == ConfigAntiAliasing::Taa    ? render::NoktusAntiAliasing::Taa
+                                                     : config.anti_aliasing == ConfigAntiAliasing::Smaa ? render::NoktusAntiAliasing::Smaa
+                                                                                                        : render::NoktusAntiAliasing::Off;
+    const int most = render::NoktusMostSupersampling(anti_aliasing);
     return static_cast<int>(std::ranges::find(kSupersampling, most) - std::begin(kSupersampling)) + 1;
 }
 

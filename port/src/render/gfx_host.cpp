@@ -17,7 +17,7 @@
 
 #include "gfx/displaylist.hpp" // Mat4
 #include "gfx/gfx.hpp"
-#include "render/noktus_mirror.hpp"
+#include "render/noktus_host.hpp"
 
 namespace dc::render {
 void CountDraw();
@@ -563,7 +563,7 @@ bool InvertAffineTransform(const float matrix[16], float inverse[16]) {
 // Kazarov's overlay text, which is the FPS counter and the text-wipe tool's labels, draws through this.
 void Draw2D(Primitive primitive, std::span<const Vertex2D> vertices, const TextureBinding &binding, const DrawState &state, const Presentation2D *presentation) {
     dc::render::CountDraw();
-    dc::render::MirrorDraw2D(primitive, vertices, binding, state, true);
+    dc::render::NoktusDraw2D(primitive, vertices, binding, state, true);
 }
 
 bool WritePng(const std::filesystem::path &path, const uint8_t *rgba, uint32_t width, uint32_t height) {

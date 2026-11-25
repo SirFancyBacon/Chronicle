@@ -889,7 +889,7 @@ them.
 
 Noktus Nimbus (`tools/noktus`, documented in its own repository) draws the game, with the window or, in a headless run, into a picture.
 Game code draws through `render::` (`render/passes.hpp` for draws, `render/renderer_calls.hpp` for everything else), which counts each draw
-against a pass and hands it to Noktus through `render/noktus_mirror.cpp`. The game's calls keep their PS2 terms up to that adapter.
+against a pass and hands it to Noktus through `render/noktus_host.cpp`. The game's calls keep their PS2 terms up to that adapter.
 
 Kazarov's renderer (`tools/kazarov/src/cpp/gfx`) drew the game until Noktus took over, and left the build at Noktus's step 13
 (2026-11-25), as did the `DC_RENDERER=kazarov` switch that brought it back for comparing. Its `gfx/gfx.hpp` still names the types the calls
@@ -901,7 +901,7 @@ window, and what's known of each texture and target, from Kazarov's layout rules
 Noktus draws on a thread of its own, paced to the display. `video.renderer` and `video.render_thread`, which older builds saved, are
 read and dropped.
 
-The Options screen reaches Noktus through `MirrorApply`: V-Sync, Frame Limit, Smooth Motion, Anisotropic Filter, Anti-Aliasing, HDR, Paper White and
+The Options screen reaches Noktus through `NoktusApply`: V-Sync, Frame Limit, Smooth Motion, Anisotropic Filter, Anti-Aliasing, HDR, Paper White and
 Peak Brightness change as the game runs. TAA's pipelines are made at start whatever the setting, so turning it on doesn't pause; `DC_NOKTUS_ANTI_ALIASING`
 overrides the setting for scripted runs. The solid world is drawn in linear light and tone-mapped (Khronos PBR Neutral) before the interface goes on; what the game blends (effects,
 see-through surfaces, its layers) still blends in the display's encoding. `DC_NOKTUS_LINEAR=0` draws the whole scene in the display's encoding, to compare. With it, light past white blooms (`DC_NOKTUS_BLOOM`, its strength, 1; 0 for none), and frames named self-lit and unfogged
@@ -909,7 +909,7 @@ see-through surfaces, its layers) still blends in the display's encoding. `DC_NO
 from the sky above than the ground below (`DC_NOKTUS_GROUND`, the share from below, a half; 1 for the game's ambient alike from every side), except on self-lit frames,
 and in towns with the clock running the main light falls from the sun or the moon where the sky draws them (`EdSunAndMoonLight`), the one fading out as the other fades in. Calibrate HDR, under HDR, sets the last two by eye, and only while HDR is being sent: first Peak Brightness, raised in steps of
 10 nits up to 1,000, 50 up to 2,000 and 100 up to 4,000 until a square at that peak can't be told from the field round it at 10,000 nits, which Noktus
-draws through `MirrorHdrPatches`; then Paper White, in steps of 10 from 80 to 500, never past the peak. Circle on the first step puts both back as they were.
+draws through `NoktusHdrPatches`; then Paper White, in steps of 10 from 80 to 500, never past the peak. Circle on the first step puts both back as they were.
 
 Noktus makes all of its pipelines when it starts, and keeps them in `<save>/noktus_pipelines.cache` for the next start. A cache another GPU or driver
 made is left unused and replaced. The pacing line's `late pipelines` counts any made while drawing, which should always be 0. Under it, `noktus gpu`

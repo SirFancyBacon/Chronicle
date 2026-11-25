@@ -45,7 +45,7 @@ std::filesystem::path CaptionFontPath() {
 void CheckTranslatedCard(const char *text) {
     dc::test::GfxFixture fixture(640, 480, 1.0f, dc::test::GfxOptions{.offscreen = true});
     // GitHub's macOS runner GPU misreads the card's lettering; real Apple GPUs do not.
-    if (render::MirrorDeviceName().contains("Paravirtual")) {
+    if (render::NoktusDeviceName().contains("Paravirtual")) {
         GTEST_SKIP() << "the CI runner's virtual GPU misreads the card";
     }
     CardFiles files;

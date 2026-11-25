@@ -624,7 +624,7 @@ void FirstRunIfNoData(bool headless) {
     renderer.offscreen = offscreen;
     renderer.validation = renderer.validation || SettingsEnv("VULKAN_VALIDATION") != nullptr;
     gfx::RendererInit(WindowHandle(), renderer);
-    render::MirrorTakeWindow(offscreen ? nullptr : WindowHandle());
+    render::NoktusTakeWindow(offscreen ? nullptr : WindowHandle());
 
     FirstRunOutcome         outcome;
     std::optional<fs::path> source = Choose(root);
@@ -648,12 +648,12 @@ void FirstRunIfNoData(bool headless) {
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "The game data could not be extracted", message.c_str(),
                                      WindowHandle());
         }
-        render::MirrorDropWindow();
+        render::NoktusDropWindow();
         gfx::RendererShutdown();
         WindowShutdown();
         std::exit(kExitFailure);
     }
-    render::MirrorDropWindow();
+    render::NoktusDropWindow();
     gfx::RendererShutdown();
     WindowShutdown();
     if (outcome.ok && source) {

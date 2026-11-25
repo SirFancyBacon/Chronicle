@@ -190,7 +190,7 @@ void ShowPatches() {
         return;
     }
     const float                  peak = render::HdrShown().peak;
-    const render::MirrorHdrPatch patches[] = {
+    const render::NoktusHdrPatch patches[] = {
         {.x = kPatchX, .y = kPatchY, .width = kPatchWidth, .height = kPatchHeight, .nits = kBrightestField},
         {.x = kPatchX + (kPatchWidth - kSquare) / 2.0f, .y = kPatchY + (kPatchHeight - kSquare) / 2.0f, .width = kSquare, .height = kSquare, .nits = peak},
     };
@@ -649,7 +649,7 @@ void RunKeys() {
 
 void BeginHdrCalibration() {
     const render::HdrOutput shown = render::HdrShown();
-    if (shown.mode == render::MirrorHdr::Off) {
+    if (shown.mode == render::NoktusHdr::Off) {
         ComMenuSePlay(MENU_SOUND_REFUSE);
         return;
     }

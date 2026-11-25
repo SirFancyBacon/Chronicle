@@ -140,7 +140,7 @@ Bytes Conv8to32(int image_width, int image_height, const Bytes &source) {
 
 // GitHub's macOS runner GPU reads palette index 1 wrong; real Apple GPUs do not.
 bool OnParavirtualGpu() {
-    return render::MirrorDeviceName().contains("Paravirtual");
+    return render::NoktusDeviceName().contains("Paravirtual");
 }
 
 } // namespace

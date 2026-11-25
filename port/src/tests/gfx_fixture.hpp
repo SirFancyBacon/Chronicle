@@ -39,11 +39,11 @@ struct GfxFixture {
         config.display_aspect = 4.0f / 3.0f;
         config.render_scale = render_scale;
         gfx::RendererInit(WindowHandle(), config);
-        render::MirrorTakeWindow(nullptr);
+        render::NoktusTakeWindow(nullptr);
     }
 
     ~GfxFixture() {
-        render::MirrorDropWindow();
+        render::NoktusDropWindow();
         gfx::RendererShutdown();
         WindowShutdown();
     }
@@ -55,7 +55,7 @@ struct GfxFixture {
         render::Clear(true, clear.data(), true, 0.0f);
         record();
         render::EndFrame();
-        ASSERT_TRUE(render::MirrorReadScreen(pixels, width, height));
+        ASSERT_TRUE(render::NoktusReadScreen(pixels, width, height));
     }
 
     std::array<uint8_t, 4> Pixel(uint32_t x, uint32_t y) const {

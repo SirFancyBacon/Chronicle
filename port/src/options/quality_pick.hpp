@@ -1,7 +1,7 @@
 #pragma once
 
 #include "platform/config.hpp"
-#include "render/noktus_mirror.hpp"
+#include "render/noktus_host.hpp"
 
 namespace dc::options {
 
@@ -11,12 +11,12 @@ namespace dc::options {
  * Medium otherwise; a desktop's Medium under 7 GB, High under 11 GB and
  * Ultra from 11 GB, an RTX or a Radeon RX 6000 or later at least High.
  */
-int QualityForGpu(const render::MirrorGpuFacts &gpu);
+int QualityForGpu(const render::NoktusGpuFacts &gpu);
 
 /** A stretch of play slower than this a frame on the GPU (milliseconds; a steady 60 has 16.7) steps the pick down. */
 inline constexpr double kQualitySlowMs = 12.5;
 
-/** How many stretches of play (each the mirror's few seconds' report) check the pick: 30 seconds. */
+/** How many stretches of play (each of Noktus's few-second reports) check the pick: 30 seconds. */
 inline constexpr int kQualityCheckStretches = 6;
 
 /**
@@ -36,7 +36,7 @@ void QualitySettleByHand(const platform::Config &before, platform::Config &after
 void QualityPickAtFirstTick();
 
 /**
- * At each tick's end: the first start's pick, if one is waiting; then, while it's unsettled, each stretch of play as the mirror reports it. Those
+ * At each tick's end: the first start's pick, if one is waiting; then, while it's unsettled, each stretch of play as Noktus reports it. Those
  * with Options open over the scene, and the one Options closes in, aren't play's.
  */
 void QualityCheckTick();

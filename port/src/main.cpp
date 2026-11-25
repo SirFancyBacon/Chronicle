@@ -50,7 +50,7 @@
 #include "platform/speaker_test.hpp"
 #include "platform/window.hpp"
 #include "qol/features.hpp"
-#include "render/noktus_mirror.hpp"
+#include "render/noktus_host.hpp"
 #include "render/passes.hpp"
 #include "render/screen.hpp"
 #include "save/save_state.hpp"
@@ -342,17 +342,17 @@ gfx::PresentMode PresentMode(ConfigPresentMode mode) {
     }
 }
 
-render::MirrorSettings MirrorSettingsOf(const Config &config) {
+render::NoktusSettings NoktusSettingsOf(const Config &config) {
     const float render_scale = config.render_scale;
     const int   render_height = config.render_height;
-    const render::MirrorHdr hdr = config.hdr == ConfigHdr::Hdr10 ? render::MirrorHdr::Hdr10 : config.hdr == ConfigHdr::ScRgb ? render::MirrorHdr::ScRgb : render::MirrorHdr::Off;
+    const render::NoktusHdr hdr = config.hdr == ConfigHdr::Hdr10 ? render::NoktusHdr::Hdr10 : config.hdr == ConfigHdr::ScRgb ? render::NoktusHdr::ScRgb : render::NoktusHdr::Off;
     return {.interpolate = config.interpolation,
             .present_mode = PresentMode(config.present_mode),
             .max_fps = config.max_fps,
             .anisotropy = config.anisotropy,
-            .anti_aliasing = config.anti_aliasing == ConfigAntiAliasing::Taa    ? render::MirrorAntiAliasing::Taa
-                             : config.anti_aliasing == ConfigAntiAliasing::Smaa ? render::MirrorAntiAliasing::Smaa
-                                                                                : render::MirrorAntiAliasing::Off,
+            .anti_aliasing = config.anti_aliasing == ConfigAntiAliasing::Taa    ? render::NoktusAntiAliasing::Taa
+                             : config.anti_aliasing == ConfigAntiAliasing::Smaa ? render::NoktusAntiAliasing::Smaa
+                                                                                : render::NoktusAntiAliasing::Off,
             .supersampling = config.supersampling,
             .render_scale = render_scale,
             .render_height = render_height,
@@ -388,13 +388,13 @@ void ApplyConfigChange(const Config &before, const Config &after) {
     InputApplyConfig(after);
     if (after.tick_rate != before.tick_rate) {
         ClockSetTickRate(after.tick_rate);
-        render::MirrorTickRate(after.tick_rate);
+        render::NoktusTickRate(after.tick_rate);
     }
     // These settings put back an FPS counter the player toggled.
     if (after.show_fps != before.show_fps || after.fps_detail != before.fps_detail) {
         GameSetPresentSettings(PresentSettings(after));
     }
-    render::MirrorApply(MirrorSettingsOf(after));
+    render::NoktusApply(NoktusSettingsOf(after));
     if (after.discord_rich_presence != before.discord_rich_presence) {
         ApplyDiscord(after);
     }
@@ -559,8 +559,8 @@ int Run(int argc, const char **argv) {
     bool offscreen = options.offscreen || (options.headless && !gfx::HeadlessSurfaceAvailable());
     window.vulkan = !offscreen;
     WindowInit(window);
-    render::MirrorTakeWindow(offscreen ? nullptr : WindowHandle());
-    render::MirrorApply(MirrorSettingsOf(config));
+    render::NoktusTakeWindow(offscreen ? nullptr : WindowHandle());
+    render::NoktusApply(NoktusSettingsOf(config));
     if (first_start && !offscreen) {
         options::QualityPickAtFirstTick(); // the Quality preset for the GPU found
     }
@@ -603,7 +603,7 @@ int Run(int argc, const char **argv) {
     if (status == kExitOk && options.screenshot != nullptr) {
         status = Screenshot(options.screenshot);
     }
-    render::MirrorStop();
+    render::NoktusStop();
 
     ConfigRemoveChangeHook(LocalizeConfigChanged);
     ConfigRemoveChangeHook(GameOptionsChanged);

@@ -1,4 +1,4 @@
-#include "render/noktus_mirror.hpp"
+#include "render/noktus_host.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
@@ -133,13 +133,13 @@ struct Mirror {
     std::unordered_map<gfx::TextureHandle, noktus::TextureId> textures;
     std::unordered_map<gfx::MeshHandle, noktus::MeshId>       meshes;
     std::unordered_map<gfx::TextureHandle, noktus::SurfaceId> surfaces;
-    bool                                                     target_known = true; // false: drawing to a target the mirror lacks
+    bool                                                     target_known = true; // false: drawing to a target Noktus lacks
     std::uint64_t                                            meshes_drawn = 0;
     std::uint64_t                                            frames_at_rate = 0;
     std::chrono::steady_clock::time_point                    rate_since;
     double                                                   frames_per_second = 0.0;
     bool                                                     play_seen = false; // the sun's shadows wanted since the last report: play, not a menu or the title
-    std::optional<double>                                    play_gpu_ms;       // the GPU's time a frame over the last report's stretch of play (MirrorTakePlayGpuMs)
+    std::optional<double>                                    play_gpu_ms;       // the GPU's time a frame over the last report's stretch of play (NoktusTakePlayGpuMs)
     std::unordered_map<gfx::TextureHandle, Indexed>          indexed;
     std::unordered_map<gfx::TextureHandle, Palette>          palettes;
     std::map<std::pair<gfx::TextureHandle, gfx::TextureHandle>, Expanded> expanded;
@@ -171,13 +171,13 @@ struct Mirror {
     std::uint64_t                                            draws_at_tick_end = 0;
     std::uint64_t                                            draws_last_tick = 0;
     HdrOutput                                                hdr;
-    MirrorHdr                                                hdr_asked = MirrorHdr::Off;
+    NoktusHdr                                                hdr_asked = NoktusHdr::Off;
 };
 
 bool        g_failed = false;
 bool        g_ready = false; // there's a window to draw on, or none is wanted
 SDL_Window *g_game_window = nullptr;
-MirrorSettings g_settings;
+NoktusSettings g_settings;
 // For a swapchain that asks, on the render thread.
 std::atomic<std::uint32_t> g_window_width = 0;
 std::atomic<std::uint32_t> g_window_height = 0;
@@ -313,7 +313,7 @@ void WriteLastPicture() {
             if (!pixels.empty()) {
                 gfx::WritePng(mirror.path, pixels.data(), width, height);
             }
-            if (const std::optional<float> moment = MirrorMoment()) {
+            if (const std::optional<float> moment = NoktusMoment()) {
                 const std::vector<std::uint8_t> between = noktus::ReadMoment(*mirror.renderer, *moment, &width, &height);
                 if (!between.empty()) {
                     gfx::WritePng(std::filesystem::path(mirror.path).replace_extension(".between.png"), between.data(), width, height);
@@ -447,19 +447,19 @@ Pass FromNoktusPass(noktus::Pass pass) {
     return Pass::Unnamed;
 }
 
-const char *HdrName(MirrorHdr mode) {
-    return mode == MirrorHdr::Hdr10 ? "hdr10" : mode == MirrorHdr::ScRgb ? "scrgb"
+const char *HdrName(NoktusHdr mode) {
+    return mode == NoktusHdr::Hdr10 ? "hdr10" : mode == NoktusHdr::ScRgb ? "scrgb"
                                                                          : "off";
 }
 
 // Windows says how bright it shows SDR's white and how far past that the display goes, and those are what HDR starts from.
 HdrOutput HdrForWindow(Mirror &mirror) {
-    MirrorSettings settings = g_settings;
+    NoktusSettings settings = g_settings;
     if (const char *const asked = std::getenv("DC_NOKTUS_HDR")) {
         const std::string_view mode = asked;
         if (mode == "hdr10" || mode == "scrgb" || mode == "off") {
-            settings.hdr = mode == "hdr10" ? MirrorHdr::Hdr10 : mode == "scrgb" ? MirrorHdr::ScRgb
-                                                                                : MirrorHdr::Off;
+            settings.hdr = mode == "hdr10" ? NoktusHdr::Hdr10 : mode == "scrgb" ? NoktusHdr::ScRgb
+                                                                                : NoktusHdr::Off;
         } else {
             static const bool warned = (std::fprintf(stderr, "DC_NOKTUS_HDR: %s isn't hdr10, scrgb or off, so the setting stands\n", asked), true);
             static_cast<void>(warned);
@@ -473,9 +473,9 @@ HdrOutput HdrForWindow(Mirror &mirror) {
     const bool      display_hdr = SDL_GetBooleanProperty(properties, SDL_PROP_WINDOW_HDR_ENABLED_BOOLEAN, false) || white != 1.0f;
     const HdrOutput output = ChooseHdr(settings, display_hdr, white, SDL_GetFloatProperty(properties, SDL_PROP_WINDOW_HDR_HEADROOM_FLOAT, 1.0f));
     if (output != mirror.hdr || settings.hdr != mirror.hdr_asked) {
-        if (settings.hdr != MirrorHdr::Off && output.mode == MirrorHdr::Off) {
+        if (settings.hdr != NoktusHdr::Off && output.mode == NoktusHdr::Off) {
             std::fprintf(stderr, "noktus: %s asked for, but the display isn't in HDR, so it stays SDR\n", HdrName(settings.hdr));
-        } else if (output.mode != MirrorHdr::Off) {
+        } else if (output.mode != NoktusHdr::Off) {
             std::fprintf(stderr, "noktus: %s asked for, the display %s in HDR, paper white %.0f nits, peak %.0f nits\n", HdrName(output.mode), display_hdr ? "is" : "isn't said to be", output.paper_white, output.peak);
         }
     }
@@ -484,13 +484,13 @@ HdrOutput HdrForWindow(Mirror &mirror) {
     return output;
 }
 
-noktus::DisplayOutput ToDisplayOutput(MirrorHdr mode) {
-    return mode == MirrorHdr::ScRgb ? noktus::DisplayOutput::ScRgb : mode == MirrorHdr::Hdr10 ? noktus::DisplayOutput::Hdr10
+noktus::DisplayOutput ToDisplayOutput(NoktusHdr mode) {
+    return mode == NoktusHdr::ScRgb ? noktus::DisplayOutput::ScRgb : mode == NoktusHdr::Hdr10 ? noktus::DisplayOutput::Hdr10
                                                                                               : noktus::DisplayOutput::Sdr;
 }
 
 // Water's reflections as the settings say, unless DC_NOKTUS_REFLECTIONS (planar or screen) asks otherwise, for comparing.
-bool PlanarReflections(const MirrorSettings &settings) {
+bool PlanarReflections(const NoktusSettings &settings) {
     if (const char *reflections = std::getenv("DC_NOKTUS_REFLECTIONS")) {
         return std::string_view(reflections) != "screen";
     }
@@ -503,33 +503,33 @@ bool PlanarReflections(const MirrorSettings &settings) {
 constexpr std::uint32_t kShadowMapSizes[] = {1024, 2048, 2048, 4096};
 constexpr float         kShadowReaches[] = {0.5f, 0.75f, 1.0f, 1.5f};
 
-int ShadowQuality(const MirrorSettings &settings) {
+int ShadowQuality(const NoktusSettings &settings) {
     return std::clamp(settings.shadow_quality, 0, 3);
 }
 
 // Each of the Quality page's own rows as the settings say, unless its DC_NOKTUS_* switch asks otherwise, for comparing: the switch wins.
-bool AmbientOcclusion(const MirrorSettings &settings) {
+bool AmbientOcclusion(const NoktusSettings &settings) {
     if (const char *occlusion = std::getenv("DC_NOKTUS_AO")) {
         return std::string_view(occlusion) != "0";
     }
     return settings.ambient_occlusion;
 }
 
-float Bloom(const MirrorSettings &settings) {
+float Bloom(const NoktusSettings &settings) {
     if (const char *bloom = std::getenv("DC_NOKTUS_BLOOM")) {
         return std::strtof(bloom, nullptr);
     }
     return g_linear && settings.glow ? 1.0f : 0.0f;
 }
 
-float WaterClarity(const MirrorSettings &settings) {
+float WaterClarity(const NoktusSettings &settings) {
     if (const char *clarity = std::getenv("DC_NOKTUS_WATER_CLARITY")) {
         return std::strtof(clarity, nullptr);
     }
     return settings.real_water ? noktus::VulkanHost{}.water_clarity : 0.0f;
 }
 
-std::uint32_t PointLights(const MirrorSettings &settings) {
+std::uint32_t PointLights(const NoktusSettings &settings) {
     return static_cast<std::uint32_t>(std::clamp(settings.point_lights, 0, 256));
 }
 
@@ -539,8 +539,8 @@ void NoteQuality(float bloom, float clarity) {
     g_real_water = clarity > 0.0f && std::isfinite(clarity);
 }
 
-bool Temporal(MirrorAntiAliasing mode) {
-    return mode == MirrorAntiAliasing::Taa;
+bool Temporal(NoktusAntiAliasing mode) {
+    return mode == NoktusAntiAliasing::Taa;
 }
 
 // The supersampling asked for, held to what the GPU's memory has room for at the window's size. That's worked out again when the window changes size
@@ -566,12 +566,12 @@ void ApplySupersampling(Mirror &mirror, bool settings_changed) {
         const float value = std::strtof(asked, &end);
         return end != asked && *end == '\0' && std::isfinite(value) ? std::optional<float>(value) : std::nullopt;
     }();
-    MirrorSettings settings = g_settings;
+    NoktusSettings settings = g_settings;
     if (forced) {
         settings.render_scale = *forced;
         settings.render_height = 0;
     }
-    const float scale = MirrorRenderScale(settings, room.window_height, samples);
+    const float scale = NoktusRenderScale(settings, room.window_height, samples);
     if (samples == mirror.drawn_samples && scale == mirror.drawn_scale) {
         return;
     }
@@ -591,19 +591,19 @@ void ApplySupersampling(Mirror &mirror, bool settings_changed) {
 }
 
 // The setting, unless DC_NOKTUS_ANTI_ALIASING says otherwise for a scripted run.
-noktus::AntiAliasing ToAntiAliasing(MirrorAntiAliasing mode) {
+noktus::AntiAliasing ToAntiAliasing(NoktusAntiAliasing mode) {
     if (const char *forced = std::getenv("DC_NOKTUS_ANTI_ALIASING")) {
         std::string asked = forced;
         std::ranges::transform(asked, asked.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        mode = asked == "taa" ? MirrorAntiAliasing::Taa : asked == "smaa" ? MirrorAntiAliasing::Smaa
-                                                                          : MirrorAntiAliasing::Off;
+        mode = asked == "taa" ? NoktusAntiAliasing::Taa : asked == "smaa" ? NoktusAntiAliasing::Smaa
+                                                                          : NoktusAntiAliasing::Off;
     }
     switch (mode) {
-        case MirrorAntiAliasing::Smaa:
+        case NoktusAntiAliasing::Smaa:
             return noktus::AntiAliasing::Smaa;
-        case MirrorAntiAliasing::Taa:
+        case NoktusAntiAliasing::Taa:
             return noktus::AntiAliasing::Taa;
-        case MirrorAntiAliasing::Off:
+        case NoktusAntiAliasing::Off:
             break;
     }
     return noktus::AntiAliasing::Off;
@@ -963,9 +963,9 @@ noktus::Layer2D ToLayer(Layer2D layer) {
 
 } // namespace
 
-HdrOutput ChooseHdr(const MirrorSettings &settings, bool display_hdr, float white, float headroom) {
+HdrOutput ChooseHdr(const NoktusSettings &settings, bool display_hdr, float white, float headroom) {
     HdrOutput output;
-    if (settings.hdr == MirrorHdr::Off || (!display_hdr && !settings.force_hdr)) {
+    if (settings.hdr == NoktusHdr::Off || (!display_hdr && !settings.force_hdr)) {
         return output;
     }
     output.mode = settings.hdr;
@@ -983,15 +983,15 @@ HdrOutput ChooseHdr(const MirrorSettings &settings, bool display_hdr, float whit
     return output;
 }
 
-bool MirrorOn() {
+bool NoktusOn() {
     return g_ready && !g_failed;
 }
 
-bool MirrorHasWindow() {
+bool NoktusHasWindow() {
     return g_game_window != nullptr;
 }
 
-bool MirrorDepthProbe() {
+bool NoktusDepthProbe() {
     static const bool probe = [] {
         const char *setting = std::getenv("DC_NOKTUS_DEPTH_PROBE");
         return setting != nullptr && std::string_view(setting) == "1";
@@ -1002,7 +1002,7 @@ bool MirrorDepthProbe() {
 // Noktus draws no smaller than a quarter each way.
 constexpr float kLeastRenderScale = 0.25f;
 
-float MirrorRenderScale(const MirrorSettings &settings, std::uint32_t window_height, int samples) {
+float NoktusRenderScale(const NoktusSettings &settings, std::uint32_t window_height, int samples) {
     float scale = std::isfinite(settings.render_scale) ? std::clamp(settings.render_scale, kLeastRenderScale, 1.0f) : 1.0f;
     if (settings.render_height > 0 && window_height > 0) {
         scale = std::clamp(static_cast<float>(settings.render_height) / static_cast<float>(window_height), kLeastRenderScale, 1.0f);
@@ -1010,21 +1010,21 @@ float MirrorRenderScale(const MirrorSettings &settings, std::uint32_t window_hei
     return scale * std::sqrt(static_cast<float>(std::clamp(samples, 1, 4)));
 }
 
-int MirrorMostSupersampling(MirrorAntiAliasing anti_aliasing) {
+int NoktusMostSupersampling(NoktusAntiAliasing anti_aliasing) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
-    if (!mirror.renderer || !MirrorOn()) {
+    if (!mirror.renderer || !NoktusOn()) {
         return 4;
     }
     // What the picture is held to, worked out when it last was, so the row and the picture agree.
     return Temporal(anti_aliasing) ? mirror.most_temporal_samples : mirror.most_samples;
 }
 
-void MirrorApply(const MirrorSettings &settings) {
+void NoktusApply(const NoktusSettings &settings) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     g_settings = settings;
-    if (mirror.renderer && MirrorOn()) {
+    if (mirror.renderer && NoktusOn()) {
         noktus::SetInterpolation(*mirror.renderer, settings.interpolate && !InterpolationForcedOff());
         noktus::SetPresentMode(*mirror.renderer, ToPresentMode(settings.present_mode));
         noktus::SetFrameLimit(*mirror.renderer, settings.max_fps);
@@ -1048,9 +1048,9 @@ void MirrorApply(const MirrorSettings &settings) {
     }
 }
 
-void MirrorSetPass(Pass pass) {
+void NoktusSetPass(Pass pass) {
     const std::optional<noktus::Pass> named = ToNoktusPass(pass);
-    if (!named || !MirrorOn()) {
+    if (!named || !NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1098,15 +1098,15 @@ Step FromNoktusStep(noktus::Step step) {
 } // namespace
 
 bool ModernFocus() {
-    return MirrorOn();
+    return NoktusOn();
 }
 
 bool ModernLight() {
-    return g_linear && MirrorOn();
+    return g_linear && NoktusOn();
 }
 
 bool ModernWater() {
-    return g_real_water && MirrorOn();
+    return g_real_water && NoktusOn();
 }
 
 // Real shadows from the sun, unless DC_NOKTUS_SHADOWS=0: for comparing with the game's own.
@@ -1286,7 +1286,7 @@ bool AddGlow(const GlowGiven &given) {
 }
 
 void ApplyFocus(const FocusSettings &settings) {
-    if (!MirrorOn()) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1395,8 +1395,8 @@ void EndLinearLight() {
     }
 }
 
-void MirrorBeginStep(Step step) {
-    if (!MirrorOn()) {
+void NoktusBeginStep(Step step) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1406,8 +1406,8 @@ void MirrorBeginStep(Step step) {
     }
 }
 
-void MirrorEndStep() {
-    if (!MirrorOn()) {
+void NoktusEndStep() {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1417,9 +1417,9 @@ void MirrorEndStep() {
     }
 }
 
-std::vector<MirrorStepReport> MirrorTickSteps() {
-    std::vector<MirrorStepReport> steps;
-    if (!MirrorOn()) {
+std::vector<NoktusStepReport> NoktusTickSteps() {
+    std::vector<NoktusStepReport> steps;
+    if (!NoktusOn()) {
         return steps;
     }
     Mirror          &mirror = State();
@@ -1439,9 +1439,9 @@ std::vector<MirrorStepReport> MirrorTickSteps() {
     return steps;
 }
 
-std::vector<MirrorClassTally> MirrorTakeClassTally() {
-    std::vector<MirrorClassTally> tally;
-    if (!MirrorOn()) {
+std::vector<NoktusClassTally> NoktusTakeClassTally() {
+    std::vector<NoktusClassTally> tally;
+    if (!NoktusOn()) {
         return tally;
     }
     Mirror          &mirror = State();
@@ -1484,9 +1484,9 @@ std::vector<MirrorClassTally> MirrorTakeClassTally() {
     return tally;
 }
 
-std::vector<MirrorPassStretch> MirrorTickPasses() {
-    std::vector<MirrorPassStretch> stretches;
-    if (!MirrorOn()) {
+std::vector<NoktusPassStretch> NoktusTickPasses() {
+    std::vector<NoktusPassStretch> stretches;
+    if (!NoktusOn()) {
         return stretches;
     }
     Mirror          &mirror = State();
@@ -1499,44 +1499,44 @@ std::vector<MirrorPassStretch> MirrorTickPasses() {
     return stretches;
 }
 
-HdrOutput MirrorHdrShown() {
+HdrOutput NoktusHdrShown() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     // What was asked for may have fallen back to SDR, where no patch shows.
-    if (!mirror.renderer || !MirrorOn() || mirror.window == nullptr || noktus::ShownOutput(*mirror.renderer) == noktus::DisplayOutput::Sdr) {
+    if (!mirror.renderer || !NoktusOn() || mirror.window == nullptr || noktus::ShownOutput(*mirror.renderer) == noktus::DisplayOutput::Sdr) {
         return {};
     }
     return mirror.hdr;
 }
 
-void MirrorHdrPatches(std::span<const MirrorHdrPatch> patches) {
+void NoktusHdrPatches(std::span<const NoktusHdrPatch> patches) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
-    if (!mirror.renderer || !MirrorOn()) {
+    if (!mirror.renderer || !NoktusOn()) {
         return;
     }
     std::vector<noktus::HdrPatch> given;
-    for (const MirrorHdrPatch &patch : patches) {
+    for (const NoktusHdrPatch &patch : patches) {
         given.push_back({.x = patch.x, .y = patch.y, .width = patch.width, .height = patch.height, .nits = patch.nits});
     }
     noktus::SetHdrPatches(*mirror.renderer, given);
 }
 
-void MirrorTickRate(double ticks_per_second) {
+void NoktusTickRate(double ticks_per_second) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
-    if (mirror.renderer && MirrorOn()) {
+    if (mirror.renderer && NoktusOn()) {
         noktus::SetTickRate(*mirror.renderer, ticks_per_second);
     }
 }
 
-std::uint64_t MirrorDrawsLastTick() {
+std::uint64_t NoktusDrawsLastTick() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     return mirror.draws_last_tick;
 }
 
-void MirrorReadDepth(std::uint32_t slot, const gfx::LogicalRect &area) {
+void NoktusReadDepth(std::uint32_t slot, const gfx::LogicalRect &area) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (mirror.open) {
@@ -1544,55 +1544,55 @@ void MirrorReadDepth(std::uint32_t slot, const gfx::LogicalRect &area) {
     }
 }
 
-std::optional<float> MirrorDepthResult(std::uint32_t slot) {
+std::optional<float> NoktusDepthResult(std::uint32_t slot) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     return mirror.renderer ? mirror.renderer->DepthResult(slot) : std::nullopt;
 }
 
-double MirrorFramesPerSecond() {
+double NoktusFramesPerSecond() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     return mirror.frames_per_second;
 }
 
-void MirrorTakeWindow(SDL_Window *window) {
+void NoktusTakeWindow(SDL_Window *window) {
     g_game_window = window;
     g_ready = true;
 }
 
-void MirrorDropWindow() {
+void NoktusDropWindow() {
     WriteLastPicture();
     g_game_window = nullptr;
     g_ready = false;
 }
 
-std::optional<MirrorGpuFacts> MirrorGpu() {
+std::optional<NoktusGpuFacts> NoktusGpu() {
     Mirror                       &mirror = State();
     std::scoped_lock              guard(mirror.lock);
-    std::optional<MirrorGpuFacts> facts;
-    if (MirrorOn()) {
+    std::optional<NoktusGpuFacts> facts;
+    if (NoktusOn()) {
         Guarded([&] {
             Start(mirror);
             const noktus::GpuFacts gpu = noktus::RendererGpu(*mirror.renderer);
-            constexpr MirrorGpuKind kinds[] = {MirrorGpuKind::Discrete, MirrorGpuKind::Integrated, MirrorGpuKind::Software, MirrorGpuKind::Other};
-            facts = MirrorGpuFacts{.name = gpu.name, .kind = kinds[static_cast<int>(gpu.kind)], .memory = gpu.memory};
+            constexpr NoktusGpuKind kinds[] = {NoktusGpuKind::Discrete, NoktusGpuKind::Integrated, NoktusGpuKind::Software, NoktusGpuKind::Other};
+            facts = NoktusGpuFacts{.name = gpu.name, .kind = kinds[static_cast<int>(gpu.kind)], .memory = gpu.memory};
         });
     }
     return facts;
 }
 
-std::optional<double> MirrorTakePlayGpuMs() {
+std::optional<double> NoktusTakePlayGpuMs() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     return std::exchange(mirror.play_gpu_ms, std::nullopt);
 }
 
-std::string MirrorDeviceName() {
+std::string NoktusDeviceName() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     std::string      name;
-    if (MirrorOn()) {
+    if (NoktusOn()) {
         Guarded([&] {
             Start(mirror);
             name = noktus::RendererDeviceName(*mirror.renderer);
@@ -1601,7 +1601,7 @@ std::string MirrorDeviceName() {
     return name;
 }
 
-bool MirrorReadScreen(std::vector<std::uint8_t> &pixels, std::uint32_t &width, std::uint32_t &height) {
+bool NoktusReadScreen(std::vector<std::uint8_t> &pixels, std::uint32_t &width, std::uint32_t &height) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (!mirror.renderer) {
@@ -1612,12 +1612,12 @@ bool MirrorReadScreen(std::vector<std::uint8_t> &pixels, std::uint32_t &width, s
     return !pixels.empty();
 }
 
-void MirrorStop() {
+void NoktusStop() {
     WriteLastPicture();
     g_failed = true; // it's finished, and nothing is to start it again
 }
 
-std::optional<float> MirrorMoment() {
+std::optional<float> NoktusMoment() {
     static const char *moment = std::getenv("DC_NOKTUS_MOMENT");
     if (moment == nullptr || *moment == '\0') {
         return std::nullopt;
@@ -1625,8 +1625,8 @@ std::optional<float> MirrorMoment() {
     return std::strtof(moment, nullptr);
 }
 
-void MirrorBeginTick() {
-    if (!MirrorOn()) {
+void NoktusBeginTick() {
+    if (!NoktusOn()) {
         return;
     }
     Mirror               &mirror = State();
@@ -1653,8 +1653,8 @@ void MirrorBeginTick() {
     });
 }
 
-void MirrorEndTick() {
-    if (!MirrorOn()) {
+void NoktusEndTick() {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1710,8 +1710,8 @@ void MirrorEndTick() {
     }
 }
 
-void MirrorMotion(gfx::InterpKey key, bool no_interpolation, float teleport_distance, bool blend_vertices) {
-    if (!MirrorOn()) {
+void NoktusMotion(gfx::InterpKey key, bool no_interpolation, float teleport_distance, bool blend_vertices) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1722,8 +1722,8 @@ void MirrorMotion(gfx::InterpKey key, bool no_interpolation, float teleport_dist
     mirror.vertices_move = blend_vertices;
 }
 
-void MirrorCutMotion() {
-    if (!MirrorOn()) {
+void NoktusCutMotion() {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1733,8 +1733,8 @@ void MirrorCutMotion() {
     }
 }
 
-void MirrorCutCameraMotion() {
-    if (!MirrorOn()) {
+void NoktusCutCameraMotion() {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1744,9 +1744,9 @@ void MirrorCutCameraMotion() {
     }
 }
 
-void MirrorTexture(gfx::TextureHandle texture, const gfx::TextureDesc &desc) {
+void NoktusTexture(gfx::TextureHandle texture, const gfx::TextureDesc &desc) {
     const platform::load_profile::Span profile(platform::load_profile::Kind::GpuObjects);
-    if (!MirrorOn() || texture == gfx::kNullTexture || (desc.format != gfx::TextureFormat::Rgba8 && desc.format != gfx::TextureFormat::Index8)) {
+    if (!NoktusOn() || texture == gfx::kNullTexture || (desc.format != gfx::TextureFormat::Rgba8 && desc.format != gfx::TextureFormat::Index8)) {
         return;
     }
     Mirror          &mirror = State();
@@ -1771,10 +1771,10 @@ void MirrorTexture(gfx::TextureHandle texture, const gfx::TextureDesc &desc) {
     });
 }
 
-void MirrorTexturePixels(gfx::TextureHandle texture, std::uint32_t level, std::uint32_t x, std::uint32_t y, std::uint32_t width,
+void NoktusTexturePixels(gfx::TextureHandle texture, std::uint32_t level, std::uint32_t x, std::uint32_t y, std::uint32_t width,
                          std::uint32_t height, const void *pixels) {
     const platform::load_profile::Span profile(platform::load_profile::Kind::GpuObjects);
-    if (!MirrorOn()) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1801,8 +1801,8 @@ void MirrorTexturePixels(gfx::TextureHandle texture, std::uint32_t level, std::u
     }
 }
 
-void MirrorPalette(gfx::TextureHandle palette, const std::uint32_t *colors, std::uint32_t first, std::uint32_t count) {
-    if (!MirrorOn()) {
+void NoktusPalette(gfx::TextureHandle palette, const std::uint32_t *colors, std::uint32_t first, std::uint32_t count) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1818,8 +1818,8 @@ void MirrorPalette(gfx::TextureHandle palette, const std::uint32_t *colors, std:
     }
 }
 
-void MirrorDestroyTexture(gfx::TextureHandle texture) {
-    if (!MirrorOn()) {
+void NoktusDestroyTexture(gfx::TextureHandle texture) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1914,8 +1914,8 @@ bool CopyIndexed(Mirror &mirror, gfx::TextureHandle from, const gfx::Rect &from_
 
 } // namespace
 
-void MirrorCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHandle to, std::int32_t x, std::int32_t y) {
-    if (!MirrorOn()) {
+void NoktusCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHandle to, std::int32_t x, std::int32_t y) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror           &mirror = State();
@@ -1932,8 +1932,8 @@ void MirrorCopyTexture(gfx::TextureHandle from, gfx::Rect rect, gfx::TextureHand
     Guarded([&] { mirror.renderer->Blit(source, texels, target, {static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y), texels.width, texels.height}, noktus::Filter::Nearest); });
 }
 
-void MirrorBlit(gfx::TextureHandle from, gfx::Rect from_rect, gfx::TextureHandle to, gfx::Rect to_rect, gfx::Filter filter) {
-    if (!MirrorOn()) {
+void NoktusBlit(gfx::TextureHandle from, gfx::Rect from_rect, gfx::TextureHandle to, gfx::Rect to_rect, gfx::Filter filter) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror           &mirror = State();
@@ -1948,9 +1948,9 @@ void MirrorBlit(gfx::TextureHandle from, gfx::Rect from_rect, gfx::TextureHandle
     }
 }
 
-void MirrorSurface(gfx::TextureHandle target, std::uint32_t width, std::uint32_t height, bool has_alpha, bool shares_depth, bool frame_target) {
+void NoktusSurface(gfx::TextureHandle target, std::uint32_t width, std::uint32_t height, bool has_alpha, bool shares_depth, bool frame_target) {
     const platform::load_profile::Span profile(platform::load_profile::Kind::GpuObjects);
-    if (!MirrorOn()) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -1975,7 +1975,7 @@ void MirrorSurface(gfx::TextureHandle target, std::uint32_t width, std::uint32_t
     });
 }
 
-void MirrorSetTarget(gfx::TextureHandle target) {
+void NoktusSetTarget(gfx::TextureHandle target) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (!mirror.open) {
@@ -1989,7 +1989,7 @@ void MirrorSetTarget(gfx::TextureHandle target) {
     }
 }
 
-void MirrorSnapshotFrame(gfx::TextureHandle target) {
+void NoktusSnapshotFrame(gfx::TextureHandle target) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     const auto       found = mirror.surfaces.find(target);
@@ -1998,7 +1998,7 @@ void MirrorSnapshotFrame(gfx::TextureHandle target) {
     }
 }
 
-bool MirrorCopyDepth(const gfx::LogicalRect &source) {
+bool NoktusCopyDepth(const gfx::LogicalRect &source) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     bool             copied = false;
@@ -2008,7 +2008,7 @@ bool MirrorCopyDepth(const gfx::LogicalRect &source) {
     return copied;
 }
 
-void MirrorClear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect) {
+void NoktusClear(bool color, const std::uint8_t *rgba, bool depth, float depth_value, const gfx::LogicalRect *rect) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (!mirror.open || !mirror.target_known) {
@@ -2025,7 +2025,7 @@ void MirrorClear(bool color, const std::uint8_t *rgba, bool depth, float depth_v
     Guarded([&] { mirror.renderer->Clear(clear, color, depth_value, depth, area); });
 }
 
-void MirrorClearStencil() {
+void NoktusClearStencil() {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
     if (mirror.open && mirror.target_known) {
@@ -2033,9 +2033,9 @@ void MirrorClearStencil() {
     }
 }
 
-void MirrorCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices) {
+void NoktusCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices) {
     const platform::load_profile::Span profile(platform::load_profile::Kind::GpuObjects);
-    if (!MirrorOn()) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -2046,8 +2046,8 @@ void MirrorCreateMesh(gfx::MeshHandle mesh, std::span<const gfx::Vertex3D> verti
     });
 }
 
-void MirrorUpdateMesh(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices) {
-    if (!MirrorOn()) {
+void NoktusUpdateMesh(gfx::MeshHandle mesh, std::uint32_t first, std::span<const gfx::Vertex3D> vertices) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -2058,8 +2058,8 @@ void MirrorUpdateMesh(gfx::MeshHandle mesh, std::uint32_t first, std::span<const
     }
 }
 
-void MirrorDestroyMesh(gfx::MeshHandle mesh) {
-    if (!MirrorOn()) {
+void NoktusDestroyMesh(gfx::MeshHandle mesh) {
+    if (!NoktusOn()) {
         return;
     }
     Mirror          &mirror = State();
@@ -2071,7 +2071,7 @@ void MirrorDestroyMesh(gfx::MeshHandle mesh) {
     }
 }
 
-void MirrorDrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint32_t index_count, const gfx::MeshConstants &constants,
+void NoktusDrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint32_t index_count, const gfx::MeshConstants &constants,
                     const gfx::TextureBinding &texture, const gfx::DrawState &state, const gfx::MeshTransform *transform) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
@@ -2087,7 +2087,7 @@ void MirrorDrawMesh(gfx::MeshHandle mesh, std::uint32_t first_index, std::uint32
     mirror.meshes_drawn++;
 }
 
-void MirrorDrawImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices, const gfx::MeshConstants &constants,
+void NoktusDrawImmediate(std::span<const gfx::Vertex3D> vertices, std::span<const std::uint32_t> indices, const gfx::MeshConstants &constants,
                          const gfx::TextureBinding &texture, const gfx::DrawState &state, const gfx::MeshTransform *transform) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
@@ -2103,7 +2103,7 @@ void MirrorDrawImmediate(std::span<const gfx::Vertex3D> vertices, std::span<cons
     mirror.meshes_drawn++;
 }
 
-void MirrorDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
+void NoktusDraw2D(gfx::Primitive primitive, std::span<const gfx::Vertex2D> vertices, const gfx::TextureBinding &texture,
                   const gfx::DrawState &state, bool over_the_window) {
     Mirror          &mirror = State();
     std::scoped_lock guard(mirror.lock);
