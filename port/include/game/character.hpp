@@ -432,4 +432,10 @@ public:
 
 STATIC_ASSERT(sizeof(CMainChara) == 0x12A0);
 
+/**
+ * Records the config or model a character was given (LoadPackData records its own), so the opening's and the attract movie's scenes draw it as one
+ * of their people unless it's their scenery. For a scene that gives a character a model directly after resetting it.
+ */
+void NoteLoadedFrom(const CCharacter *character, const char *name);
+
 } // namespace dc::game

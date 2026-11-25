@@ -298,6 +298,7 @@ void LoadData() {
 
     Chara__3[6].Initialize();
     Chara__3[6].frame = LoadMDSFile(GetPackFile(read_buffer, "01p19a.mds", nullptr), &CharaDataBuffer__2[4], 6, nullptr, nullptr);
+    NoteLoadedFrom(&Chara__3[6], "01p19a.mds"); // a villager given a model of its own, not a config: one of the scene's people
 
     CFrameAttr noroi_attr;
 
@@ -308,6 +309,7 @@ void LoadData() {
 
     Chara__3[7].Initialize();
     Chara__3[7].frame = LoadMDSFile(GetPackFile(read_buffer, "01p17a.mds", nullptr), &CharaDataBuffer__2[4], 6, nullptr, nullptr);
+    NoteLoadedFrom(&Chara__3[7], "01p17a.mds"); // a villager given a model of its own, not a config: one of the scene's people
 
     CFrameAttr dancer_attr;
 

@@ -4,9 +4,14 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstring>
+#include <optional>
 #include <print>
 #include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 
 #include "chararead.hpp"
 #include "cloth.hpp"
@@ -15,6 +20,7 @@
 #include "mathutil.hpp"
 #include "mglib.hpp"
 #include "platform/arena.hpp"
+#include "render/passes.hpp"
 #include "render/renderer_calls.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
@@ -745,6 +751,45 @@ void CCharacter::SetScale(float *scale) {
     CCharacter::SetScale(scale[0], scale[1], scale[2]);
 }
 
+namespace {
+
+// Whether each character the opening's and the attract movie's scenes load is one of their people, by the config it was loaded from: their props,
+// effects, scenery and camera paths load through CCharacter too. Not every person casts a character's shadow (the attract movie's first scene's
+// actors, the festival's dancers), and no scenery does. Kept from a load until the character is reset; loads and draws are the game thread's.
+// Function-local: the scenes' characters are globals of other units, which reset (Initialize) during static initialisation, in an order this unit
+// doesn't control.
+std::unordered_map<const CCharacter *, bool> &LoadedPerson() {
+    static std::unordered_map<const CCharacter *, bool> loaded;
+    return loaded;
+}
+
+bool SceneryConfig(std::string_view name) {
+    if (const std::size_t dot = name.rfind('.'); dot != std::string_view::npos) {
+        name = name.substr(0, dot);
+    }
+    std::string lower(name);
+    std::ranges::transform(lower, lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    // The opening's table things, its gathering light and butterfly; the attract movie's rock, floor, ball, scaffold, stage props and effects;
+    // and the camera paths both load (NNNNcp, rmNNcam).
+    constexpr std::array<std::string_view, 12> kScenery = {"03komono", "atrpeff1", "buterfly", "rm04ex",     "rm05saget", "d01o03_m",
+                                                           "rm11rock", "f_boll_2", "rm16yuka", "rm18ashiba", "info2",     "pat"};
+    return std::ranges::contains(kScenery, lower) || (lower.starts_with("rm") && lower.ends_with("cam")) || lower.ends_with("cp");
+}
+
+bool PersonInScenes(const CCharacter *character) {
+    if (character->shadow_frame != nullptr) {
+        return true;
+    }
+    const auto found = LoadedPerson().find(character);
+    return found != LoadedPerson().end() && found->second;
+}
+
+} // namespace
+
+void NoteLoadedFrom(const CCharacter *character, const char *name) {
+    LoadedPerson()[character] = name != nullptr && !SceneryConfig(name);
+}
+
 void CCharacter::Draw() {
     sceVu0FVECTOR ambient;
     sceVu0FVECTOR saved_ambient;
@@ -842,11 +887,20 @@ void CCharacter::Draw() {
 
     MGSetAmbient(ambient);
     MGSetPLight(light_direction, light_colour);
-    MGDraw(this->frame);
+    {
+        // The opening and the attract movie are one pass for the whole frame: a character drawn there is still a character, as in play, so the
+        // renderer's ambient occlusion darkens it by the world alone, not by its own hat, hair or scarf (PersonInScenes).
+        const render::Pass             pass = render::CurrentPass();
+        std::optional<render::PassScope> as_character;
+        if ((pass == render::Pass::Opening || pass == render::Pass::Attract) && PersonInScenes(this)) {
+            as_character.emplace(render::Pass::Characters);
+        }
+        MGDraw(this->frame);
 
-    for (int cloth_no = 0; cloth_no < CHARA_CLOTH_MAX; cloth_no++) {
-        if (this->cloth[cloth_no] != nullptr) {
-            this->cloth[cloth_no]->Draw();
+        for (int cloth_no = 0; cloth_no < CHARA_CLOTH_MAX; cloth_no++) {
+            if (this->cloth[cloth_no] != nullptr) {
+                this->cloth[cloth_no]->Draw();
+            }
         }
     }
 
@@ -885,14 +939,17 @@ void CCharacter::LoadPackData(unsigned int *pack, char *name, CDataAlloc2<1> *mo
 
 void CCharacter::LoadPackData(unsigned int *pack, char *name, CDataAlloc2<1> *model_alloc, CDataAlloc2<1> *motion_alloc, CDataAlloc2<1> *texture_alloc) {
     ReadInfo(this, pack, name, model_alloc, motion_alloc, texture_alloc, 0, nullptr, 0, 0);
+    NoteLoadedFrom(this, name); // after: loading begins by resetting the character
 }
 
 void CCharacter::LoadPackData2(unsigned int *pack, char *name, CDataAlloc2<1> *alloc, int texture_block_no, CDataAlloc2<1> *image_alloc, int visual_type) {
     ReadInfo(this, pack, name, alloc, alloc, alloc, texture_block_no, image_alloc, visual_type, 0);
+    NoteLoadedFrom(this, name); // after: loading begins by resetting the character
 }
 
 void CCharacter::LoadPackData3(unsigned int *pack, char *name, CDataAlloc2<1> *alloc, int texture_block_no, CDataAlloc2<1> *image_alloc, int keep_textures, int visual_type) {
     ReadInfo(this, pack, name, alloc, alloc, alloc, texture_block_no, image_alloc, visual_type, keep_textures);
+    NoteLoadedFrom(this, name); // after: loading begins by resetting the character
 }
 
 void CCharacter::DeleteExtendTexture(int block_no) {
@@ -927,6 +984,7 @@ void CCharacter::DeleteExtendMotion() {
 }
 
 void CCharacter::Initialize() {
+    LoadedPerson().erase(this);
     CObject::Initialize(1.0f);
     this->frame = nullptr;
     this->motion_no = 0;
