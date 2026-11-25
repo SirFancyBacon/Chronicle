@@ -54,35 +54,35 @@ recovered, as `CCharacter::ClothStep` does with `PortImagePointer`) fixes the ro
 
 | site | function | state | class | expression | origin | use |
 |---|---|---|---|---|---|---|
-| port/src/game/dataset.cpp:469 | dc::game::LoadMDSFile | port | escapes | `reinterpret_cast < std :: uintptr_t >(data)` | parameter | argument: println |
-| port/src/game/edit_in.cpp:1719 | dc::game::LoadData | port | escapes | `reinterpret_cast < std :: intptr_t >(func_point[i].parts)` | field | argument to unknown: operator[] |
-| port/src/game/editloop.cpp:3466 | dc::game::MainEditMode | port | escapes | `reinterpret_cast < intptr_t >(& EdWind)` | image | store: Chara->wind |
-| port/src/game/editloop.cpp:5098 | dc::game::LoadObjectParts | port | escapes | `reinterpret_cast < intptr_t >(parts->frame[level])` | field | store: parts->preview_frame |
-| port/src/game/editloop.cpp:5195 | dc::game::LoadPTS | port | escapes | `reinterpret_cast < std :: uintptr_t >(header->func)` | field | store: parts->func_data |
-| port/src/game/shot_freefuncs.cpp:1015 | dc::game::BtMapJumpLoad | port | escapes | `reinterpret_cast < std :: uintptr_t >(& arena.base[static_cast < std :: ptrdiff_t >(arena.used)* 16])` | arena (base) | return |
-| port/src/game/title/op_b.cpp:939 | dc::game::OpB_InitProcess2 | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind)` | image | store: Chara__3[8].wind |
-| port/src/game/title/op_c.cpp:906 | dc::game::OpC_InitProcess5 | port | escapes | `reinterpret_cast < intptr_t >(& Wind)` | image | store: Chara__3[11].wind |
-| port/src/game/title/op_c.cpp:1593 | dc::game::OpC_MotionProcess | port | escapes | `reinterpret_cast < intptr_t >(& Wind)` | image | store: Chara__3[11].wind |
-| port/src/game/title/op_d.cpp:617 | dc::game::OpD_MotionProcess | port | escapes | `reinterpret_cast < intptr_t >(& Wind)` | image | store: Chara__3[cloth_actor].wind |
-| port/src/game/title/rushmovi.cpp:451 | dc::game::MotionProcess | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[1].wind |
-| port/src/game/title/rushmovi.cpp:453 | dc::game::MotionProcess | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
-| port/src/game/title/title.cpp:338 | dc::game::InitProcA | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
-| port/src/game/title/title.cpp:672 | dc::game::InitProcB | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
-| port/src/game/title/title.cpp:917 | dc::game::InitProcC | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
-| port/src/game/title/title.cpp:1132 | dc::game::InitProcD | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
-| port/src/game/title/title.cpp:1273 | dc::game::InitProcE | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
-| port/src/game/title/title.cpp:1412 | dc::game::InitProcF | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
-| port/src/game/title/title.cpp:1565 | dc::game::InitProcG | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
-| port/src/game/title/title.cpp:1566 | dc::game::InitProcG | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[1].wind |
-| port/src/game/title/title.cpp:1567 | dc::game::InitProcG | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[2].wind |
-| port/src/game/title/title.cpp:1724 | dc::game::InitProcH | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[1].wind |
-| port/src/game/title/title.cpp:1919 | dc::game::InitProcI | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
+| port/src/game/dataset.cpp:542 | dc::game::LoadMDSFile | port | escapes | `reinterpret_cast < std :: uintptr_t >(data)` | parameter | argument: println |
+| port/src/game/edit_in.cpp:1742 | dc::game::LoadData | port | escapes | `reinterpret_cast < std :: intptr_t >(func_point[i].parts)` | field | argument to unknown: operator[] |
+| port/src/game/editloop.cpp:3591 | dc::game::MainEditMode | port | escapes | `reinterpret_cast < intptr_t >(& EdWind)` | image | store: Chara->wind |
+| port/src/game/editloop.cpp:5224 | dc::game::LoadObjectParts | port | escapes | `reinterpret_cast < intptr_t >(parts->frame[level])` | field | store: parts->preview_frame |
+| port/src/game/editloop.cpp:5321 | dc::game::LoadPTS | port | escapes | `reinterpret_cast < std :: uintptr_t >(header->func)` | field | store: parts->func_data |
+| port/src/game/shot_freefuncs.cpp:1018 | dc::game::BtMapJumpLoad | port | escapes | `reinterpret_cast < std :: uintptr_t >(& arena.base[static_cast < std :: ptrdiff_t >(arena.used)* 16])` | arena (base) | return |
+| port/src/game/title/op_b.cpp:926 | dc::game::OpB_InitProcess2 | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind)` | image | store: Chara__3[8].wind |
+| port/src/game/title/op_c.cpp:892 | dc::game::OpC_InitProcess5 | port | escapes | `reinterpret_cast < intptr_t >(& Wind)` | image | store: Chara__3[11].wind |
+| port/src/game/title/op_c.cpp:1579 | dc::game::OpC_MotionProcess | port | escapes | `reinterpret_cast < intptr_t >(& Wind)` | image | store: Chara__3[11].wind |
+| port/src/game/title/op_d.cpp:606 | dc::game::OpD_MotionProcess | port | escapes | `reinterpret_cast < intptr_t >(& Wind)` | image | store: Chara__3[cloth_actor].wind |
+| port/src/game/title/rushmovi.cpp:431 | dc::game::MotionProcess | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[1].wind |
+| port/src/game/title/rushmovi.cpp:433 | dc::game::MotionProcess | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
+| port/src/game/title/title.cpp:323 | dc::game::InitProcA | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
+| port/src/game/title/title.cpp:657 | dc::game::InitProcB | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
+| port/src/game/title/title.cpp:902 | dc::game::InitProcC | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
+| port/src/game/title/title.cpp:1117 | dc::game::InitProcD | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
+| port/src/game/title/title.cpp:1258 | dc::game::InitProcE | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
+| port/src/game/title/title.cpp:1397 | dc::game::InitProcF | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
+| port/src/game/title/title.cpp:1550 | dc::game::InitProcG | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
+| port/src/game/title/title.cpp:1551 | dc::game::InitProcG | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[1].wind |
+| port/src/game/title/title.cpp:1552 | dc::game::InitProcG | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[2].wind |
+| port/src/game/title/title.cpp:1709 | dc::game::InitProcH | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[1].wind |
+| port/src/game/title/title.cpp:1904 | dc::game::InitProcI | port | escapes | `reinterpret_cast < std :: intptr_t >(& Wind__4)` | image | store: Chara__3[0].wind |
 
 ## Low-bits sites that can run (1)
 
 | site | function | state | class | expression | origin | use |
 |---|---|---|---|---|---|---|
-| port/src/game/texture.cpp:664 | dc::game::CTextureManager::SetBuffer | port | low-bits | `reinterpret_cast < std :: uintptr_t >(buffer)` | parameter | store: misalignment |
+| port/src/game/texture.cpp:661 | dc::game::CTextureManager::SetBuffer | port | low-bits | `reinterpret_cast < std :: uintptr_t >(buffer)` | parameter | store: misalignment |
 
 ## Round trips resolved where the value comes back (0)
 
