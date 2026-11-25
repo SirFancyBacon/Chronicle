@@ -91,19 +91,22 @@ using namespace dc::save;
 
 namespace {
 
-// The opening's models and motions, rebuilt from their glTF on a thread of their own while it plays: each scene otherwise rebuilt its own as it loaded,
-// on the game's thread, for up to a second (most of it reading JSON). Let go once it's over, as nothing else reads them.
+// The opening's and the attract movie's models and motions, rebuilt from their glTF on a thread of their own while they play: each scene otherwise
+// rebuilt its own as it loaded, on the game's thread, for up to a second (most of it reading JSON), and the attract's held the game a quarter of a
+// second at each change of scene. Let go once it's over, as nothing else reads them.
 void PrepareModelsFor(int mode) {
-    static bool opening_prepared = false;
-    const bool  opening = mode == GAME_MODE_OPENING;
-    if (opening == opening_prepared) {
+    static std::string_view prepared;
+    const std::string_view  wanted = mode == GAME_MODE_OPENING ? "opdat/" : mode == GAME_MODE_RUSH_MOVIE ? "rmdat/" : "";
+    if (wanted == prepared) {
         return;
     }
-    opening_prepared = opening;
-    if (opening) {
-        data::model_gltf::PrepareAhead({"opdat/", "commenu/"}); // the opening first: it reads from the start
+    if (!prepared.empty()) {
+        data::model_gltf::LetGo(prepared);
+    }
+    prepared = wanted;
+    if (!wanted.empty()) {
+        data::model_gltf::PrepareAhead({std::string(wanted), "commenu/"}); // the movie's first: it reads from the start
     } else {
-        data::model_gltf::LetGo("opdat/");
         data::model_gltf::PrepareAhead({"commenu/"});
     }
 }
