@@ -33,6 +33,7 @@
 #include "mglib.hpp"
 #include "object.hpp"
 #include "rect.hpp"
+#include "render/passes.hpp"
 #include "savedata.hpp"
 #include "snd.hpp"
 #include "sound.hpp"
@@ -614,33 +615,38 @@ void TitleDraw() {
     sceVu0NormalLightMatrix(light, light0, light1, light2);
     MGSetPLight(light, color);
 
-    if (CProcess.no != TITLE_STEP_OPENING_BOOK && CProcess.no != TITLE_STEP_EXIT) {
-        static std::array<float, 4> rot = {0.0f, 0.0f, 0.0f, 0.0f};
+    {
+        // The turning backdrop and its clouds are the title's sky: drawn as one, they aren't solid world for the renderer's ambient occlusion,
+        // which around a far dome shades nothing and cost the title a millisecond on a laptop's GPU.
+        render::PassScope sky(render::Pass::Sky);
+        if (CProcess.no != TITLE_STEP_OPENING_BOOK && CProcess.no != TITLE_STEP_EXIT) {
+            static std::array<float, 4> rot = {0.0f, 0.0f, 0.0f, 0.0f};
 
-        TexManager.ReloadTexture(GetVif1Packet(), 0);
-        rot[1] += 0.001f;
+            TexManager.ReloadTexture(GetVif1Packet(), 0);
+            rot[1] += 0.001f;
 
-        if (rot[1] > 3.14f) {
-            rot[1] -= 6.28f;
+            if (rot[1] > 3.14f) {
+                rot[1] -= 6.28f;
+            }
+
+            ObjectFrame3->SetRotation(rot[0], rot[1], rot[2]);
+            ObjectFrame3->SetScale(TitlePortBackdropScale(), 1.0f, TitlePortBackdropScale());
+            MGDraw(ObjectFrame3);
         }
 
-        ObjectFrame3->SetRotation(rot[0], rot[1], rot[2]);
-        ObjectFrame3->SetScale(TitlePortBackdropScale(), 1.0f, TitlePortBackdropScale());
-        MGDraw(ObjectFrame3);
-    }
+        if (CProcess.no != TITLE_STEP_OPENING_BOOK && CProcess.no != TITLE_STEP_EXIT) {
+            TexManager.ReloadTexture(GetVif1Packet(), 1);
 
-    if (CProcess.no != TITLE_STEP_OPENING_BOOK && CProcess.no != TITLE_STEP_EXIT) {
-        TexManager.ReloadTexture(GetVif1Packet(), 1);
+            if (CProcess.no == TITLE_STEP_FADE_IN || (CProcess.no == TITLE_STEP_MENU_FADE_OUT && CCursol.GetSelect() == TITLE_MENU_NEW_GAME) || CProcess.no == TITLE_STEP_ATTRACT_FADE_OUT) {
+                ambient[3] = static_cast<float>(CFade.Get(100));
+            } else {
+                ambient[3] = 100.0f;
+            }
 
-        if (CProcess.no == TITLE_STEP_FADE_IN || (CProcess.no == TITLE_STEP_MENU_FADE_OUT && CCursol.GetSelect() == TITLE_MENU_NEW_GAME) || CProcess.no == TITLE_STEP_ATTRACT_FADE_OUT) {
-            ambient[3] = static_cast<float>(CFade.Get(100));
-        } else {
-            ambient[3] = 100.0f;
+            MGSetAmbient(ambient);
+            Cloud__2.SetScale(TitlePortBackdropScale(), TitlePortBackdropHeightScale(), 1.0f);
+            Cloud__2.Draw();
         }
-
-        MGSetAmbient(ambient);
-        Cloud__2.SetScale(TitlePortBackdropScale(), TitlePortBackdropHeightScale(), 1.0f);
-        Cloud__2.Draw();
     }
 
     if (CProcess.no != TITLE_STEP_FADE_IN || CFade.Get(128) >= 4) {
