@@ -7,7 +7,7 @@ build=$1
 folder=$2
 
 # Named one by one, so that a build missing any of them fails here and not later.
-for name in darkcloud dcdata noktus-launcher lang glyphs assets/data.zip assets/datapacks; do
+for name in darkcloud dcdata noktus-launcher lang glyphs assets/data.zip assets/datapacks assets/gameplay; do
     if [ ! -e "$build/$name" ]; then
         echo "release: the build has no $name" >&2
         exit 1

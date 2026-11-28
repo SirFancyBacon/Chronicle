@@ -249,6 +249,15 @@ add_custom_target(dc_datapacks
 add_dependencies(darkcloud dc_datapacks)
 install(DIRECTORY datapacks/enhanced_fishing datapacks/qol DESTINATION ${CMAKE_INSTALL_BINDIR}/assets/datapacks)
 
+# The gameplay documents (docs/ITEM_FRAMEWORK.md): assets/gameplay beside the executable, which the launcher's setup puts in the data, where
+# the game reads them and packs override them.
+add_custom_target(dc_gameplay
+    COMMAND ${CMAKE_COMMAND} -E rm -rf $<TARGET_FILE_DIR:darkcloud>/assets/gameplay
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/gameplay $<TARGET_FILE_DIR:darkcloud>/assets/gameplay
+    COMMENT "Copying the gameplay documents")
+add_dependencies(darkcloud dc_gameplay)
+install(DIRECTORY gameplay/ DESTINATION ${CMAKE_INSTALL_BINDIR}/assets/gameplay)
+
 # The tests use an installed GoogleTest, or fetch one at configure time; a build with neither turns them off.
 option(DC_BUILD_TESTS "Build darkcloud_tests" ON)
 if(DC_BUILD_TESTS)
