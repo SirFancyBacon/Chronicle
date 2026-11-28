@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Named one by one, so that a build missing any of them fails here and not on the other PC.
-$needed = @('darkcloud.exe', 'dcdata.exe', 'noktus-launcher.exe', 'SDL3.dll', 'lang', 'glyphs', 'assets/data.zip', 'assets/datapacks', 'assets/gameplay')
+$needed = @('darkcloud.exe', 'dcdata.exe', 'noktus-launcher.exe', 'SDL3.dll', 'lang', 'glyphs', 'assets/data.zip', 'assets/datapacks', 'assets/gameplay', 'assets/motion_names.json')
 $missing = @($needed | Where-Object { -not (Test-Path -LiteralPath (Join-Path $Build $_)) })
 if ($missing.Count -gt 0) {
     throw "release: the build has no $($missing -join ', ')"
