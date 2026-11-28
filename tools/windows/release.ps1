@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Named one by one, so that a build missing any of them fails here and not on the other PC.
-$needed = @('darkcloud.exe', 'dcdata.exe', 'noktus-launcher.exe', 'SDL3.dll', 'lang', 'glyphs', 'assets/data.zip', 'assets/datapacks', 'assets/gameplay')
+$needed = @('darkcloud.exe', 'dcdata.exe', 'noktus-launcher.exe', 'CREDITS.md', 'SDL3.dll', 'lang', 'glyphs', 'assets/data.zip', 'assets/datapacks', 'assets/gameplay')
 $missing = @($needed | Where-Object { -not (Test-Path -LiteralPath (Join-Path $Build $_)) })
 if ($missing.Count -gt 0) {
     throw "release: the build has no $($missing -join ', ')"
@@ -20,6 +20,7 @@ foreach ($name in 'darkcloud.exe', 'dcdata.exe', 'noktus-launcher.exe') {
     Copy-Item -LiteralPath (Join-Path $Build $name) -Destination $Folder -Force
 }
 Get-ChildItem -LiteralPath $Build -Filter '*.dll' -File | Copy-Item -Destination $Folder -Force
+Copy-Item -LiteralPath (Join-Path $Build 'CREDITS.md') -Destination $Folder -Force
 foreach ($name in 'lang', 'glyphs', 'assets') {
     $old = Join-Path $Folder $name
     if (Test-Path -LiteralPath $old) {

@@ -155,6 +155,8 @@ add_subdirectory(${NOKTUS_SOURCE_DIR} ${CMAKE_BINARY_DIR}/noktus)
 if(TARGET noktus_launcher)
     set_target_properties(noktus_launcher PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 endif()
+# Noktus's credits beside the game: they hold the licences of what it and the launcher carry (Kazarov's, the libraries'), which go with every copy.
+configure_file(${NOKTUS_SOURCE_DIR}/CREDITS.md ${CMAKE_BINARY_DIR}/CREDITS.md COPYONLY)
 add_library(dc_port OBJECT ${PORT_LIB_SOURCES} ${DC_SCE_SOURCES})
 target_link_libraries(dc_port PRIVATE dc_options SDL3::SDL3 Vulkan::Vulkan nlohmann_json::nlohmann_json fastgltf::fastgltf kz_port_headers chronicle_zstd)
 # port/src, the generated headers, dcdata's header-only core and the stb directories: captionfont.cpp
@@ -216,6 +218,7 @@ install(TARGETS darkcloud RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 if(TARGET noktus_launcher)
     install(TARGETS noktus_launcher RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
+install(FILES ${CMAKE_BINARY_DIR}/CREDITS.md DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # The strings the port draws itself, translated (docs/LOCALIZATION.md): lang/ beside the executable, where the
 # game reads its language files.
