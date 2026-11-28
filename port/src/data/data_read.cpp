@@ -243,9 +243,9 @@ std::string FoldArchivePath(std::string_view path) {
 
 [[noreturn]] void NoData(const fs::path &root, const char *why) {
     std::println(stderr,
-                 "no game data: {} {}; extract the disc with `dcdata extract <disc image> {}` "
+                 "no game data: {} {}; set it up from the disc with the launcher, `noktus-launcher --setup <disc image>`, "
                  "or pass --data <dir>",
-                 PathsDisplay(root), why, PathsDisplay(root));
+                 PathsDisplay(root), why);
     std::abort();
 }
 

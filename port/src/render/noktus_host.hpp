@@ -103,7 +103,7 @@ bool NoktusOn();
 /** Noktus draws to this window, on its own thread and paced to the display, or into a picture with no window at all. Nothing is drawn before this. */
 void NoktusTakeWindow(SDL_Window *window); // null for a run with no window
 
-/** Lets go of a window about to be closed, for the first-run screen, which has one of its own. */
+/** Lets go of a window about to be closed, for a test that makes and closes windows of its own. */
 void NoktusDropWindow();
 
 /** The GPU drawing the game. */

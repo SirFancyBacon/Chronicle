@@ -20,39 +20,32 @@ It also appears in the desktop's application list as Chronicle.
 
 ## The first start
 
-With no game data, the game opens a window that asks for it and, straight
-away, the system's file selector for a `.iso`, `.bin` or `.img` of the PAL
-disc. The window's **Disc image** button (Enter) opens it again; **Folder with
-DATA.DAT and DATA.HD2** (F) takes a folder copied from the disc instead. Inside the Flatpak the selector is the desktop's
-file-chooser portal, so the game reads the chosen file without any
-permission to your files. The game then extracts every file the disc's index
-lists, showing the file count and megabytes, and checks each one. `dcdata`
-then converts the textures, models and sound, the same step as `dcdata extract`
-from a shell, and the game continues. All of it took about nine minutes on a
-fast desktop and runs once. The finished data is about 6 GB, and it needs more
-than that while it converts.
+The game is set up once from the player's own disc by the launcher, which the
+Flatpak lists as **Chronicle Launcher** beside the game. Started with no game
+data, or data an older version set up, the game says so in a message and
+offers to open the launcher, then exits with status 3.
 
-Cancelling the file selector returns to the prompt, to try again or pick a
-folder. Closing the window during extraction stops it; the next
-start picks up where it stopped, though the conversion starts over. A symlinked
-data folder is filled in place, so there the game carries on with what's there. Quitting the prompt instead exits with
-status 3 and prints the `dcdata` command below. A failed extraction (an image
-of another disc, a truncated image, a full disk) shows the extractor's
-message and exits with status 1, leaving nothing the game would mistake for
-complete data, except in a symlinked data folder, which is filled in place.
-
-Where no file selector is available (no portal, and no zenity outside a
-sandbox), the prompt says so on stderr and exits with status 3.
+In the launcher's Setup page, **Disc image...** takes a `.iso` of the PAL or NTSC
+disc and **Disc folder...** a folder holding `DATA.DAT` and `DATA.HD2`. Inside the
+Flatpak these are the desktop's file-chooser portal, so the launcher reads the
+chosen file without any permission to your files. **Set up** copies the disc's
+files, converts the textures, models and sound, and packs it all into `data.zip`
+(**Pack into one file**, on by default); about two minutes on a fast desktop.
+The data is about 5 GB, and packing needs as much again while it runs. Stopped
+part way, the next setup carries on from the stages it finished. **Play** then
+starts the game.
 
 ### From a shell
 
-`dcdata` does the same from a script. It needs read access to the folder
+The launcher does the same without a window. It needs read access to the folder
 holding the image, granted for that one command:
 
 ```sh
-flatpak run --filesystem="$HOME/Games:ro" --command=dcdata org.themoonpeople.Chronicle \
-    extract "$HOME/Games/Dark Cloud (PAL).iso" ~/.var/app/org.themoonpeople.Chronicle/data/chronicle/data
+flatpak run --filesystem="$HOME/Games:ro" --command=noktus-launcher org.themoonpeople.Chronicle \
+    --setup "$HOME/Games/Dark Cloud (PAL).iso"
 ```
+
+`--folder` after the image leaves the data a folder rather than packing it.
 
 ## Where things live
 
@@ -61,7 +54,7 @@ so:
 
 | | |
 |---|---|
-| game data | `~/.var/app/org.themoonpeople.Chronicle/data/chronicle/data` |
+| game data | `~/.var/app/org.themoonpeople.Chronicle/data/chronicle/data.zip` (or `data/`, unpacked) |
 | saves, `config.json` | `~/.var/app/org.themoonpeople.Chronicle/data/chronicle/save` |
 
 `config.json` is described in `docs/PC.md`. `flatpak uninstall --delete-data

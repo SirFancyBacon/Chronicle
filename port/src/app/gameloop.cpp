@@ -1026,7 +1026,7 @@ int RunGame([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
     if (languages.size() == 1) {
         LanguageCode = languages[0];
     } else if (languages.empty()) {
-        std::println(stderr, "the data has no languages.json; run dcdata extract again");
+        std::println(stderr, "the data has no languages.json; set it up again with the launcher");
     }
     MGInit();
     InitMemoryFile();

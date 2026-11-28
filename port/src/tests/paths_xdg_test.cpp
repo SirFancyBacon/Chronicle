@@ -81,7 +81,7 @@ TEST_F(PathsXdgDarkcloud, DarkcloudNamesTheDirectoryToExtractTo) {
     std::string data = PathsDisplay(fs::path(dir / "xdg/chronicle/data").make_preferred());
     ASSERT_TRUE(status == kExitNoData);
     ASSERT_TRUE(text.str().contains("no game data: " + data + " is not a directory"));
-    ASSERT_TRUE(text.str().contains("`dcdata extract <disc image> " + data + "`"));
+    ASSERT_TRUE(text.str().contains("noktus-launcher --setup <disc image>"));
     Leave(dir);
 }
 

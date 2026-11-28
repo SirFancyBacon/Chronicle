@@ -40,8 +40,8 @@
 #include "platform/crash_report.hpp"
 #include "platform/data_archive.hpp"
 #include "platform/discord.hpp"
+#include "platform/data_needed.hpp"
 #include "platform/display.hpp"
-#include "platform/firstrun.hpp"
 #include "platform/hitches.hpp"
 #include "platform/input.hpp"
 #include "platform/input_script.hpp"
@@ -221,39 +221,6 @@ Options ParseOptions(int argc, const char **argv) {
         }
     }
     return options;
-}
-
-// InitCDFile stops on the same conditions, but checking first gives the one-line message and its
-// own exit status before a window or a Vulkan device exists.
-void RequireData() {
-    const fs::path &root = PathsDataRoot();
-    if (DataArchivePresent(root)) {
-        return;
-    }
-    std::error_code error;
-    const char     *why = nullptr;
-    if (!fs::is_directory(root, error)) {
-        why = "is not a directory";
-    } else {
-        why = "is empty";
-        auto options = fs::directory_options::follow_directory_symlink |
-                       fs::directory_options::skip_permission_denied;
-        for (fs::recursive_directory_iterator it(root, options, error), end; !error && it != end;
-             it.increment(error)) {
-            std::error_code entry_error;
-            if (it->is_regular_file(entry_error)) {
-                why = nullptr;
-                break;
-            }
-        }
-    }
-    if (why != nullptr) {
-        std::fprintf(stderr,
-                     "no game data: %s %s; extract the disc with `dcdata extract <disc image> %s` "
-                     "or place data.zip beside it\n",
-                     PathsDisplay(root).c_str(), why, PathsDisplay(root).c_str());
-        std::exit(kExitNoData);
-    }
 }
 
 // The Options screen keeps the interface at 100%, so a size that takes the HUD past the window
@@ -466,7 +433,6 @@ int Run(int argc, const char **argv) {
         return result == dc::platform::SpeakerTest::Done ? kExitOk : result == dc::platform::SpeakerTest::BadLayout ? kExitUsage
                                                                                                                     : kExitFailure;
     }
-    FirstRunIfNoData(options.headless);
     if (options.jump == nullptr) {
         options.jump = std::getenv("DC_JUMP");
     }
@@ -536,7 +502,7 @@ int Run(int argc, const char **argv) {
     GameSetAutosave(!options.headless && (options.jump == nullptr || *options.jump == '\0'));
     const char *fast_load = std::getenv("DC_FAST_LOAD");
     GameSetFastLoad(options.fast_load || (fast_load != nullptr && *fast_load != '\0' && *fast_load != '0'));
-    RequireData();
+    RequireCurrentData(options.headless);
     GameLoadTraceCheckpoint("data_ready");
     if (!options.headless) {
         GameSetDataIcon();

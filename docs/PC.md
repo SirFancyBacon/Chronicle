@@ -52,9 +52,11 @@ run time a device with Vulkan 1.3 or later, `dualSrcBlend` and `shaderClipDistan
 (any desktop driver; Mesa's lavapipe in CI; `tools/kazarov/src/cpp/gfx/README.md`, "Device", has the whole list). `.github/workflows/pc.yml` is a
 complete recipe on Ubuntu 26.04.
 
-The game's files come from the disc (see "Game data"). Without them a
-windowed start asks for the disc image and extracts it; `dcdata` does the
-same from a shell:
+The game's files come from the disc (see "Game data"), set up by Noktus's launcher
+(`noktus-launcher`, built beside the game): without them, or with data an older
+version set up, a windowed start says so and offers to open it. From a shell,
+`noktus-launcher --setup <disc image>` sets up the data where the game finds it, and
+`dcdata` still does it by hand:
 
 ```sh
 port/build/pc/dcdata extract "rom/pal/Dark Cloud (PAL).iso" data
@@ -122,9 +124,9 @@ bait, docs/FISHING_FRAMEWORK.md), and SDL's own variables.
 
 Exit statuses (`port/src/app/exitcodes.hpp`): 0 when the window was closed or
 `--frames` ran out, 1 when the window, the renderer or the screenshot failed,
-2 for bad arguments, 3 when the data directory is missing or holds no file
-and no disc was given at the first-run prompt (one line names it and the
-`dcdata` command; a headless run checks before any window opens), 4 for a failed game assertion (retail's `__assert`, after the game's
+2 for bad arguments, 3 when the data directory is missing or holds no file, or
+its `data_version.json` says an older layout than the game reads (one line names it
+and the launcher's command; checked before any window opens), 4 for a failed game assertion (retail's `__assert`, after the game's
 own message: `LoadFile` prints `File open error "<path>"`). A `PS2_UNIMPLEMENTED`
 stub aborts (SIGABRT) so a debugger or a core dump stops at it.
 
@@ -839,7 +841,7 @@ that mode's `case`: the developer menu sets `mode` itself and returns 1.
 
 ## Platform
 
-The host side is Kazarov's `tools/kazarov/src/cpp` (`gfx`, `audio`, `platform`, `sce`); `port/src/platform` keeps the game's config, firstrun, discord and save_state.
+The host side is Kazarov's `tools/kazarov/src/cpp` (`gfx`, `audio`, `platform`, `sce`); `port/src/platform` keeps the game's config, the data check (`data_needed`), discord and save_state.
 They build as `dc_host` without `port.h` or the game's include paths, so no
 game header or SDK type reaches them. Game types meet them only in
 `port/src`: the game units in `port/src/game` and the platform layer beside
@@ -877,8 +879,7 @@ them.
   `ClockWaitNextTick(hook)` runs a hook over and over while it waits, with the
   elapsed fraction of the tick; `MGEndFrame` presents display frames through it.
 - **Config** (`platform/config`) and **paths** (`platform/paths`): above.
-- **Overlay** (`platform/overlay`): the port's 5x7 font (the first-run screen
-  draws with it too), a line of text drawn with `gfx::Draw2D` on whole pixels
+- **Overlay** (`platform/overlay`): the port's 5x7 font, a line of text drawn with `gfx::Draw2D` on whole pixels
   at the window's corner, and the
   rate meter behind the FPS counter ("The FPS counter").
 - **Audio output** (`platform/audio`): an SDL3 float stereo stream that pulls
@@ -1968,7 +1969,7 @@ port/build/pc/dcdata publish-gameplay data
 
 `pack` takes an existing extracted directory and writes a ZIP archive beside it by default; a second output path is optional, and an existing archive there is never replaced. It stores files without compression so the port can read them without a decompression cost (the baked textures are already compressed). It writes classic ZIP while the archive fits it, and adds ZIP64's records past 4 GiB or 65,534 files: the extracted data with its baked textures and models is about 5 GB in 42,685 files. Each file must stay under 2 GiB. The runtime also reads standard deflated ZIP entries and ZIP64 archives from other writers; encrypted and multi-disk archives are unsupported. The game gives `data.zip` priority over loose files when both exist. It opens the archive once and reads entries at their offsets, from several threads at once (overlapped reads on Windows), checking each entry's CRC the first time it's read in a run: a later read that differed, from a failing disk say, wouldn't be caught. On Windows this is the way to play: each loose file's open is scanned by the antivirus, about 3.4 ms a file on the laptop measured on 2026-11-15, which made the hitches as areas load. Do not modify an archive while the game is running.
 
-Extraction runs the disc's asset classes side by side. `dcdata::ClassOf` sorts the files by extension into textures, models, audio, movies, scripts, packs and the rest; `dcdata::Extract` cuts each class into slices of about 32 MiB and hands them to a `JobRunner`. The `dcdata` tool passes Kazarov's shared scheduler (`kazarov::job_set_run`, the one `dc2data` runs its conversion jobs on), which starts the largest slice of each class first and stops at the first failure; without a runner, as in the first-run window and the host tests, `dcdata::RunOnThreads` interleaves the same slices on plain threads. `dcdata pack` checksums the files on all cores and writes the archive with `dcdata::PackDirectory` (Kazarov's stored writer is classic ZIP only); for 5 GB it takes about half a minute.
+Extraction runs the disc's asset classes side by side. `dcdata::ClassOf` sorts the files by extension into textures, models, audio, movies, scripts, packs and the rest; `dcdata::Extract` cuts each class into slices of about 32 MiB and hands them to a `JobRunner`. The `dcdata` tool passes Kazarov's shared scheduler (`kazarov::job_set_run`, the one `dc2data` runs its conversion jobs on), which starts the largest slice of each class first and stops at the first failure; without a runner, as in the host tests, `dcdata::RunOnThreads` interleaves the same slices on plain threads. `dcdata pack` checksums the files on all cores and writes the archive with `dcdata::PackDirectory` (Kazarov's stored writer is classic ZIP only); for 5 GB it takes about half a minute.
 
 The source is a disc image, read through its ISO 9660 tree, or a directory
 that holds `DATA.DAT` and `DATA.HD2` (such as `rom/pal/extracted/iso`).
@@ -2001,10 +2002,6 @@ keeps, as before. `export-png <data> <out>` writes the textures back as PNG, the
 documents pointing at those, with the models' glTF bundles, whose images then
 open: the files to mod from. The glTF bundles in the data itself point at PNGs
 that aren't there, since the game never reads a glTF's images.
-The game's own first run extracts the files itself, for its progress screen,
-then runs the `dcdata` beside it with `extract` to do the rest, so its data is
-the same as a shell's (`platform/firstrun.cpp`). Where there's no `dcdata`, the
-data stays raw and the game decodes the disc's textures itself.
 `extract` and `publish-gameplay` write the gameplay documents tracked in
 `port/gameplay` into the data under `gameplay/`, from the seed the build
 seals beside `dcdata` (`assets/data.zip`), so a package ships that folder with
@@ -2024,22 +2021,14 @@ local `data/` if there is one, so a checkout or an unpacked copy stays
 self-contained, and otherwise to `$XDG_DATA_HOME/chronicle/save`. It is
 created when first used.
 
-When the data directory is missing or holds no file and the run is not
-headless, `FirstRunIfNoData` (`port/src/platform/firstrun.cpp`) opens the
-window and asks for the disc: a disc image through SDL's file dialog (the
-file-chooser portal under Flatpak, zenity elsewhere), or a folder holding
-`DATA.DAT` and `DATA.HD2`. It extracts with `dcdata`'s core on a worker
-thread into `<data>.partial`, drawing the file and byte counts through
-`gfx::Draw2D` while the main thread pumps events, checks every file and
-has `dcdata` convert the data, renames the directory into place, then closes
-its window and `main` goes on. Closing the window stops it (a later start
-resumes from the partial directory and converts again); a failed extraction
-shows the extractor's or `dcdata`'s message in a
-message box and exits with status 1. `FirstRunSetChooser` replaces the
-dialog, which lets a headless run go through the flow. Declined, or
-headless, `main` stops with status 3 and one line naming the directory and
-the `dcdata` command, before anything else starts; `InitCDFile` would abort
-on the same conditions. `InitCDFile` warns
+Before anything else starts, `RequireCurrentData` (`port/src/platform/data_needed.cpp`) stops the
+game with status 3 when the data directory is missing or holds no file and there's no `data.zip`
+beside it, or when the data's `data_version.json` says an older layout than Noktus's
+`convert/data_version.hpp` `kDataVersion` (data without the document is `dcdata`'s, layout 1). It
+prints one line naming the directory and the launcher's command; with a window it also shows a
+system message box offering to open the launcher beside the game (the game's own interface draws
+from the data it hasn't got). Data of a newer layout is only noted. `InitCDFile` would abort on
+missing data too. `InitCDFile` warns
 when `data.hd2` lists a file that is missing or the wrong size. Files the
 game looks for and does not find behave as on the disc: `LoadFile2` returns
 0 and `LoadFile` asserts, naming the file (status 4).

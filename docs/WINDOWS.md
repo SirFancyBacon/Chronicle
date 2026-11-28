@@ -189,8 +189,8 @@ default hidden-window swapchains.
 ## Limits
 
 Native builds, unit tests and bounded offscreen gameplay have been checked.
-Interactive controls, visible windowed presentation, audible output, first-run
-disc selection, gameplay save/reload and a full campaign are not qualified by
+Interactive controls, visible windowed presentation, audible output, the
+launcher's disc selection, gameplay save/reload and a full campaign are not qualified by
 these checks. Validation-layer cleanliness is unverified without installed
 layers. The game's data, save, input-script and screenshot paths support
 Unicode, as do `dcdata`'s arguments; optional WAV capture and

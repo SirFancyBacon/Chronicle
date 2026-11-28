@@ -158,7 +158,7 @@ endif()
 # Noktus's credits beside the game: they hold the licences of what it and the launcher carry (Kazarov's, the libraries'), which go with every copy.
 configure_file(${NOKTUS_SOURCE_DIR}/CREDITS.md ${CMAKE_BINARY_DIR}/CREDITS.md COPYONLY)
 add_library(dc_port OBJECT ${PORT_LIB_SOURCES} ${DC_SCE_SOURCES})
-target_link_libraries(dc_port PRIVATE dc_options SDL3::SDL3 Vulkan::Vulkan nlohmann_json::nlohmann_json fastgltf::fastgltf kz_port_headers chronicle_zstd)
+target_link_libraries(dc_port PRIVATE dc_options SDL3::SDL3 Vulkan::Vulkan nlohmann_json::nlohmann_json fastgltf::fastgltf kz_port_headers chronicle_zstd noktus_convert)
 # port/src, the generated headers, dcdata's header-only core and the stb directories: captionfont.cpp
 # rasterizes with stb_truetype and platform/png_image.cpp decodes with stb_image, which Kazarov stages
 # (or fetches) for dc_host.
@@ -197,7 +197,7 @@ endif()
 function(dc_link_game target)
     target_sources(${target} PRIVATE $<TARGET_OBJECTS:dc_port> $<TARGET_OBJECTS:dc_ps2>)
     target_link_libraries(${target} PRIVATE noktus_vulkan noktus_audio dc_options dc_host kz_port_headers SDL3::SDL3 Vulkan::Vulkan fastgltf::fastgltf nlohmann_json::nlohmann_json
-        chronicle_zstd)
+        chronicle_zstd noktus_convert)
     target_include_directories(${target} PRIVATE ${PORT_DIR} ${CMAKE_SOURCE_DIR}/tools/dcdata)
     target_compile_options(${target} PRIVATE -Wall -Wno-mismatched-tags -Wno-unused-label
         -Wno-overloaded-virtual -Wno-unused-function)
