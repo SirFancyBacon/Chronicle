@@ -292,6 +292,14 @@ void MergeModelAssets(const fs::path &stage, const fs::path &data) {
     dcdata::Log(stdout, "published {} model files\n", copied);
 }
 
+// The models alone, for Noktus's converter, which writes the textures itself: Kazarov converts both in one pass, so its textures are
+// made and left in the stage.
+void BakeModels(const fs::path &raw, const fs::path &data) {
+    TextureStage stage;
+    ConvertInto(raw, stage.root);
+    MergeModelAssets(stage.root, data);
+}
+
 // Converts the textures and models in one pass, since the models' glTF reference the textures' PNGs.
 void BakeAssets(const fs::path &raw, const fs::path &data) {
     TextureStage stage;
@@ -496,6 +504,7 @@ int Usage() {
                "       dcdata texture-map <raw-directory> <mapping.json>\n"
                "       dcdata convert-models <raw-directory> <output-directory>\n"
                "       dcdata bake-assets <raw-directory> <data-directory>\n"
+               "       dcdata bake-models <raw-directory> <data-directory>\n"
                "       dcdata strip-models <data-directory>\n"
                "       dcdata export-png <data-directory> <output-directory>\n"
                "       dcdata pack <data-directory> [output.zip]\n"
@@ -621,6 +630,10 @@ int main(int argc, char **argv) {
         }
         if (argc == 4 && std::strcmp(argv[1], "bake-assets") == 0) {
             BakeAssets(paths[2], paths[3]);
+            return 0;
+        }
+        if (argc == 4 && std::strcmp(argv[1], "bake-models") == 0) {
+            BakeModels(paths[2], paths[3]);
             return 0;
         }
         if (argc == 4 && std::strcmp(argv[1], "convert-models") == 0) {
